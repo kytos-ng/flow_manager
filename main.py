@@ -1,6 +1,7 @@
 """kytos/flow_manager NApp installs, lists and deletes switch flows."""
 from collections import OrderedDict
 from copy import deepcopy
+from threading import Lock
 
 from flask import jsonify, request
 from pyof.foundation.base import UBIntBase
@@ -89,6 +90,8 @@ class Main(KytosNApp):
 
         # Storehouse client to save and restore flow data:
         self.storehouse = StoreHouse(self.controller)
+
+        self._storehouse_lock = Lock()
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {'flow_list': [
@@ -193,14 +196,14 @@ class Main(KytosNApp):
                 if command == 'add':
                     log.info('A consistency problem was detected in '
                              f'switch {dpid}.')
-                    self._install_flows(command, flow, [switch])
+                    self._install_flows(command, flow, [switch], save=False)
                     log.info(f'Flow forwarded to switch {dpid} to be '
                              'installed.')
             elif command == 'delete':
                 log.info('A consistency problem was detected in '
                          f'switch {dpid}.')
                 command = 'delete_strict'
-                self._install_flows(command, flow, [switch])
+                self._install_flows(command, flow, [switch], save=False)
                 log.info(f'Flow forwarded to switch {dpid} to be deleted.')
 
     def check_storehouse_consistency(self, switch):
@@ -218,7 +221,7 @@ class Main(KytosNApp):
                          f'switch {dpid}.')
                 flow = {'flows': [installed_flow.as_dict()]}
                 command = 'delete_strict'
-                self._install_flows(command, flow, [switch])
+                self._install_flows(command, flow, [switch], save=False)
                 log.info(f'Flow forwarded to switch {dpid} to be deleted.')
             else:
                 serializer = FlowFactory.get_class(switch)
@@ -232,7 +235,7 @@ class Main(KytosNApp):
                              f'switch {dpid}.')
                     flow = {'flows': [installed_flow.as_dict()]}
                     command = 'delete_strict'
-                    self._install_flows(command, flow, [switch])
+                    self._install_flows(command, flow, [switch], save=False)
                     log.info(f'Flow forwarded to switch {dpid} to be deleted.')
 
     # pylint: disable=attribute-defined-outside-init
@@ -429,13 +432,14 @@ class Main(KytosNApp):
 
         return jsonify({"response": "FlowMod Messages Sent"})
 
-    def _install_flows(self, command, flows_dict, switches=[]):
+    def _install_flows(self, command, flows_dict, switches=[], save=True):
         """Execute all procedures to install flows in the switches.
 
         Args:
             command: Flow command to be installed
             flows_dict: Dictionary with flows to be installed in the switches.
             switches: A list of switches
+            save: A boolean to save flows in the storehouse (True) or not
         """
         for switch in switches:
             serializer = FlowFactory.get_class(switch)
@@ -454,7 +458,9 @@ class Main(KytosNApp):
                 self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
 
                 self._send_napp_event(switch, flow, command)
-                self._store_changed_flows(command, flow_dict, switch)
+                if save:
+                    with self._storehouse_lock:
+                        self._store_changed_flows(command, flow_dict, switch)
 
     def _add_flow_mod_sent(self, xid, flow, command):
         """Add the flow mod to the list of flow mods sent."""
