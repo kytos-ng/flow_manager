@@ -430,7 +430,7 @@ class Main(KytosNApp):
             self._install_flows(command, flows_dict,
                                 self._get_all_switches_enabled())
 
-        return jsonify({"response": "FlowMod Messages Sent"})
+        return jsonify({"response": "FlowMod Messages Sent"}), 202
 
     def _install_flows(self, command, flows_dict, switches=[], save=True):
         """Execute all procedures to install flows in the switches.
