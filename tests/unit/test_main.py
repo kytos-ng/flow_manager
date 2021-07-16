@@ -108,7 +108,7 @@ class TestMain(TestCase):
             response_1 = api.post(url, json={'flows': [{"priority": 25}]})
             response_2 = api.post(url)
 
-            self.assertEqual(response_1.status_code, 200)
+            self.assertEqual(response_1.status_code, 202)
             self.assertEqual(response_2.status_code, 400)
 
         self.assertEqual(mock_install_flows.call_count, 2)
@@ -125,9 +125,9 @@ class TestMain(TestCase):
             response_1 = api.post(url_1, json=data)
             response_2 = api.post(url_2, json=data)
 
-            self.assertEqual(response_1.status_code, 200)
+            self.assertEqual(response_1.status_code, 202)
             if method == 'delete':
-                self.assertEqual(response_2.status_code, 200)
+                self.assertEqual(response_2.status_code, 202)
 
         self.assertEqual(mock_install_flows.call_count, 3)
 
