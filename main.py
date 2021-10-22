@@ -262,7 +262,7 @@ class Main(KytosNApp):
         installed_flow = {}
         installed_flow['command'] = command
         installed_flow['flow'] = flow
-        should_persist_flow = True if command == "add" else False
+        should_persist_flow = command == "add"
         deleted_flows_idxs = set()
 
         serializer = FlowFactory.get_class(switch)

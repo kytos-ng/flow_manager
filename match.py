@@ -112,7 +112,6 @@ def match13_no_strict(flow_to_install, stored_flow_dict):
 
     Return the flow if any fields match, otherwise, return False.
     """
-
     if 'match' not in flow_to_install or 'match' not in stored_flow_dict:
         return stored_flow_dict
     if not flow_to_install['match']:
