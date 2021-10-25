@@ -299,11 +299,12 @@ class Main(KytosNApp):
                     deleted_flows_idxs.add(i)
                     break
 
-            stored_flows = [
-                flow
-                for i, flow in enumerate(stored_flows)
-                if i not in deleted_flows_idxs
-            ]
+            if deleted_flows_idxs:
+                stored_flows = [
+                    flow
+                    for i, flow in enumerate(stored_flows)
+                    if i not in deleted_flows_idxs
+                ]
             if should_persist_flow:
                 stored_flows.append(installed_flow)
             stored_flows_box[switch.id]['flow_list'] = stored_flows
