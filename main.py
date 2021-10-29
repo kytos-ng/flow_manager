@@ -198,13 +198,14 @@ class Main(KytosNApp):
                              f'switch {dpid}.')
                     self._install_flows(command, flow, [switch], save=False)
                     log.info(f'Flow forwarded to switch {dpid} to be '
-                             'installed.')
+                             f'installed. Flow: {flow}')
             elif command == 'delete':
                 log.info('A consistency problem was detected in '
                          f'switch {dpid}.')
                 command = 'delete_strict'
                 self._install_flows(command, flow, [switch], save=False)
-                log.info(f'Flow forwarded to switch {dpid} to be deleted.')
+                log.info(f'Flow forwarded to switch {dpid} to be deleted.'
+                         f' Flow: {flow}')
 
     def check_storehouse_consistency(self, switch):
         """Check consistency of installed flows for a specific switch."""
@@ -222,7 +223,8 @@ class Main(KytosNApp):
                 flow = {'flows': [installed_flow.as_dict()]}
                 command = 'delete_strict'
                 self._install_flows(command, flow, [switch], save=False)
-                log.info(f'Flow forwarded to switch {dpid} to be deleted.')
+                log.info(f'Flow forwarded to switch {dpid} to be deleted.'
+                         f' Flow: {flow}')
             else:
                 serializer = FlowFactory.get_class(switch)
                 stored_flows = self.stored_flows[dpid]['flow_list']
@@ -236,7 +238,8 @@ class Main(KytosNApp):
                     flow = {'flows': [installed_flow.as_dict()]}
                     command = 'delete_strict'
                     self._install_flows(command, flow, [switch], save=False)
-                    log.info(f'Flow forwarded to switch {dpid} to be deleted.')
+                    log.info(f'Flow forwarded to switch {dpid} to be deleted.'
+                             f' Flow: {flow}')
 
     # pylint: disable=attribute-defined-outside-init
     def _load_flows(self):
@@ -415,6 +418,8 @@ class Main(KytosNApp):
                 result = 'The request body is not well-formed.'
                 raise BadRequest(result)
 
+        log.info(f'Send FlowMod from request dpid: {dpid} command: {command}'
+                 f' flows_dict: {flows_dict}')
         if dpid:
             switch = self.controller.get_switch_by_dpid(dpid)
             if not switch:
