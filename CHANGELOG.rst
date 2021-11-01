@@ -21,6 +21,18 @@ Removed
 Security
 ========
 
+[4.1] - 2021-10.22
+******************
+
+Changed
+=======
+- Removed 'delete' command persistency
+- Faster filtering when removing stored flows
+
+Fixed
+=====
+- Fixed ``match13_no_strict`` issue 13
+
 
 [4.0] - 2021-05-27
 ******************
