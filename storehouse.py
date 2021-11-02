@@ -1,9 +1,10 @@
 """Module to handle the storehouse."""
 import time
 
+from napps.kytos.flow_manager import settings
+
 from kytos.core import log
 from kytos.core.events import KytosEvent
-from napps.kytos.flow_manager import settings
 
 DEFAULT_BOX_RESTORE_TIMER = 0.1
 BOX_RESTORE_ATTEMPTS = 10
