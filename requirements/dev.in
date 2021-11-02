@@ -1,5 +1,4 @@
-flask
--e git+https://github.com/kytos/python-openflow.git#egg=python-openflow
--e git+https://github.com/kytos/kytos.git#egg=kytos
--e git+https://github.com/kytos/of_core.git#egg=of_core
+-e git+https://github.com/kytos-ng/python-openflow.git#egg=python-openflow
+-e git+https://github.com/kytos-ng/kytos.git#egg=kytos
+-e git+https://github.com/kytos-ng/of_core.git#egg=kytos_of_core
 -e .[dev]
