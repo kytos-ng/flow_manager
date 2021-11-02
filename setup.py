@@ -146,8 +146,10 @@ class Linter(SimpleCommand):
 
     description = "lint Python source code"
 
+    # pylint: disable=fixme
     def run(self):
         """Run yala."""
+        # TODO submit a PR for yala to support black as a linter
         print("Yala is running. It may take several seconds...")
         check_call("yala setup.py *.py serializers tests", shell=True)
 
