@@ -11,14 +11,13 @@ class TestMain(TestCase):
     """Test the Main class."""
 
     def setUp(self):
-        """Execute steps before each tests.
-        """
+        """Execute steps before each tests."""
         self.napp = Main(self.get_controller_mock())
 
     @staticmethod
     def get_controller_mock():
         """Return a controller mock."""
-        options = KytosConfig().options['daemon']
+        options = KytosConfig().options["daemon"]
         controller = Controller(options)
         controller.log = Mock()
         return controller
@@ -26,7 +25,7 @@ class TestMain(TestCase):
     def test_add_flow_mod_sent_ok(self):
         self.napp._flow_mods_sent_max_size = 3
         flow = Mock()
-        xid = '12345'
+        xid = "12345"
         initial_len = len(self.napp._flow_mods_sent)
         self.napp._add_flow_mod_sent(xid, flow)
 
@@ -35,13 +34,13 @@ class TestMain(TestCase):
 
     def test_add_flow_mod_sent_overlimit(self):
         self.napp._flow_mods_sent_max_size = 5
-        xid = '23456'
+        xid = "23456"
         while len(self.napp._flow_mods_sent) < 5:
-            xid += '1'
+            xid += "1"
             flow = Mock()
             self.napp._add_flow_mod_sent(xid, flow)
 
-        xid = '90876'
+        xid = "90876"
         flow = Mock()
         initial_len = len(self.napp._flow_mods_sent)
         self.napp._add_flow_mod_sent(xid, flow)
