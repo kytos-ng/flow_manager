@@ -150,6 +150,8 @@ class Linter(SimpleCommand):
     def run(self):
         """Run yala."""
         # TODO submit a PR for yala to support black as a linter
+        print("black is running. It may take some seconds...")
+        check_call("git ls-files | grep -e '.py$' | xargs black --check", shell=True)
         print("Yala is running. It may take several seconds...")
         check_call("yala setup.py *.py serializers tests", shell=True)
 

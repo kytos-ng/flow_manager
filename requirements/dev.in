@@ -2,3 +2,4 @@
 -e git+https://github.com/kytos-ng/kytos.git#egg=kytos
 -e git+https://github.com/kytos-ng/of_core.git#egg=kytos_of_core
 -e .[dev]
+black>=21.10b0 # 21.x requires click>=7.1.2
