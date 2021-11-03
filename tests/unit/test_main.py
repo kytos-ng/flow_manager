@@ -468,7 +468,8 @@ class TestMain(TestCase):
 
         self.napp._store_changed_flows(command, flow_to_install, switch)
         mock_save_flow.assert_called()
-        self.assertDictEqual(self.napp.stored_flows[dpid]["flow_list"][0], stored_flow)
+        self.assertDictEqual(self.napp.stored_flows[dpid]["flow_list"][0],
+                             stored_flow)
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
