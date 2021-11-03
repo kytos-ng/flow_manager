@@ -1,4 +1,5 @@
 """kytos/flow_manager NApp installs, lists and deletes switch flows."""
+import time
 from collections import OrderedDict
 from copy import deepcopy
 from threading import Lock
@@ -14,6 +15,7 @@ from kytos.core.helpers import listen_to
 from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.flow_manager.storehouse import StoreHouse
 from napps.kytos.of_core.flow import FlowFactory
+from napps.kytos.of_core.settings import STATS_INTERVAL
 
 from .exceptions import InvalidCommandError
 from .settings import (CONSISTENCY_COOKIE_IGNORED_RANGE,
@@ -187,6 +189,8 @@ class Main(KytosNApp):
         serializer = FlowFactory.get_class(switch)
 
         for stored_flow in stored_flows:
+            if time.time() - stored_flow.get('timestamp', 0) < STATS_INTERVAL:
+                continue
             command = stored_flow['command']
             stored_flow_obj = serializer.from_dict(stored_flow['flow'], switch)
 
@@ -269,6 +273,7 @@ class Main(KytosNApp):
         flow_list = []
         installed_flow['command'] = command
         installed_flow['flow'] = flow
+        installed_flow['timestamp'] = time.time()
         deleted_flows = []
 
         serializer = FlowFactory.get_class(switch)
