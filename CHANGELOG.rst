@@ -21,6 +21,14 @@ Removed
 Security
 ========
 
+[4.1.2] - 2021-11.03
+********************
+
+Fixed
+=====
+- Fixed issue 28, early return on ``match13_no_strict``
+
+
 [4.1] - 2021-10.22
 ******************
 
