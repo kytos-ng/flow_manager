@@ -40,8 +40,7 @@ def _match_ipv4_10(match_fields, args, wildcards):
         mask = (wildcards
                 & FlowWildCards.OFPFW_NW_SRC_MASK) >> \
                 FlowWildCards.OFPFW_NW_SRC_SHIFT
-        if mask > 32:
-            mask = 32
+        mask = min(mask, 32)
         if mask != 32 and 'nw_src' not in args:
             return False
         mask = (0xffffffff << mask) & 0xffffffff
@@ -53,8 +52,7 @@ def _match_ipv4_10(match_fields, args, wildcards):
         mask = (wildcards
                 & FlowWildCards.OFPFW_NW_DST_MASK) >> \
                 FlowWildCards.OFPFW_NW_DST_SHIFT
-        if mask > 32:
-            mask = 32
+        mask = min(mask, 32)
         if mask != 32 and 'nw_dst' not in args:
             return False
         mask = (0xffffffff << mask) & 0xffffffff
@@ -108,33 +106,30 @@ def match10_no_strict(flow_dict, args):
 
 
 def match13_no_strict(flow_to_install, stored_flow_dict):
-    """Match a packet againts the stored flow (OF 1.3).
+    """Match a flow that is either exact or more specific (non-strict) (OF1.3).
 
     Return the flow if any fields match, otherwise, return False.
     """
-    if flow_to_install.get('cookie_mask') and 'cookie' in stored_flow_dict:
-        cookie = flow_to_install['cookie'] & flow_to_install['cookie_mask']
-        stored_cookie = (stored_flow_dict['cookie'] &
-                         flow_to_install['cookie_mask'])
-        if cookie == stored_cookie:
-            return stored_flow_dict
+    cookie = flow_to_install.get('cookie', 0) & flow_to_install.get(
+        'cookie_mask', 0
+    )
+    cookie_stored = stored_flow_dict.get('cookie', 0) & flow_to_install.get(
+        'cookie_mask', 0
+    )
+    if cookie and cookie != cookie_stored:
         return False
-    if 'match' not in flow_to_install:
+
+    if 'match' not in flow_to_install or 'match' not in stored_flow_dict:
+        return stored_flow_dict
+    if not flow_to_install['match']:
+        return stored_flow_dict
+    if len(flow_to_install['match']) > len(stored_flow_dict['match']):
         return False
 
     for key, value in flow_to_install.get('match').items():
-        if 'match' not in stored_flow_dict:
+        if key not in stored_flow_dict['match']:
             return False
-        if key not in ('ipv4_src', 'ipv4_dst', 'ipv6_src', 'ipv6_dst'):
-            if value == stored_flow_dict['match'].get(key):
-                return stored_flow_dict
-        else:
-            field = stored_flow_dict['match'].get(key)
-            if not field:
-                return False
-            masked_ip_addr = ipaddress.ip_network(value, False)
-            field_mask = field + "/" + str(masked_ip_addr.netmask)
-            masked_stored_ip = ipaddress.ip_network(field_mask, False)
-            if masked_ip_addr == masked_stored_ip:
-                return stored_flow_dict
-    return False
+        if value != stored_flow_dict['match'].get(key):
+            return False
+
+    return stored_flow_dict
