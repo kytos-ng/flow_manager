@@ -1,6 +1,7 @@
 """Flow serializer for OF 1.3."""
 from itertools import chain
 
+from napps.kytos.flow_manager.serializers.base import FlowSerializer
 from pyof.foundation.basic_types import HWAddress, IPAddress
 from pyof.foundation.network_types import EtherType
 from pyof.v0x04.common.action import (ActionOutput, ActionPopVLAN, ActionPush,
@@ -10,8 +11,6 @@ from pyof.v0x04.common.flow_instructions import InstructionType as IType
 from pyof.v0x04.common.flow_match import OxmOfbMatchField, OxmTLV, VlanId
 from pyof.v0x04.common.port import PortNo
 from pyof.v0x04.controller2switch.flow_mod import FlowMod
-
-from napps.kytos.flow_manager.serializers.base import FlowSerializer
 
 
 # pylint: disable=too-many-return-statements, inconsistent-return-statements

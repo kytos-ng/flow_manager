@@ -1,9 +1,14 @@
 """kytos/flow_manager NApp installs, lists and deletes switch flows."""
+
+# pylint: disable=relative-beyond-top-level
 from collections import OrderedDict
 from copy import deepcopy
 from threading import Lock
 
 from flask import jsonify, request
+from napps.kytos.flow_manager.match import match_flow
+from napps.kytos.flow_manager.storehouse import StoreHouse
+from napps.kytos.of_core.flow import FlowFactory
 from pyof.foundation.base import UBIntBase
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
@@ -11,9 +16,6 @@ from werkzeug.exceptions import BadRequest, NotFound, UnsupportedMediaType
 
 from kytos.core import KytosEvent, KytosNApp, log, rest
 from kytos.core.helpers import listen_to
-from napps.kytos.flow_manager.match import match_flow
-from napps.kytos.flow_manager.storehouse import StoreHouse
-from napps.kytos.of_core.flow import FlowFactory
 
 from .exceptions import InvalidCommandError
 from .settings import (CONSISTENCY_COOKIE_IGNORED_RANGE,

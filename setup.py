@@ -3,6 +3,8 @@
 Run "python3 setup.py --help-commands" to list all available commands and their
 descriptions.
 """
+
+# pylint: disable=consider-using-f-string,duplicate-code
 import os
 import shutil
 import sys

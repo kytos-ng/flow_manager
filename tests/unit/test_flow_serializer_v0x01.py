@@ -25,13 +25,13 @@ class TestFlowSerializer10(TestCase):
         self.napp.flow_attributes = {'flow_attr'}
         self.napp.match_attributes = {'match_attr'}
         dictionary = {'flow_attr': 'any_data',
-                      'match': {'match_attr': 123},
+                      'match': {'match_attr': 122},
                       'actions': [{'action_type': 'output',
                                    'port': 'controller'}]}
         return_flow_mod = self.napp.from_dict(dictionary)
 
         self.assertEqual(return_flow_mod.flow_attr, 'any_data')
-        self.assertEqual(return_flow_mod.match.match_attr, 123)
+        self.assertEqual(return_flow_mod.match.match_attr, 122)
         self.assertEqual(len(return_flow_mod.actions), 1)
 
     def test_update_match(self):

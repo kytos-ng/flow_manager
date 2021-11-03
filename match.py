@@ -40,8 +40,7 @@ def _match_ipv4_10(match_fields, args, wildcards):
         mask = (wildcards
                 & FlowWildCards.OFPFW_NW_SRC_MASK) >> \
                 FlowWildCards.OFPFW_NW_SRC_SHIFT
-        if mask > 32:
-            mask = 32
+        mask = min(mask, 32)
         if mask != 32 and 'nw_src' not in args:
             return False
         mask = (0xffffffff << mask) & 0xffffffff
@@ -53,8 +52,7 @@ def _match_ipv4_10(match_fields, args, wildcards):
         mask = (wildcards
                 & FlowWildCards.OFPFW_NW_DST_MASK) >> \
                 FlowWildCards.OFPFW_NW_DST_SHIFT
-        if mask > 32:
-            mask = 32
+        mask = min(mask, 32)
         if mask != 32 and 'nw_dst' not in args:
             return False
         mask = (0xffffffff << mask) & 0xffffffff
