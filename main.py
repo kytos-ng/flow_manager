@@ -1,9 +1,14 @@
 """kytos/flow_manager NApp installs, lists and deletes switch flows."""
+
+# pylint: disable=relative-beyond-top-level
 from collections import OrderedDict
 from copy import deepcopy
 from threading import Lock
 
 from flask import jsonify, request
+from napps.kytos.flow_manager.match import match_flow
+from napps.kytos.flow_manager.storehouse import StoreHouse
+from napps.kytos.of_core.flow import FlowFactory
 from pyof.foundation.base import UBIntBase
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
@@ -11,9 +16,6 @@ from werkzeug.exceptions import BadRequest, NotFound, UnsupportedMediaType
 
 from kytos.core import KytosEvent, KytosNApp, log, rest
 from kytos.core.helpers import listen_to
-from napps.kytos.flow_manager.match import match_flow
-from napps.kytos.flow_manager.storehouse import StoreHouse
-from napps.kytos.of_core.flow import FlowFactory
 
 from .exceptions import InvalidCommandError
 from .settings import (CONSISTENCY_COOKIE_IGNORED_RANGE,
@@ -199,13 +201,6 @@ class Main(KytosNApp):
                     self._install_flows(command, flow, [switch], save=False)
                     log.info(f'Flow forwarded to switch {dpid} to be '
                              f'installed. Flow: {flow}')
-            elif command == 'delete':
-                log.info('A consistency problem was detected in '
-                         f'switch {dpid}.')
-                command = 'delete_strict'
-                self._install_flows(command, flow, [switch], save=False)
-                log.info(f'Flow forwarded to switch {dpid} to be deleted.'
-                         f' Flow: {flow}')
 
     def check_storehouse_consistency(self, switch):
         """Check consistency of installed flows for a specific switch."""
@@ -269,22 +264,22 @@ class Main(KytosNApp):
                      f'have not been specified: {switch}')
             return
         installed_flow = {}
-        flow_list = []
         installed_flow['command'] = command
         installed_flow['flow'] = flow
-        deleted_flows = []
+        should_persist_flow = command == "add"
+        deleted_flows_idxs = set()
 
         serializer = FlowFactory.get_class(switch)
         installed_flow_obj = serializer.from_dict(flow, switch)
 
         if switch.id not in stored_flows_box:
             # Switch not stored, add to box.
-            flow_list.append(installed_flow)
-            stored_flows_box[switch.id] = {'flow_list': flow_list}
+            if should_persist_flow:
+                stored_flows_box[switch.id] = {'flow_list': [installed_flow]}
         else:
             stored_flows = stored_flows_box[switch.id].get('flow_list', [])
             # Check if flow already stored
-            for stored_flow in stored_flows:
+            for i, stored_flow in enumerate(stored_flows):
                 stored_flow_obj = serializer.from_dict(stored_flow['flow'],
                                                        switch)
 
@@ -293,7 +288,7 @@ class Main(KytosNApp):
                 if installed_flow['command'] == 'delete':
                     # No strict match
                     if match_flow(flow, version, stored_flow['flow']):
-                        deleted_flows.append(stored_flow)
+                        deleted_flows_idxs.add(i)
 
                 elif installed_flow_obj == stored_flow_obj:
                     if stored_flow['command'] == installed_flow['command']:
@@ -305,13 +300,17 @@ class Main(KytosNApp):
                     # is to remove it. In this case, the old instruction is
                     # removed and the new one is stored.
                     stored_flow['command'] = installed_flow.get('command')
-                    deleted_flows.append(stored_flow)
+                    deleted_flows_idxs.add(i)
                     break
 
-            # if installed_flow['command'] != 'delete':
-            stored_flows.append(installed_flow)
-            for i in deleted_flows:
-                stored_flows.remove(i)
+            if deleted_flows_idxs:
+                stored_flows = [
+                    flow
+                    for i, flow in enumerate(stored_flows)
+                    if i not in deleted_flows_idxs
+                ]
+            if should_persist_flow:
+                stored_flows.append(installed_flow)
             stored_flows_box[switch.id]['flow_list'] = stored_flows
 
         stored_flows_box['id'] = 'flow_persistence'

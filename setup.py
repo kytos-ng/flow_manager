@@ -3,6 +3,8 @@
 Run "python3 setup.py --help-commands" to list all available commands and their
 descriptions.
 """
+
+# pylint: disable=consider-using-f-string,duplicate-code
 import os
 import shutil
 import sys
@@ -22,7 +24,7 @@ if 'bdist_wheel' in sys.argv:
 BASE_ENV = Path(os.environ.get('VIRTUAL_ENV', '/'))
 
 NAPP_NAME = 'flow_manager'
-NAPP_VERSION = '4.0'
+NAPP_VERSION = '4.1.2'
 
 # Kytos var folder
 VAR_PATH = BASE_ENV / 'var' / 'lib' / 'kytos'
