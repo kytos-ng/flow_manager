@@ -441,6 +441,38 @@ class TestMain(TestCase):
     @patch('napps.kytos.flow_manager.main.Main._install_flows')
     @patch('napps.kytos.flow_manager.main.FlowFactory.get_class')
     @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
+    def test_no_strict_delete_with_cookie(self, *args):
+        """Test the non-strict matching method.
+
+        A FlowMod with a non zero cookie but empty match fields shouldn't match
+        other existing installed flows that have match clauses.
+        """
+        (mock_save_flow, _, _) = args
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        stored_flow = {
+            "command": "add",
+            "flow": {
+                "actions": [{"action_type": "output", "port": 4294967293}],
+                "match": {"dl_vlan": 3799, "dl_type": 35020},
+            },
+        }
+        flow_to_install = {
+            "cookie": 6191162389751548793,
+            "cookie_mask": 18446744073709551615,
+        }
+        flow_list = {"flow_list": [stored_flow]}
+        command = "delete"
+        self.napp.stored_flows = {dpid: flow_list}
+
+        self.napp._store_changed_flows(command, flow_to_install, switch)
+        mock_save_flow.assert_called()
+        self.assertDictEqual(self.napp.stored_flows[dpid]["flow_list"][0], stored_flow)
+
+    @patch("napps.kytos.flow_manager.main.Main._install_flows")
+    @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
+    @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
     def test_no_strict_delete(self, *args):
         """Test the non-strict matching method.
 
