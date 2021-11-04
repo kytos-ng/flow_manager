@@ -104,8 +104,7 @@ class Main(KytosNApp):
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {'flow_list': [
-        #                                     {'command': '<add|delete>',
-        #                                      'flow': {flow_dict}}]}}}
+        #                                     {'flow': {flow_dict}}]}}}
         self.stored_flows = {}
         self.resent_flows = set()
 
@@ -136,9 +135,8 @@ class Main(KytosNApp):
         if dpid in self.stored_flows:
             flow_list = self.stored_flows[dpid]["flow_list"]
             for flow in flow_list:
-                command = flow["command"]
                 flows_dict = {"flows": [flow["flow"]]}
-                self._install_flows(command, flows_dict, [switch])
+                self._install_flows("add", flows_dict, [switch])
             self.resent_flows.add(dpid)
             log.info(f"Flows resent to Switch {dpid}")
 
@@ -178,16 +176,18 @@ class Main(KytosNApp):
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_check_consistency(self, event):
         """Check the consistency of a switch upon receiving flow stats."""
-        if not ENABLE_CONSISTENCY_CHECK:
+        self.check_consistency(event.content["switch"])
+
+    def check_consistency(self, switch):
+        """Check consistency of stored and installed flows given a switch."""
+        if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
             return
-        switch = event.content["switch"]
-        if switch.is_enabled():
-            self.check_storehouse_consistency(switch)
-            if switch.dpid in self.stored_flows:
-                self.check_switch_consistency(switch)
+        self.check_storehouse_consistency(switch)
+        if switch.dpid in self.stored_flows:
+            self.check_switch_consistency(switch)
 
     def check_switch_consistency(self, switch):
-        """Check consistency of installed flows for a specific switch."""
+        """Check consistency of stored flows for a specific switch."""
         dpid = switch.dpid
 
         # Flows stored in storehouse
@@ -196,19 +196,17 @@ class Main(KytosNApp):
         serializer = FlowFactory.get_class(switch)
 
         for stored_flow in stored_flows:
-            command = stored_flow["command"]
             stored_flow_obj = serializer.from_dict(stored_flow["flow"], switch)
 
             flow = {"flows": [stored_flow["flow"]]}
 
             if stored_flow_obj not in switch.flows:
-                if command == "add":
-                    log.info("A consistency problem was detected in " f"switch {dpid}.")
-                    self._install_flows(command, flow, [switch], save=False)
-                    log.info(f"Flow forwarded to switch {dpid} to be " "installed.")
+                log.info("A consistency problem was detected in " f"switch {dpid}.")
+                self._install_flows("add", flow, [switch], save=False)
+                log.info(f"Flow forwarded to switch {dpid} to be " "installed.")
 
     def check_storehouse_consistency(self, switch):
-        """Check consistency of installed flows for a specific switch."""
+        """Check consistency of installed flows given a switch."""
         dpid = switch.dpid
 
         for installed_flow in switch.flows:
@@ -251,6 +249,7 @@ class Main(KytosNApp):
         else:
             log.info("Flows loaded.")
 
+    # TODO split in two methods
     def _store_changed_flows(self, command, flow, switch):
         """Store changed flows.
 
@@ -268,13 +267,9 @@ class Main(KytosNApp):
             )
             return
         installed_flow = {}
-        installed_flow["command"] = command
         installed_flow["flow"] = flow
         should_persist_flow = command == "add"
         deleted_flows_idxs = set()
-
-        serializer = FlowFactory.get_class(switch)
-        installed_flow_obj = serializer.from_dict(flow, switch)
 
         if switch.id not in stored_flows_box:
             # Switch not stored, add to box.
@@ -284,27 +279,12 @@ class Main(KytosNApp):
             stored_flows = stored_flows_box[switch.id].get("flow_list", [])
             # Check if flow already stored
             for i, stored_flow in enumerate(stored_flows):
-                stored_flow_obj = serializer.from_dict(stored_flow["flow"], switch)
-
                 version = switch.connection.protocol.version
 
-                if installed_flow["command"] == "delete":
+                if command == "delete":
                     # No strict match
                     if match_flow(flow, version, stored_flow["flow"]):
                         deleted_flows_idxs.add(i)
-
-                elif installed_flow_obj == stored_flow_obj:
-                    if stored_flow["command"] == installed_flow["command"]:
-                        log.debug("Data already stored.")
-                        return
-                    # Flow with inconsistency in "command" fields : Remove the
-                    # old instruction. This happens when there is a stored
-                    # instruction to install the flow, but the new instruction
-                    # is to remove it. In this case, the old instruction is
-                    # removed and the new one is stored.
-                    stored_flow["command"] = installed_flow.get("command")
-                    deleted_flows_idxs.add(i)
-                    break
 
             if deleted_flows_idxs:
                 stored_flows = [
