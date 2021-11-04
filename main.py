@@ -190,8 +190,8 @@ class Main(KytosNApp):
         serializer = FlowFactory.get_class(switch)
 
         for stored_flow in stored_flows:
-            stored_time = stored_flow.get('created_at',
-                                          get_time("0001-01-01T00:00:00"))
+            stored_time = get_time(stored_flow.get('created_at',
+                                                   '0001-01-01T00:00:00'))
             if (now() - stored_time).seconds < STATS_INTERVAL:
                 continue
             command = stored_flow['command']
@@ -269,7 +269,7 @@ class Main(KytosNApp):
         installed_flow = {}
         installed_flow['command'] = command
         installed_flow['flow'] = flow
-        installed_flow['created_at'] = now().isoformat()
+        installed_flow['created_at'] = now().strftime("%Y-%m-%dT%H:%M:%S")
         should_persist_flow = command == "add"
         deleted_flows_idxs = set()
 
