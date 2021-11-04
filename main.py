@@ -1,6 +1,7 @@
 """kytos/flow_manager NApp installs, lists and deletes switch flows."""
 
 # pylint: disable=relative-beyond-top-level
+import itertools
 from collections import OrderedDict
 from copy import deepcopy
 from threading import Lock
@@ -103,7 +104,7 @@ class Main(KytosNApp):
         self._storehouse_lock = Lock()
 
         # Format of stored flow data:
-        # {'flow_persistence': {'dpid_str': {'flow_list': [
+        # {'flow_persistence': {'dpid_str': {cookie_val: [
         #                                     {'flow': {flow_dict}}]}}}
         self.stored_flows = {}
         self.resent_flows = set()
@@ -120,6 +121,10 @@ class Main(KytosNApp):
         """Shutdown routine of the NApp."""
         log.debug("flow-manager stopping")
 
+    def stored_flows_list(self, dpid):
+        """Helper method to get the ordered list of stored flows."""
+        return itertools.chain(*[v for v in self.stored_flows[dpid].values()])
+
     @listen_to("kytos/of_core.handshake.completed")
     def resend_stored_flows(self, event):
         """Resend stored Flows."""
@@ -133,8 +138,7 @@ class Main(KytosNApp):
             log.debug(f"Flow already resent to the switch {dpid}")
             return
         if dpid in self.stored_flows:
-            flow_list = self.stored_flows[dpid]["flow_list"]
-            for flow in flow_list:
+            for flow in self.stored_flows_list(dpid):
                 flows_dict = {"flows": [flow["flow"]]}
                 self._install_flows("add", flows_dict, [switch])
             self.resent_flows.add(dpid)
@@ -189,19 +193,14 @@ class Main(KytosNApp):
     def check_switch_consistency(self, switch):
         """Check consistency of stored flows for a specific switch."""
         dpid = switch.dpid
-
-        # Flows stored in storehouse
-        stored_flows = self.stored_flows[dpid]["flow_list"]
-
         serializer = FlowFactory.get_class(switch)
 
-        for stored_flow in stored_flows:
+        for stored_flow in self.stored_flows_list(dpid):
             stored_flow_obj = serializer.from_dict(stored_flow["flow"], switch)
-
-            flow = {"flows": [stored_flow["flow"]]}
 
             if stored_flow_obj not in switch.flows:
                 log.info("A consistency problem was detected in " f"switch {dpid}.")
+                flow = {"flows": [stored_flow["flow"]]}
                 self._install_flows("add", flow, [switch], save=False)
                 log.info(f"Flow forwarded to switch {dpid} to be " "installed.")
 
@@ -223,10 +222,9 @@ class Main(KytosNApp):
                 log.info(f"Flow forwarded to switch {dpid} to be deleted.")
             else:
                 serializer = FlowFactory.get_class(switch)
-                stored_flows = self.stored_flows[dpid]["flow_list"]
                 stored_flows_list = [
                     serializer.from_dict(stored_flow["flow"], switch)
-                    for stored_flow in stored_flows
+                    for stored_flow in self.stored_flows_list(dpid)
                 ]
 
                 if installed_flow not in stored_flows_list:
@@ -249,42 +247,28 @@ class Main(KytosNApp):
         else:
             log.info("Flows loaded.")
 
-    # TODO split in two methods
-    def _store_changed_flows(self, command, flow, switch):
-        """Store changed flows.
-
-        Args:
-            command: Flow command to be installed
-            flow: Flows to be stored
-            switch: Switch target
-        """
+    def _del_matched_flows_store(self, flow_dict, switch):
+        """Try to delete matching stored flows given a flow dict."""
         stored_flows_box = deepcopy(self.stored_flows)
-        # if the flow has a destination dpid it can be stored.
-        if not switch:
-            log.info(
-                "The Flow cannot be stored, the destination switch "
-                f"have not been specified: {switch}"
-            )
-            return
-        installed_flow = {}
-        installed_flow["flow"] = flow
-        should_persist_flow = command == "add"
         deleted_flows_idxs = set()
 
         if switch.id not in stored_flows_box:
-            # Switch not stored, add to box.
-            if should_persist_flow:
-                stored_flows_box[switch.id] = {"flow_list": [installed_flow]}
-        else:
-            stored_flows = stored_flows_box[switch.id].get("flow_list", [])
-            # Check if flow already stored
+            return
+
+        cookies = (
+            self.stored_flows[switch.id].keys()
+            if flow_dict.get("cookie") is None
+            else [int(flow_dict.get("cookie", 0))]
+        )
+
+        for cookie in cookies:
+            stored_flows = stored_flows_box[switch.id].get(cookie, [])
+
             for i, stored_flow in enumerate(stored_flows):
                 version = switch.connection.protocol.version
-
-                if command == "delete":
-                    # No strict match
-                    if match_flow(flow, version, stored_flow["flow"]):
-                        deleted_flows_idxs.add(i)
+                # No strict match
+                if match_flow(flow_dict, version, stored_flow["flow"]):
+                    deleted_flows_idxs.add(i)
 
             if deleted_flows_idxs:
                 stored_flows = [
@@ -292,14 +276,52 @@ class Main(KytosNApp):
                     for i, flow in enumerate(stored_flows)
                     if i not in deleted_flows_idxs
                 ]
-            if should_persist_flow:
-                stored_flows.append(installed_flow)
-            stored_flows_box[switch.id]["flow_list"] = stored_flows
+
+            if stored_flows:
+                stored_flows_box[switch.id][cookie] = stored_flows
+            else:
+                stored_flows_box[switch.id].pop(cookie, None)
 
         stored_flows_box["id"] = "flow_persistence"
         self.storehouse.save_flow(stored_flows_box)
         del stored_flows_box["id"]
         self.stored_flows = deepcopy(stored_flows_box)
+
+    def _add_flow_store(self, flow_dict, switch):
+        """Try to add a flow dict in the store."""
+        installed_flow = {}
+        installed_flow["flow"] = flow_dict
+
+        stored_flows_box = deepcopy(self.stored_flows)
+        cookie = int(flow_dict.get("cookie", 0))
+        if switch.id not in stored_flows_box:
+            stored_flows_box[switch.id] = OrderedDict()
+
+        if not stored_flows_box[switch.id].get(cookie):
+            stored_flows_box[switch.id][cookie] = [installed_flow]
+        else:
+            stored_flows_box[switch.id][cookie].append(installed_flow)
+
+        stored_flows_box["id"] = "flow_persistence"
+        self.storehouse.save_flow(stored_flows_box)
+        del stored_flows_box["id"]
+        self.stored_flows = deepcopy(stored_flows_box)
+
+    def _store_changed_flows(self, command, flow_dict, switch):
+        """Store changed flows.
+
+        Args:
+            command: Flow command to be installed
+            flow: flow dict to be stored
+            switch: Switch target
+        """
+        cmd_handlers = {
+            "add": self._add_flow_store,
+            "delete": self._del_matched_flows_store,
+        }
+        if command not in cmd_handlers:
+            return
+        return cmd_handlers[command](flow_dict, switch)
 
     @rest("v2/flows")
     @rest("v2/flows/<dpid>")
