@@ -429,7 +429,7 @@ class TestMain(TestCase):
         flow_1.as_dict.return_value = {'flow_1': 'data'}
 
         flow_list = [{"command": "add",
-                      "created_at": now(),
+                      "created_at": now().strftime("%Y-%m-%dT%H:%M:%S"),
                       "flow": {'flow_1': 'data'}
                       }]
         serializer = MagicMock()
