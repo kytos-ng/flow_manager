@@ -2,13 +2,10 @@
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-from kytos.lib.helpers import (
-    get_connection_mock,
-    get_controller_mock,
-    get_kytos_event_mock,
-    get_switch_mock,
-    get_test_client,
-)
+from kytos.core.helpers import now
+from kytos.lib.helpers import (get_connection_mock, get_controller_mock,
+                               get_kytos_event_mock, get_switch_mock,
+                               get_test_client)
 
 
 # pylint: disable=protected-access, too-many-public-methods
@@ -432,8 +429,37 @@ class TestMain(TestCase):
         self.napp.check_switch_consistency(switch)
         mock_install_flows.assert_not_called()
 
-    @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
+    @patch('napps.kytos.flow_manager.main.Main._install_flows')
+    @patch('napps.kytos.flow_manager.main.FlowFactory.get_class')
+    def test_check_switch_consistency_ignore(self, *args):
+        """Test check_switch_consistency method.
+
+        This test checks the case when a flow is missing in the last received
+        flow_stats because the flow was just installed. Thus, it should be
+        ignored.
+        """
+        (mock_flow_factory, mock_install_flows) = args
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.flows = []
+
+        flow_1 = MagicMock()
+        flow_1.as_dict.return_value = {'flow_1': 'data'}
+
+        flow_list = [{"command": "add",
+                      "created_at": now().strftime("%Y-%m-%dT%H:%M:%S"),
+                      "flow": {'flow_1': 'data'}
+                      }]
+        serializer = MagicMock()
+        serializer.flow.cookie.return_value = 0
+
+        mock_flow_factory.return_value = serializer
+        self.napp.stored_flows = {dpid: {"flow_list": flow_list}}
+        self.napp.check_switch_consistency(switch)
+        mock_install_flows.assert_not_called()
+
+    @patch('napps.kytos.flow_manager.main.Main._install_flows')
+    @patch('napps.kytos.flow_manager.main.FlowFactory.get_class')
     def test_check_storehouse_consistency(self, *args):
         """Test check_storehouse_consistency method.
 

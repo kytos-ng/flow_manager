@@ -9,21 +9,19 @@ from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.flow_manager.storehouse import StoreHouse
 from napps.kytos.of_core.flow import FlowFactory
+from napps.kytos.of_core.settings import STATS_INTERVAL
 from pyof.foundation.base import UBIntBase
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
 from werkzeug.exceptions import BadRequest, NotFound, UnsupportedMediaType
 
 from kytos.core import KytosEvent, KytosNApp, log, rest
-from kytos.core.helpers import listen_to
+from kytos.core.helpers import get_time, listen_to, now
 
 from .exceptions import InvalidCommandError
-from .settings import (
-    CONSISTENCY_COOKIE_IGNORED_RANGE,
-    CONSISTENCY_TABLE_ID_IGNORED_RANGE,
-    ENABLE_CONSISTENCY_CHECK,
-    FLOWS_DICT_MAX_SIZE,
-)
+from .settings import (CONSISTENCY_COOKIE_IGNORED_RANGE,
+                       CONSISTENCY_TABLE_ID_IGNORED_RANGE,
+                       ENABLE_CONSISTENCY_CHECK, FLOWS_DICT_MAX_SIZE)
 
 
 def cast_fields(flow_dict):
@@ -196,8 +194,12 @@ class Main(KytosNApp):
         serializer = FlowFactory.get_class(switch)
 
         for stored_flow in stored_flows:
-            command = stored_flow["command"]
-            stored_flow_obj = serializer.from_dict(stored_flow["flow"], switch)
+            stored_time = get_time(stored_flow.get('created_at',
+                                                   '0001-01-01T00:00:00'))
+            if (now() - stored_time).seconds <= STATS_INTERVAL:
+                continue
+            command = stored_flow['command']
+            stored_flow_obj = serializer.from_dict(stored_flow['flow'], switch)
 
             flow = {"flows": [stored_flow["flow"]]}
 
@@ -205,7 +207,8 @@ class Main(KytosNApp):
                 if command == "add":
                     log.info("A consistency problem was detected in " f"switch {dpid}.")
                     self._install_flows(command, flow, [switch], save=False)
-                    log.info(f"Flow forwarded to switch {dpid} to be " "installed.")
+                    log.info(f'Flow forwarded to switch {dpid} to be '
+                             f'installed. Flow: {flow}')
 
     def check_storehouse_consistency(self, switch):
         """Check consistency of installed flows for a specific switch."""
@@ -222,7 +225,8 @@ class Main(KytosNApp):
                 flow = {"flows": [installed_flow.as_dict()]}
                 command = "delete_strict"
                 self._install_flows(command, flow, [switch], save=False)
-                log.info(f"Flow forwarded to switch {dpid} to be deleted.")
+                log.info(f'Flow forwarded to switch {dpid} to be deleted.'
+                         f' Flow: {flow}')
             else:
                 serializer = FlowFactory.get_class(switch)
                 stored_flows = self.stored_flows[dpid]["flow_list"]
@@ -236,7 +240,8 @@ class Main(KytosNApp):
                     flow = {"flows": [installed_flow.as_dict()]}
                     command = "delete_strict"
                     self._install_flows(command, flow, [switch], save=False)
-                    log.info(f"Flow forwarded to switch {dpid} to be deleted.")
+                    log.info(f'Flow forwarded to switch {dpid} to be deleted.'
+                             f' Flow: {flow}')
 
     # pylint: disable=attribute-defined-outside-init
     def _load_flows(self):
@@ -268,8 +273,9 @@ class Main(KytosNApp):
             )
             return
         installed_flow = {}
-        installed_flow["command"] = command
-        installed_flow["flow"] = flow
+        installed_flow['command'] = command
+        installed_flow['flow'] = flow
+        installed_flow['created_at'] = now().strftime("%Y-%m-%dT%H:%M:%S")
         should_persist_flow = command == "add"
         deleted_flows_idxs = set()
 
@@ -421,6 +427,8 @@ class Main(KytosNApp):
                 result = "The request body is not well-formed."
                 raise BadRequest(result)
 
+        log.info(f'Send FlowMod from request dpid: {dpid} command: {command}'
+                 f' flows_dict: {flows_dict}')
         if dpid:
             switch = self.controller.get_switch_by_dpid(dpid)
             if not switch:
