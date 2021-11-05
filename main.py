@@ -168,15 +168,18 @@ class Main(KytosNApp):
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_check_consistency(self, event):
         """Check the consistency of a switch upon receiving flow stats."""
-        self.check_consistency(event.content["switch"])
+        with self._storehouse_lock:
+            self.check_consistency(event.content["switch"])
 
     def check_consistency(self, switch):
         """Check consistency of stored and installed flows given a switch."""
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
             return
+        log.debug(f"check_consistency on switch {switch.id} has started")
         self.check_storehouse_consistency(switch)
         if switch.dpid in self.stored_flows:
             self.check_switch_consistency(switch)
+        log.debug(f"check_consistency on switch {switch.id} is done")
 
     @staticmethod
     def switch_flows_by_cookie(switch):
@@ -276,6 +279,7 @@ class Main(KytosNApp):
             else [int(flow_dict.get("cookie", 0))]
         )
 
+        has_deleted_any_flow = False
         for cookie in cookies:
             stored_flows = stored_flows_box[switch.id].get(cookie, [])
             if not stored_flows:
@@ -288,23 +292,28 @@ class Main(KytosNApp):
                 if match_flow(flow_dict, version, stored_flow["flow"]):
                     deleted_flows_idxs.add(i)
 
-            if deleted_flows_idxs:
-                stored_flows = [
-                    flow
-                    for i, flow in enumerate(stored_flows)
-                    if i not in deleted_flows_idxs
-                ]
+            if not deleted_flows_idxs:
+                continue
+
+            stored_flows = [
+                flow
+                for i, flow in enumerate(stored_flows)
+                if i not in deleted_flows_idxs
+            ]
+            has_deleted_any_flow = True
 
             if stored_flows:
                 stored_flows_box[switch.id][cookie] = stored_flows
             else:
                 stored_flows_box[switch.id].pop(cookie, None)
 
-        stored_flows_box["id"] = "flow_persistence"
-        self.storehouse.save_flow(stored_flows_box)
-        del stored_flows_box["id"]
-        self.stored_flows = deepcopy(stored_flows_box)
+        if has_deleted_any_flow:
+            stored_flows_box["id"] = "flow_persistence"
+            self.storehouse.save_flow(stored_flows_box)
+            del stored_flows_box["id"]
+            self.stored_flows = deepcopy(stored_flows_box)
 
+    # pylint: disable=fixme
     def _add_flow_store(self, flow_dict, switch):
         """Try to add a flow dict in the store."""
         installed_flow = {}
@@ -315,6 +324,7 @@ class Main(KytosNApp):
         if switch.id not in stored_flows_box:
             stored_flows_box[switch.id] = OrderedDict()
 
+        # TODO handle issue 23 (overlapping FlowMod add)
         if not stored_flows_box[switch.id].get(cookie):
             stored_flows_box[switch.id][cookie] = [installed_flow]
         else:
