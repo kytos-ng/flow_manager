@@ -335,10 +335,9 @@ class TestMain(TestCase):
         mock_event = MagicMock()
         flow = {"command": "add", "flow": MagicMock()}
 
-        flows = {"flow_list": [flow]}
         mock_event.content = {"switch": switch}
         self.napp.controller.switches = {dpid: switch}
-        self.napp.stored_flows = {dpid: flows}
+        self.napp.stored_flows = {dpid: {0: [flow]}}
         self.napp.resend_stored_flows(mock_event)
         mock_install_flows.assert_called()
 
@@ -364,16 +363,15 @@ class TestMain(TestCase):
         flows = {"flow": flow}
 
         command = "add"
-        flow_list = {
-            "flow_list": [
+        stored_flows = {
+            84114964: [
                 {
                     "match_fields": match_fields,
-                    "command": "delete",
                     "flow": flow,
                 }
             ]
         }
-        self.napp.stored_flows = {dpid: flow_list}
+        self.napp.stored_flows = {dpid: stored_flows}
         self.napp._store_changed_flows(command, flows, switch)
         mock_save_flow.assert_called()
 
@@ -397,12 +395,12 @@ class TestMain(TestCase):
         flow_1 = MagicMock()
         flow_1.as_dict.return_value = {"flow_1": "data"}
 
-        flow_list = [{"command": "add", "flow": {"flow_1": "data"}}]
+        stored_flows = [{"flow": {"flow_1": "data"}}]
         serializer = MagicMock()
         serializer.flow.cookie.return_value = 0
 
         mock_flow_factory.return_value = serializer
-        self.napp.stored_flows = {dpid: {"flow_list": flow_list}}
+        self.napp.stored_flows = {dpid: {0: stored_flows}}
         self.napp.check_switch_consistency(switch)
         mock_install_flows.assert_called()
 
@@ -523,11 +521,11 @@ class TestMain(TestCase):
 
         switch.flows = [flow_1]
 
-        flow_list = [{"command": "add", "flow": {"flow_2": "data", "cookie": 1}}]
+        stored_flows = [{"flow": {"flow_2": "data", "cookie": 1}}]
         serializer = flow_1
 
         mock_flow_factory.return_value = serializer
-        self.napp.stored_flows = {dpid: {"flow_list": flow_list}}
+        self.napp.stored_flows = {dpid: {0: stored_flows}}
         self.napp.check_storehouse_consistency(switch)
         mock_install_flows.assert_called()
 
@@ -673,9 +671,8 @@ class TestMain(TestCase):
         switch.id = dpid
         flow_to_install = {"match": {"in_port": 1}}
         stored_flow = {
-            "flow_list": [
+            0: [
                 {
-                    "command": "add",
                     "flow": {
                         "priority": 10,
                         "cookie": 84114904,
@@ -687,14 +684,12 @@ class TestMain(TestCase):
                     },
                 },
                 {
-                    "command": "add",
                     "flow": {
                         "actions": [],
                         "match": {"in_port": 2},
                     },
                 },
                 {
-                    "command": "add",
                     "flow": {
                         "priority": 20,
                         "cookie": 84114904,
@@ -714,9 +709,8 @@ class TestMain(TestCase):
         mock_save_flow.assert_called()
 
         expected_stored = {
-            "flow_list": [
+            0: [
                 {
-                    "command": "add",
                     "flow": {"actions": [], "match": {"in_port": 2}},
                 }
             ]
@@ -925,7 +919,7 @@ class TestMain(TestCase):
             flow.as_dict.return_value = {"flow_1": "data", "cookie": cookie}
             switch.flows = [flow]
             mock_flow_factory.return_value = flow
-            self.napp.stored_flows = {dpid: {"flow_list": flow}}
+            self.napp.stored_flows = {dpid: {0: [flow]}}
             self.napp.check_storehouse_consistency(switch)
             self.assertEqual(mock_install_flows.call_count, called)
 
@@ -953,6 +947,6 @@ class TestMain(TestCase):
             flow.as_dict.return_value = {"flow_1": "data", "cookie": table_id}
             switch.flows = [flow]
             mock_flow_factory.return_value = flow
-            self.napp.stored_flows = {dpid: {"flow_list": flow}}
+            self.napp.stored_flows = {dpid: {0: [flow]}}
             self.napp.check_storehouse_consistency(switch)
             self.assertEqual(mock_install_flows.call_count, called)
