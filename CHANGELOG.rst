@@ -21,6 +21,25 @@ Removed
 Security
 ========
 
+[5.1.0] - 2021-11.05
+********************
+
+Added
+=====
+- Added lock to avoid race flow mod race conditions in the consistency check
+
+Changed
+=======
+- ``stored_flows`` are now indexed by cookie, issue 34
+- Changed the ``flow_persistence`` data structured on storehouse
+- Refactored the consistency checks methods accordingly to use cookie indexes
+
+
+Deprecated
+==========
+- The prior ``flow_persistence`` data structure isn't supported anymore. It's required to delete the ``kytos.flow.persistence`` folder, upgrading won't be supported this time.
+
+
 [4.1.2] - 2021-11.03
 ********************
 
