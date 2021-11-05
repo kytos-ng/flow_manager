@@ -3,8 +3,7 @@
 # pylint: disable=relative-beyond-top-level
 import itertools
 import logging
-from collections import defaultdict
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from threading import Lock
 
@@ -127,7 +126,7 @@ class Main(KytosNApp):
 
     def stored_flows_list(self, dpid):
         """Ordered list of all stored flows given a dpid."""
-        return itertools.chain(*[v for v in self.stored_flows[dpid].values()])
+        return itertools.chain(*list(self.stored_flows[dpid].values()))
 
     @listen_to("kytos/of_core.handshake.completed")
     def resend_stored_flows(self, event):
@@ -234,7 +233,8 @@ class Main(KytosNApp):
 
                 if dpid not in self.stored_flows:
                     log.info(
-                        f"Consistency check: alien flow on switch {dpid}, id not indexed"
+                        f"Consistency check: alien flow on switch {dpid}, dpid"
+                        " not indexed"
                     )
                     flow = {"flows": [installed_flow.as_dict()]}
                     command = "delete_strict"
@@ -348,7 +348,9 @@ class Main(KytosNApp):
             "delete": self._del_matched_flows_store,
         }
         if command not in cmd_handlers:
-            return
+            raise ValueError(
+                f"Invalid command: {command}, supported: {list(cmd_handlers.keys())}"
+            )
         return cmd_handlers[command](flow_dict, switch)
 
     @rest("v2/flows")
