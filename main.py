@@ -9,13 +9,14 @@ from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.flow_manager.storehouse import StoreHouse
 from napps.kytos.of_core.flow import FlowFactory
+from napps.kytos.of_core.settings import STATS_INTERVAL
 from pyof.foundation.base import UBIntBase
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
 from werkzeug.exceptions import BadRequest, NotFound, UnsupportedMediaType
 
 from kytos.core import KytosEvent, KytosNApp, log, rest
-from kytos.core.helpers import listen_to
+from kytos.core.helpers import get_time, listen_to, now
 
 from .exceptions import InvalidCommandError
 from .settings import (CONSISTENCY_COOKIE_IGNORED_RANGE,
@@ -189,6 +190,10 @@ class Main(KytosNApp):
         serializer = FlowFactory.get_class(switch)
 
         for stored_flow in stored_flows:
+            stored_time = get_time(stored_flow.get('created_at',
+                                                   '0001-01-01T00:00:00'))
+            if (now() - stored_time).seconds <= STATS_INTERVAL:
+                continue
             command = stored_flow['command']
             stored_flow_obj = serializer.from_dict(stored_flow['flow'], switch)
 
@@ -266,6 +271,7 @@ class Main(KytosNApp):
         installed_flow = {}
         installed_flow['command'] = command
         installed_flow['flow'] = flow
+        installed_flow['created_at'] = now().strftime("%Y-%m-%dT%H:%M:%S")
         should_persist_flow = command == "add"
         deleted_flows_idxs = set()
 
