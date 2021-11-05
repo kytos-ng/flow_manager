@@ -2,6 +2,8 @@
 
 # pylint: disable=relative-beyond-top-level
 import itertools
+import logging
+from collections import defaultdict
 from collections import OrderedDict
 from copy import deepcopy
 from threading import Lock
@@ -25,6 +27,8 @@ from .settings import (
     ENABLE_CONSISTENCY_CHECK,
     FLOWS_DICT_MAX_SIZE,
 )
+
+DEBUG_ENABLED = log.isEnabledFor(logging.DEBUG)
 
 
 def cast_fields(flow_dict):
@@ -122,7 +126,7 @@ class Main(KytosNApp):
         log.debug("flow-manager stopping")
 
     def stored_flows_list(self, dpid):
-        """Helper method to get the ordered list of stored flows."""
+        """Ordered list of all stored flows given a dpid."""
         return itertools.chain(*[v for v in self.stored_flows[dpid].values()])
 
     @listen_to("kytos/of_core.handshake.completed")
@@ -161,22 +165,6 @@ class Main(KytosNApp):
                     return True
         return False
 
-    def consistency_ignored_check(self, flow):
-        """Check if the flow is in the list of flows ignored by consistency.
-
-        Check by `cookie` range and `table_id` range.
-        Return True if the flow is in the ignored range, otherwise return
-        False.
-        """
-        # Check by cookie
-        if self.is_ignored(flow.cookie, self.cookie_ignored_range):
-            return True
-
-        # Check by `table_id`
-        if self.is_ignored(flow.table_id, self.tab_id_ignored_range):
-            return True
-        return False
-
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_check_consistency(self, event):
         """Check the consistency of a switch upon receiving flow stats."""
@@ -190,55 +178,76 @@ class Main(KytosNApp):
         if switch.dpid in self.stored_flows:
             self.check_switch_consistency(switch)
 
+    @staticmethod
+    def switch_flows_by_cookie(switch):
+        """Build switch.flows indexed by cookie."""
+        installed_flows = defaultdict(list)
+        for cookie, flows in itertools.groupby(switch.flows, lambda x: x.cookie):
+            for flow in flows:
+                installed_flows[cookie].append(flow)
+        return installed_flows
+
     def check_switch_consistency(self, switch):
         """Check consistency of stored flows for a specific switch."""
         dpid = switch.dpid
         serializer = FlowFactory.get_class(switch)
+        installed_flows = self.switch_flows_by_cookie(switch)
 
-        for stored_flow in self.stored_flows_list(dpid):
-            stored_flow_obj = serializer.from_dict(stored_flow["flow"], switch)
+        for cookie, stored_flows in self.stored_flows[dpid].items():
+            for stored_flow in stored_flows:
+                stored_flow_obj = serializer.from_dict(stored_flow["flow"], switch)
+                if stored_flow_obj in installed_flows[cookie]:
+                    continue
 
-            if stored_flow_obj not in switch.flows:
-                log.info("A consistency problem was detected in " f"switch {dpid}.")
+                log.info(f"Consistency check: missing flow on switch {dpid}.")
                 flow = {"flows": [stored_flow["flow"]]}
                 self._install_flows("add", flow, [switch], save=False)
                 log.info(
-                    f"Flow forwarded to switch {dpid} to be " f"installed. Flow: {flow}"
+                    f"Flow forwarded to switch {dpid} to be installed. Flow: {flow}"
                 )
 
     def check_storehouse_consistency(self, switch):
         """Check consistency of installed flows given a switch."""
         dpid = switch.dpid
 
-        for installed_flow in switch.flows:
-
-            # Check if the flow is in the ignored flow list
-            if self.consistency_ignored_check(installed_flow):
+        for cookie, flows in self.switch_flows_by_cookie(switch).items():
+            if self.is_ignored(cookie, self.cookie_ignored_range):
                 continue
 
-            if dpid not in self.stored_flows:
-                log.info("A consistency problem was detected in " f"switch {dpid}.")
-                flow = {"flows": [installed_flow.as_dict()]}
-                command = "delete_strict"
-                self._install_flows(command, flow, [switch], save=False)
-                log.info(
-                    f"Flow forwarded to switch {dpid} to be deleted." f" Flow: {flow}"
+            serializer = FlowFactory.get_class(switch)
+            stored_flows_list = [
+                serializer.from_dict(stored_flow["flow"], switch)
+                for stored_flow in self.stored_flows[dpid].get(cookie, [])
+            ]
+            if DEBUG_ENABLED:
+                log.debug(
+                    f"stored_flows_list: cookie index {cookie},"
+                    f" {[f.as_dict() for f in stored_flows_list]}"
                 )
-            else:
-                serializer = FlowFactory.get_class(switch)
-                stored_flows_list = [
-                    serializer.from_dict(stored_flow["flow"], switch)
-                    for stored_flow in self.stored_flows_list(dpid)
-                ]
 
-                if installed_flow not in stored_flows_list:
-                    log.info("A consistency problem was detected in " f"switch {dpid}.")
+            for installed_flow in flows:
+                if self.is_ignored(installed_flow.table_id, self.tab_id_ignored_range):
+                    continue
+
+                if dpid not in self.stored_flows:
+                    log.info(
+                        f"Consistency check: alien flow on switch {dpid}, id not indexed"
+                    )
                     flow = {"flows": [installed_flow.as_dict()]}
                     command = "delete_strict"
                     self._install_flows(command, flow, [switch], save=False)
                     log.info(
-                        f"Flow forwarded to switch {dpid} to be deleted."
-                        f" Flow: {flow}"
+                        f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
+                    )
+                    continue
+
+                if installed_flow not in stored_flows_list:
+                    log.info(f"Consistency check: alien flow on switch {dpid}")
+                    flow = {"flows": [installed_flow.as_dict()]}
+                    command = "delete_strict"
+                    self._install_flows(command, flow, [switch], save=False)
+                    log.info(
+                        f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
                     )
 
     # pylint: disable=attribute-defined-outside-init
@@ -257,7 +266,6 @@ class Main(KytosNApp):
     def _del_matched_flows_store(self, flow_dict, switch):
         """Try to delete matching stored flows given a flow dict."""
         stored_flows_box = deepcopy(self.stored_flows)
-        deleted_flows_idxs = set()
 
         if switch.id not in stored_flows_box:
             return
@@ -270,7 +278,10 @@ class Main(KytosNApp):
 
         for cookie in cookies:
             stored_flows = stored_flows_box[switch.id].get(cookie, [])
+            if not stored_flows:
+                continue
 
+            deleted_flows_idxs = set()
             for i, stored_flow in enumerate(stored_flows):
                 version = switch.connection.protocol.version
                 # No strict match
