@@ -555,13 +555,13 @@ class TestMain(TestCase):
             "cookie": 6191162389751548793,
             "cookie_mask": 18446744073709551615,
         }
-        flow_list = {"flow_list": [stored_flow]}
+        stored_flows = {0: [stored_flow]}
         command = "delete"
-        self.napp.stored_flows = {dpid: flow_list}
+        self.napp.stored_flows = {dpid: stored_flows}
 
         self.napp._store_changed_flows(command, flow_to_install, switch)
-        mock_save_flow.assert_called()
-        self.assertDictEqual(self.napp.stored_flows[dpid]["flow_list"][0], stored_flow)
+        mock_save_flow.assert_not_called()
+        self.assertDictEqual(self.napp.stored_flows[dpid][0][0], stored_flow)
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
@@ -576,7 +576,6 @@ class TestMain(TestCase):
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
         stored_flow = {
-            "command": "add",
             "flow": {
                 "actions": [{"action_type": "set_vlan", "vlan_id": 300}],
                 "cookie": 6191162389751548793,
@@ -584,7 +583,6 @@ class TestMain(TestCase):
             },
         }
         stored_flow2 = {
-            "command": "add",
             "flow": {
                 "actions": [],
                 "cookie": 4961162389751548787,
@@ -595,9 +593,12 @@ class TestMain(TestCase):
             "cookie": 6191162389751548793,
             "cookie_mask": 18446744073709551615,
         }
-        flow_list = {"flow_list": [stored_flow, stored_flow2]}
+        stored_flows = {
+            6191162389751548793: [stored_flow],
+            4961162389751548787: [stored_flow2],
+        }
         command = "delete"
-        self.napp.stored_flows = {dpid: flow_list}
+        self.napp.stored_flows = {dpid: stored_flows}
 
         self.napp._store_changed_flows(command, flow_to_install, switch)
         mock_save_flow.assert_called()
@@ -804,7 +805,7 @@ class TestMain(TestCase):
         self.napp.stored_flows = {dpid: stored_flows}
 
         self.napp._store_changed_flows(command, flow_to_install, switch)
-        mock_save_flow.assert_called()
+        mock_save_flow.assert_not_called()
         expected_stored = {
             0: [
                 {
