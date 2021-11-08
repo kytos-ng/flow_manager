@@ -19,32 +19,35 @@ from kytos.core import KytosEvent, KytosNApp, log, rest
 from kytos.core.helpers import get_time, listen_to, now
 
 from .exceptions import InvalidCommandError
-from .settings import (CONSISTENCY_COOKIE_IGNORED_RANGE,
-                       CONSISTENCY_TABLE_ID_IGNORED_RANGE,
-                       ENABLE_CONSISTENCY_CHECK, FLOWS_DICT_MAX_SIZE)
+from .settings import (
+    CONSISTENCY_COOKIE_IGNORED_RANGE,
+    CONSISTENCY_TABLE_ID_IGNORED_RANGE,
+    ENABLE_CONSISTENCY_CHECK,
+    FLOWS_DICT_MAX_SIZE,
+)
 
 
 def cast_fields(flow_dict):
     """Make casting the match fields from UBInt() to native int ."""
-    match = flow_dict['match']
+    match = flow_dict["match"]
     for field, value in match.items():
         if isinstance(value, UBIntBase):
             match[field] = int(value)
-    flow_dict['match'] = match
+    flow_dict["match"] = match
     return flow_dict
 
 
 def _validate_range(values):
     """Check that the range of flows ignored by the consistency is valid."""
     if len(values) != 2:
-        msg = f'The tuple must have 2 items, not {len(values)}'
+        msg = f"The tuple must have 2 items, not {len(values)}"
         raise ValueError(msg)
     first, second = values
     if second < first:
-        msg = f'The first value is bigger than the second: {values}'
+        msg = f"The first value is bigger than the second: {values}"
         raise ValueError(msg)
     if not isinstance(first, int) or not isinstance(second, int):
-        msg = f'Expected a tuple of integers, received {values}'
+        msg = f"Expected a tuple of integers, received {values}"
         raise TypeError(msg)
 
 
@@ -55,8 +58,10 @@ def _valid_consistency_ignored(consistency_ignored_list):
     is well formatted. Returns True, if the list is well
     formatted, otherwise return False.
     """
-    msg = ('The list of ignored flows in the consistency check'
-           'is not well formatted, it will be ignored: %s')
+    msg = (
+        "The list of ignored flows in the consistency check"
+        "is not well formatted, it will be ignored: %s"
+    )
     for consistency_ignored in consistency_ignored_list:
         if isinstance(consistency_ignored, tuple):
             try:
@@ -65,8 +70,10 @@ def _valid_consistency_ignored(consistency_ignored_list):
                 log.warn(msg, error)
                 return False
         elif not isinstance(consistency_ignored, (int, tuple)):
-            error_msg = ('The elements must be of class int or tuple'
-                         f' but they are: {type(consistency_ignored)}')
+            error_msg = (
+                "The elements must be of class int or tuple"
+                f" but they are: {type(consistency_ignored)}"
+            )
             log.warn(msg, error_msg)
             return False
     return True
@@ -115,26 +122,26 @@ class Main(KytosNApp):
         """Shutdown routine of the NApp."""
         log.debug("flow-manager stopping")
 
-    @listen_to('kytos/of_core.handshake.completed')
+    @listen_to("kytos/of_core.handshake.completed")
     def resend_stored_flows(self, event):
         """Resend stored Flows."""
         # if consistency check is enabled, it should take care of this
         if ENABLE_CONSISTENCY_CHECK:
             return
-        switch = event.content['switch']
+        switch = event.content["switch"]
         dpid = str(switch.dpid)
         # This can be a problem because this code is running a thread
         if dpid in self.resent_flows:
-            log.debug(f'Flow already resent to the switch {dpid}')
+            log.debug(f"Flow already resent to the switch {dpid}")
             return
         if dpid in self.stored_flows:
-            flow_list = self.stored_flows[dpid]['flow_list']
+            flow_list = self.stored_flows[dpid]["flow_list"]
             for flow in flow_list:
-                command = flow['command']
-                flows_dict = {"flows": [flow['flow']]}
+                command = flow["command"]
+                flows_dict = {"flows": [flow["flow"]]}
                 self._install_flows(command, flows_dict, [switch])
             self.resent_flows.add(dpid)
-            log.info(f'Flows resent to Switch {dpid}')
+            log.info(f"Flows resent to Switch {dpid}")
 
     @staticmethod
     def is_ignored(field, ignored_range):
@@ -169,12 +176,12 @@ class Main(KytosNApp):
             return True
         return False
 
-    @listen_to('kytos/of_core.flow_stats.received')
+    @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_check_consistency(self, event):
         """Check the consistency of a switch upon receiving flow stats."""
         if not ENABLE_CONSISTENCY_CHECK:
             return
-        switch = event.content['switch']
+        switch = event.content["switch"]
         if switch.is_enabled():
             self.check_storehouse_consistency(switch)
             if switch.dpid in self.stored_flows:
@@ -185,27 +192,27 @@ class Main(KytosNApp):
         dpid = switch.dpid
 
         # Flows stored in storehouse
-        stored_flows = self.stored_flows[dpid]['flow_list']
+        stored_flows = self.stored_flows[dpid]["flow_list"]
 
         serializer = FlowFactory.get_class(switch)
 
         for stored_flow in stored_flows:
-            stored_time = get_time(stored_flow.get('created_at',
-                                                   '0001-01-01T00:00:00'))
+            stored_time = get_time(stored_flow.get("created_at", "0001-01-01T00:00:00"))
             if (now() - stored_time).seconds <= STATS_INTERVAL:
                 continue
-            command = stored_flow['command']
-            stored_flow_obj = serializer.from_dict(stored_flow['flow'], switch)
+            command = stored_flow["command"]
+            stored_flow_obj = serializer.from_dict(stored_flow["flow"], switch)
 
-            flow = {'flows': [stored_flow['flow']]}
+            flow = {"flows": [stored_flow["flow"]]}
 
             if stored_flow_obj not in switch.flows:
-                if command == 'add':
-                    log.info('A consistency problem was detected in '
-                             f'switch {dpid}.')
+                if command == "add":
+                    log.info("A consistency problem was detected in " f"switch {dpid}.")
                     self._install_flows(command, flow, [switch], save=False)
-                    log.info(f'Flow forwarded to switch {dpid} to be '
-                             f'installed. Flow: {flow}')
+                    log.info(
+                        f"Flow forwarded to switch {dpid} to be "
+                        f"installed. Flow: {flow}"
+                    )
 
     def check_storehouse_consistency(self, switch):
         """Check consistency of installed flows for a specific switch."""
@@ -218,41 +225,43 @@ class Main(KytosNApp):
                 continue
 
             if dpid not in self.stored_flows:
-                log.info('A consistency problem was detected in '
-                         f'switch {dpid}.')
-                flow = {'flows': [installed_flow.as_dict()]}
-                command = 'delete_strict'
+                log.info("A consistency problem was detected in " f"switch {dpid}.")
+                flow = {"flows": [installed_flow.as_dict()]}
+                command = "delete_strict"
                 self._install_flows(command, flow, [switch], save=False)
-                log.info(f'Flow forwarded to switch {dpid} to be deleted.'
-                         f' Flow: {flow}')
+                log.info(
+                    f"Flow forwarded to switch {dpid} to be deleted." f" Flow: {flow}"
+                )
             else:
                 serializer = FlowFactory.get_class(switch)
-                stored_flows = self.stored_flows[dpid]['flow_list']
-                stored_flows_list = [serializer.from_dict(stored_flow['flow'],
-                                                          switch)
-                                     for stored_flow in stored_flows]
+                stored_flows = self.stored_flows[dpid]["flow_list"]
+                stored_flows_list = [
+                    serializer.from_dict(stored_flow["flow"], switch)
+                    for stored_flow in stored_flows
+                ]
 
                 if installed_flow not in stored_flows_list:
-                    log.info('A consistency problem was detected in '
-                             f'switch {dpid}.')
-                    flow = {'flows': [installed_flow.as_dict()]}
-                    command = 'delete_strict'
+                    log.info("A consistency problem was detected in " f"switch {dpid}.")
+                    flow = {"flows": [installed_flow.as_dict()]}
+                    command = "delete_strict"
                     self._install_flows(command, flow, [switch], save=False)
-                    log.info(f'Flow forwarded to switch {dpid} to be deleted.'
-                             f' Flow: {flow}')
+                    log.info(
+                        f"Flow forwarded to switch {dpid} to be deleted."
+                        f" Flow: {flow}"
+                    )
 
     # pylint: disable=attribute-defined-outside-init
     def _load_flows(self):
         """Load stored flows."""
         try:
-            data = self.storehouse.get_data()['flow_persistence']
-            if 'id' in data:
-                del data['id']
+            data = self.storehouse.get_data()["flow_persistence"]
+            if "id" in data:
+                del data["id"]
             self.stored_flows = data
         except (KeyError, FileNotFoundError) as error:
-            log.debug(f'There are no flows to load: {error}')
+            log.debug(f"There are no flows to load: {error}")
         else:
-            log.info('Flows loaded.')
+            log.info("Flows loaded.")
 
     def _store_changed_flows(self, command, flow, switch):
         """Store changed flows.
@@ -265,13 +274,15 @@ class Main(KytosNApp):
         stored_flows_box = deepcopy(self.stored_flows)
         # if the flow has a destination dpid it can be stored.
         if not switch:
-            log.info('The Flow cannot be stored, the destination switch '
-                     f'have not been specified: {switch}')
+            log.info(
+                "The Flow cannot be stored, the destination switch "
+                f"have not been specified: {switch}"
+            )
             return
         installed_flow = {}
-        installed_flow['command'] = command
-        installed_flow['flow'] = flow
-        installed_flow['created_at'] = now().strftime("%Y-%m-%dT%H:%M:%S")
+        installed_flow["command"] = command
+        installed_flow["flow"] = flow
+        installed_flow["created_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
         should_persist_flow = command == "add"
         deleted_flows_idxs = set()
 
@@ -281,31 +292,30 @@ class Main(KytosNApp):
         if switch.id not in stored_flows_box:
             # Switch not stored, add to box.
             if should_persist_flow:
-                stored_flows_box[switch.id] = {'flow_list': [installed_flow]}
+                stored_flows_box[switch.id] = {"flow_list": [installed_flow]}
         else:
-            stored_flows = stored_flows_box[switch.id].get('flow_list', [])
+            stored_flows = stored_flows_box[switch.id].get("flow_list", [])
             # Check if flow already stored
             for i, stored_flow in enumerate(stored_flows):
-                stored_flow_obj = serializer.from_dict(stored_flow['flow'],
-                                                       switch)
+                stored_flow_obj = serializer.from_dict(stored_flow["flow"], switch)
 
                 version = switch.connection.protocol.version
 
-                if installed_flow['command'] == 'delete':
+                if installed_flow["command"] == "delete":
                     # No strict match
-                    if match_flow(flow, version, stored_flow['flow']):
+                    if match_flow(flow, version, stored_flow["flow"]):
                         deleted_flows_idxs.add(i)
 
                 elif installed_flow_obj == stored_flow_obj:
-                    if stored_flow['command'] == installed_flow['command']:
-                        log.debug('Data already stored.')
+                    if stored_flow["command"] == installed_flow["command"]:
+                        log.debug("Data already stored.")
                         return
                     # Flow with inconsistency in "command" fields : Remove the
                     # old instruction. This happens when there is a stored
                     # instruction to install the flow, but the new instruction
                     # is to remove it. In this case, the old instruction is
                     # removed and the new one is stored.
-                    stored_flow['command'] = installed_flow.get('command')
+                    stored_flow["command"] = installed_flow.get("command")
                     deleted_flows_idxs.add(i)
                     break
 
@@ -317,15 +327,15 @@ class Main(KytosNApp):
                 ]
             if should_persist_flow:
                 stored_flows.append(installed_flow)
-            stored_flows_box[switch.id]['flow_list'] = stored_flows
+            stored_flows_box[switch.id]["flow_list"] = stored_flows
 
-        stored_flows_box['id'] = 'flow_persistence'
+        stored_flows_box["id"] = "flow_persistence"
         self.storehouse.save_flow(stored_flows_box)
-        del stored_flows_box['id']
+        del stored_flows_box["id"]
         self.stored_flows = deepcopy(stored_flows_box)
 
-    @rest('v2/flows')
-    @rest('v2/flows/<dpid>')
+    @rest("v2/flows")
+    @rest("v2/flows/<dpid>")
     def list(self, dpid=None):
         """Retrieve all flows from a switch identified by dpid.
 
@@ -342,30 +352,28 @@ class Main(KytosNApp):
         switch_flows = {}
 
         for switch in switches:
-            flows_dict = [cast_fields(flow.as_dict())
-                          for flow in switch.flows]
-            switch_flows[switch.dpid] = {'flows': flows_dict}
+            flows_dict = [cast_fields(flow.as_dict()) for flow in switch.flows]
+            switch_flows[switch.dpid] = {"flows": flows_dict}
 
         return jsonify(switch_flows)
 
-    @listen_to('kytos.flow_manager.flows.(install|delete)')
+    @listen_to("kytos.flow_manager.flows.(install|delete)")
     def event_flows_install_delete(self, event):
         """Install or delete flows in the switches through events.
 
         Install or delete Flow of switches identified by dpid.
         """
         try:
-            dpid = event.content['dpid']
-            flow_dict = event.content['flow_dict']
+            dpid = event.content["dpid"]
+            flow_dict = event.content["flow_dict"]
         except KeyError as error:
-            log.error("Error getting fields to install or remove "
-                      f"Flows: {error}")
+            log.error("Error getting fields to install or remove " f"Flows: {error}")
             return
 
-        if event.name == 'kytos.flow_manager.flows.install':
-            command = 'add'
-        elif event.name == 'kytos.flow_manager.flows.delete':
-            command = 'delete'
+        if event.name == "kytos.flow_manager.flows.install":
+            command = "add"
+        elif event.name == "kytos.flow_manager.flows.delete":
+            command = "delete"
         else:
             msg = f'Invalid event "{event.name}", should be install|delete'
             raise ValueError(msg)
@@ -374,11 +382,12 @@ class Main(KytosNApp):
         try:
             self._install_flows(command, flow_dict, [switch])
         except InvalidCommandError as error:
-            log.error("Error installing or deleting Flow through"
-                      f" Kytos Event: {error}")
+            log.error(
+                "Error installing or deleting Flow through" f" Kytos Event: {error}"
+            )
 
-    @rest('v2/flows', methods=['POST'])
-    @rest('v2/flows/<dpid>', methods=['POST'])
+    @rest("v2/flows", methods=["POST"])
+    @rest("v2/flows/<dpid>", methods=["POST"])
     def add(self, dpid=None):
         """Install new flows in the switch identified by dpid.
 
@@ -386,10 +395,10 @@ class Main(KytosNApp):
         """
         return self._send_flow_mods_from_request(dpid, "add")
 
-    @rest('v2/delete', methods=['POST'])
-    @rest('v2/delete/<dpid>', methods=['POST'])
-    @rest('v2/flows', methods=['DELETE'])
-    @rest('v2/flows/<dpid>', methods=['DELETE'])
+    @rest("v2/delete", methods=["POST"])
+    @rest("v2/delete/<dpid>", methods=["POST"])
+    @rest("v2/flows", methods=["DELETE"])
+    @rest("v2/flows/<dpid>", methods=["DELETE"])
     def delete(self, dpid=None):
         """Delete existing flows in the switch identified by dpid.
 
@@ -408,37 +417,40 @@ class Main(KytosNApp):
             flows_dict = request.get_json() or {}
             content_type = request.content_type
             # Get flow to check if the request is well-formed
-            flows = flows_dict.get('flows', [])
+            flows = flows_dict.get("flows", [])
 
             if content_type is None:
-                result = 'The request body is empty'
+                result = "The request body is empty"
                 raise BadRequest(result)
 
-            if content_type != 'application/json':
-                result = ('The content type must be application/json '
-                          f'(received {content_type}).')
+            if content_type != "application/json":
+                result = (
+                    "The content type must be application/json "
+                    f"(received {content_type})."
+                )
                 raise UnsupportedMediaType(result)
 
             if not any(flows_dict) or not any(flows):
-                result = 'The request body is not well-formed.'
+                result = "The request body is not well-formed."
                 raise BadRequest(result)
 
-        log.info(f'Send FlowMod from request dpid: {dpid} command: {command}'
-                 f' flows_dict: {flows_dict}')
+        log.info(
+            f"Send FlowMod from request dpid: {dpid} command: {command}"
+            f" flows_dict: {flows_dict}"
+        )
         if dpid:
             switch = self.controller.get_switch_by_dpid(dpid)
             if not switch:
-                return jsonify({"response": 'dpid not found.'}), 404
+                return jsonify({"response": "dpid not found."}), 404
             elif switch.is_enabled() is False:
                 if command == "delete":
                     self._install_flows(command, flows_dict, [switch])
                 else:
-                    return jsonify({"response": 'switch is disabled.'}), 404
+                    return jsonify({"response": "switch is disabled."}), 404
             else:
                 self._install_flows(command, flows_dict, [switch])
         else:
-            self._install_flows(command, flows_dict,
-                                self._get_all_switches_enabled())
+            self._install_flows(command, flows_dict, self._get_all_switches_enabled())
 
         return jsonify({"response": "FlowMod Messages Sent"}), 202
 
@@ -453,7 +465,7 @@ class Main(KytosNApp):
         """
         for switch in switches:
             serializer = FlowFactory.get_class(switch)
-            flows = flows_dict.get('flows', [])
+            flows = flows_dict.get("flows", [])
             for flow_dict in flows:
                 flow = serializer.from_dict(flow_dict, switch)
                 if command == "delete":
@@ -479,31 +491,29 @@ class Main(KytosNApp):
         self._flow_mods_sent[xid] = (flow, command)
 
     def _send_flow_mod(self, switch, flow_mod):
-        event_name = 'kytos/flow_manager.messages.out.ofpt_flow_mod'
+        event_name = "kytos/flow_manager.messages.out.ofpt_flow_mod"
 
-        content = {'destination': switch.connection,
-                   'message': flow_mod}
+        content = {"destination": switch.connection, "message": flow_mod}
 
         event = KytosEvent(name=event_name, content=content)
         self.controller.buffers.msg_out.put(event)
 
     def _send_napp_event(self, switch, flow, command, **kwargs):
         """Send an Event to other apps informing about a FlowMod."""
-        if command == 'add':
-            name = 'kytos/flow_manager.flow.added'
-        elif command in ('delete', 'delete_strict'):
-            name = 'kytos/flow_manager.flow.removed'
-        elif command == 'error':
-            name = 'kytos/flow_manager.flow.error'
+        if command == "add":
+            name = "kytos/flow_manager.flow.added"
+        elif command in ("delete", "delete_strict"):
+            name = "kytos/flow_manager.flow.removed"
+        elif command == "error":
+            name = "kytos/flow_manager.flow.error"
         else:
             raise InvalidCommandError
-        content = {'datapath': switch,
-                   'flow': flow}
+        content = {"datapath": switch, "flow": flow}
         content.update(kwargs)
         event_app = KytosEvent(name, content)
         self.controller.buffers.app.put(event_app)
 
-    @listen_to('.*.of_core.*.ofpt_error')
+    @listen_to(".*.of_core.*.ofpt_error")
     def handle_errors(self, event):
         """Receive OpenFlow error and send a event.
 
@@ -525,7 +535,7 @@ class Main(KytosNApp):
 
         if message.code == BadActionCode.OFPBAC_BAD_OUT_PORT:
             actions = []
-            if hasattr(error_packet, 'actions'):
+            if hasattr(error_packet, "actions"):
                 # Get actions from the flow mod (OF 1.0)
                 actions = error_packet.actions
             else:
@@ -545,6 +555,11 @@ class Main(KytosNApp):
         except KeyError:
             pass
         else:
-            self._send_napp_event(flow.switch, flow, 'error',
-                                  error_command=error_command,
-                                  error_type=error_type, error_code=error_code)
+            self._send_napp_event(
+                flow.switch,
+                flow,
+                "error",
+                error_command=error_command,
+                error_type=error_type,
+                error_code=error_code,
+            )

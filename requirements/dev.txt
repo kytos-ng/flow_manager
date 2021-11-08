@@ -13,6 +13,7 @@
     # via
     #   -r requirements/dev.in
     #   kytos
+black>=21.10b0 # via -r requirements/dev.in
 astroid==2.8.4
     # via pylint
 backcall==0.1.0
@@ -21,11 +22,12 @@ backcall==0.1.0
     #   kytos
 backports.entry-points-selectable==1.1.0
     # via virtualenv
-click==7.1.1
+click>=7.1.2
     # via
     #   flask
     #   kytos
     #   pip-tools
+    #   black
 coverage==6.1.1
     # via kytos-flow-manager
 decorator==4.4.2
