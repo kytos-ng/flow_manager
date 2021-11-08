@@ -331,7 +331,7 @@ class Main(KytosNApp):
         else:
             version = switch.connection.protocol.version
             stored_flows = stored_flows_box[switch.id].get(cookie, [])
-            for i in range(len(stored_flows)):
+            for i, _ in enumerate(stored_flows):
                 if all(
                     (
                         stored_flows[i]["flow"].get("priority", 0)

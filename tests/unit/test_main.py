@@ -2,6 +2,9 @@
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
+# pylint: disable=too-many-lines,fixme
+# TODO split this test suite in smaller ones
+
 from kytos.core.helpers import now
 from kytos.lib.helpers import (
     get_connection_mock,
@@ -408,6 +411,7 @@ class TestMain(TestCase):
     @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
     def test_add_overlapping_flow(self, *args):
         """Test add an overlapping flow."""
+        (_,) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
@@ -449,6 +453,7 @@ class TestMain(TestCase):
     @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
     def test_add_overlapping_flow_diff_priority(self, *args):
         """Test that a different priority wouldn't overlap."""
+        (_,) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
