@@ -2,7 +2,6 @@
 
 # pylint: disable=relative-beyond-top-level
 import itertools
-import logging
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from threading import Lock
@@ -27,8 +26,6 @@ from .settings import (
     ENABLE_CONSISTENCY_CHECK,
     FLOWS_DICT_MAX_SIZE,
 )
-
-DEBUG_ENABLED = log.isEnabledFor(logging.DEBUG)
 
 
 def cast_fields(flow_dict):
@@ -227,11 +224,10 @@ class Main(KytosNApp):
                 serializer.from_dict(stored_flow["flow"], switch)
                 for stored_flow in self.stored_flows[dpid].get(cookie, [])
             ]
-            if DEBUG_ENABLED:
-                log.debug(
-                    f"stored_flows_list: cookie index {cookie},"
-                    f" {[f.as_dict() for f in stored_flows_list]}"
-                )
+            log.debug(
+                f"stored_flows_list on switch {switch.id} by cookie: {hex(cookie)}: "
+                f"{self.stored_flows[dpid].get(cookie, [])}"
+            )
 
             for installed_flow in flows:
                 if self.is_ignored(installed_flow.table_id, self.tab_id_ignored_range):
