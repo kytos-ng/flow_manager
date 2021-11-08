@@ -215,7 +215,7 @@ class Main(KytosNApp):
                 )
 
     def check_storehouse_consistency(self, switch):
-        """Check consistency of installed flows given a switch."""
+        """Check consistency of installed flows for a specific switch."""
         dpid = switch.dpid
 
         for cookie, flows in self.switch_flows_by_cookie(switch).items():
