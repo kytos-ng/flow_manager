@@ -315,9 +315,8 @@ class Main(KytosNApp):
             del stored_flows_box["id"]
             self.stored_flows = deepcopy(stored_flows_box)
 
-    # pylint: disable=fixme
     def _add_flow_store(self, flow_dict, switch):
-        """Try to add a flow dict in the store."""
+        """Try to add a flow dict in the store idempotently."""
         installed_flow = {}
         installed_flow["flow"] = flow_dict
         installed_flow["created_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
@@ -327,11 +326,23 @@ class Main(KytosNApp):
         if switch.id not in stored_flows_box:
             stored_flows_box[switch.id] = OrderedDict()
 
-        # TODO handle issue 23 (overlapping FlowMod add)
         if not stored_flows_box[switch.id].get(cookie):
             stored_flows_box[switch.id][cookie] = [installed_flow]
         else:
-            stored_flows_box[switch.id][cookie].append(installed_flow)
+            version = switch.connection.protocol.version
+            stored_flows = stored_flows_box[switch.id].get(cookie, [])
+            for i in range(len(stored_flows)):
+                if all(
+                    (
+                        stored_flows[i]["flow"].get("priority", 0)
+                        == flow_dict.get("priority", 0),
+                        match_flow(flow_dict, version, stored_flows[i]["flow"]),
+                    )
+                ):
+                    stored_flows_box[switch.id][cookie][i] = installed_flow
+                    break
+            else:
+                stored_flows_box[switch.id][cookie].append(installed_flow)
 
         stored_flows_box["id"] = "flow_persistence"
         self.storehouse.save_flow(stored_flows_box)
