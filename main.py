@@ -198,7 +198,9 @@ class Main(KytosNApp):
 
         for cookie, stored_flows in self.stored_flows[dpid].items():
             for stored_flow in stored_flows:
-                stored_time = get_time(stored_flow.get("created_at", "0001-01-01T00:00:00"))
+                stored_time = get_time(
+                    stored_flow.get("created_at", "0001-01-01T00:00:00")
+                )
                 if (now() - stored_time).seconds <= STATS_INTERVAL:
                     continue
                 stored_flow_obj = serializer.from_dict(stored_flow["flow"], switch)
