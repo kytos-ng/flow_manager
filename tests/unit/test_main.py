@@ -405,6 +405,87 @@ class TestMain(TestCase):
         self.napp.check_switch_consistency(switch)
         mock_install_flows.assert_called()
 
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
+    def test_add_overlapping_flow(self, *args):
+        """Test add an overlapping flow."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        cookie = 0x20
+
+        self.napp.stored_flows = {
+            dpid: {
+                cookie: [
+                    {
+                        "flow": {
+                            "priority": 10,
+                            "cookie": 84114904,
+                            "match": {
+                                "ipv4_src": "192.168.1.1",
+                                "ipv4_dst": "192.168.0.2",
+                            },
+                            "actions": [{"action_type": "output", "port": 2}],
+                        }
+                    }
+                ]
+            }
+        }
+
+        new_actions = [{"action_type": "output", "port": 3}]
+        flow_dict = {
+            "priority": 10,
+            "cookie": cookie,
+            "match": {
+                "ipv4_src": "192.168.1.1",
+                "ipv4_dst": "192.168.0.2",
+            },
+            "actions": new_actions,
+        }
+
+        self.napp._add_flow_store(flow_dict, switch)
+        assert len(self.napp.stored_flows[dpid]) == 1
+        assert self.napp.stored_flows[dpid][0x20][0]["flow"]["actions"] == new_actions
+
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
+    def test_add_overlapping_flow_diff_priority(self, *args):
+        """Test that a different priority wouldn't overlap."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+
+        cookie = 0x20
+        self.napp.stored_flows = {
+            dpid: {
+                cookie: [
+                    {
+                        "flow": {
+                            "priority": 10,
+                            "cookie": 84114904,
+                            "match": {
+                                "ipv4_src": "192.168.1.1",
+                                "ipv4_dst": "192.168.0.2",
+                            },
+                            "actions": [{"action_type": "output", "port": 2}],
+                        }
+                    }
+                ]
+            }
+        }
+
+        new_actions = [{"action_type": "output", "port": 3}]
+        flow_dict = {
+            "priority": 11,
+            "cookie": cookie,
+            "match": {
+                "ipv4_src": "192.168.1.1",
+                "ipv4_dst": "192.168.0.2",
+            },
+            "actions": new_actions,
+        }
+
+        self.napp._add_flow_store(flow_dict, switch)
+        assert len(self.napp.stored_flows[dpid][cookie]) == 2
+
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_check_switch_flow_not_missing(self, *args):
