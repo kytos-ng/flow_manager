@@ -5,6 +5,7 @@ import itertools
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from threading import Lock
+from threading import Thread
 
 from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow
@@ -108,6 +109,7 @@ class Main(KytosNApp):
         # {'flow_persistence': {'dpid_str': {cookie_val: [
         #                                     {'flow': {flow_dict}}]}}}
         self.stored_flows = {}
+        self.archived_flows = {}
         self.resent_flows = set()
 
     def execute(self):
@@ -116,7 +118,16 @@ class Main(KytosNApp):
         The execute method is called by the run method of KytosNApp class.
         Users shouldn't call this method directly.
         """
-        self._load_flows()
+        threads = []
+        for box_id, box_attr in (
+            ("flows", "stored_flows"),
+            ("flows_archive", "archived_flows"),
+        ):
+            t = Thread(target=self._load_flows, args=(box_id, box_attr))
+            threads.append(t)
+            t.start()
+        for t in threads:
+            t.join()
 
     def shutdown(self):
         """Shutdown routine of the NApp."""
@@ -255,17 +266,19 @@ class Main(KytosNApp):
                     )
 
     # pylint: disable=attribute-defined-outside-init
-    def _load_flows(self):
-        """Load stored flows."""
+    def _load_flows(
+        self, box_id="flows", box_attr="stored_flows", data_key="flow_persistence"
+    ):
+        """Load stored flows of a box_id."""
         try:
-            data = self.storehouse.get_data()["flow_persistence"]
+            data = self.storehouse.get_data()[data_key]
             if "id" in data:
                 del data["id"]
-            self.stored_flows = data
+            setattr(self, box_attr, data)
         except (KeyError, FileNotFoundError) as error:
-            log.debug(f"There are no flows to load: {error}")
+            log.info(f"There are no flows to load from {error}.")
         else:
-            log.info("Flows loaded.")
+            log.info(f"Flows loaded from {box_attr}.")
 
     def _del_matched_flows_store(self, flow_dict, switch):
         """Try to delete matching stored flows given a flow dict."""
