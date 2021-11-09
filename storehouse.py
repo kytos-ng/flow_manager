@@ -33,6 +33,10 @@ class StoreHouse:
 
         if "box" not in self.__dict__:
             self.box = None
+        if "box_flows_archived" not in self.__dict__:
+            self.box_flows_archived = None
+        self.box_id_to_attr = {"flows": "box", "flows_archived": "box_flows_archived"}
+
         self.list_stored_boxes()
 
     def get_data(self):
@@ -48,24 +52,25 @@ class StoreHouse:
             raise FileNotFoundError(error)
         return self.box.data
 
-    def create_box(self):
+    def create_box(self, box_id=None):
         """Create a persistence box to store administrative changes."""
         content = {
             "namespace": self.namespace,
+            "box_id": box_id,
             "callback": self._create_box_callback,
             "data": {},
         }
         event = KytosEvent(name="kytos.storehouse.create", content=content)
         self.controller.buffers.app.put(event)
 
-    def _create_box_callback(self, _event, data, error):
+    def _create_box_callback(self, event, data, error):
         """Execute the callback to handle create_box."""
         if error:
             log.error(
                 f"Can't create persistence" f"box with namespace {self.namespace}"
             )
 
-        self.box = data
+        setattr(self, self.box_id_to_attr[event.content["box_id"]],  data)
 
     def list_stored_boxes(self):
         """List all persistence box stored in storehouse."""
@@ -80,10 +85,11 @@ class StoreHouse:
 
     def _get_or_create_a_box_from_list_of_boxes(self, _event, data, _error):
         """Create a persistence box or retrieve the stored box."""
-        if data:
-            self.get_stored_box(data[0])
-        else:
-            self.create_box()
+        for box_id in self.box_id_to_attr:
+            if box_id in data:
+                self.get_stored_box(box_id)
+            else:
+                self.create_box(box_id)
 
     def get_stored_box(self, box_id):
         """Get persistence box from storehouse."""
@@ -97,12 +103,12 @@ class StoreHouse:
         event = KytosEvent(name=name, content=content)
         self.controller.buffers.app.put(event)
 
-    def _get_box_callback(self, _event, data, error):
+    def _get_box_callback(self, event, data, error):
         """Handle get_box method saving the box or logging with the error."""
         if error:
-            log.error("Persistence box not found.")
+            log.error(f"Persistence box {event.content['box_id']} not found.")
 
-        self.box = data
+        setattr(self, self.box_id_to_attr[event.content["box_id"]],  data)
 
     def save_flow(self, flows):
         """Save flows in storehouse."""
