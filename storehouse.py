@@ -33,9 +33,9 @@ class StoreHouse:
 
         if "box" not in self.__dict__:
             self.box = None
-        if "box_flows_archived" not in self.__dict__:
-            self.box_flows_archived = None
-        self.box_id_to_attr = {"flows": "box", "flows_archived": "box_flows_archived"}
+        if "box_archived" not in self.__dict__:
+            self.box_archived = None
+        self.box_id_to_attr = {"flows": "box", "flows_archived": "box_archived"}
 
         self.list_stored_boxes()
 
@@ -70,7 +70,7 @@ class StoreHouse:
                 f"Can't create persistence" f"box with namespace {self.namespace}"
             )
 
-        setattr(self, self.box_id_to_attr[event.content["box_id"]],  data)
+        setattr(self, self.box_id_to_attr[event.content["box_id"]], data)
 
     def list_stored_boxes(self):
         """List all persistence box stored in storehouse."""
@@ -108,7 +108,7 @@ class StoreHouse:
         if error:
             log.error(f"Persistence box {event.content['box_id']} not found.")
 
-        setattr(self, self.box_id_to_attr[event.content["box_id"]],  data)
+        setattr(self, self.box_id_to_attr[event.content["box_id"]], data)
 
     def save_flow(self, flows):
         """Save flows in storehouse."""
@@ -129,3 +129,16 @@ class StoreHouse:
             log.error(f"Can't update persistence box {data.box_id}.")
 
         log.info(f"Flow saved in {self.namespace}.{data.box_id}")
+
+    def save_archive_flow(self, stored_flows):
+        """Save archive flows in storehouse."""
+        self.box_archived.data = stored_flows
+        content = {
+            "namespace": self.namespace,
+            "box_id": self.box_archived.box_id,
+            "data": self.box_archived.data,
+            "callback": self._save_flow_callback,
+        }
+
+        event = KytosEvent(name="kytos.storehouse.update", content=content)
+        self.controller.buffers.app.put(event)
