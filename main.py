@@ -222,7 +222,7 @@ class Main(KytosNApp):
             serializer = FlowFactory.get_class(switch)
             stored_flows_list = [
                 serializer.from_dict(stored_flow["flow"], switch)
-                for stored_flow in self.stored_flows[dpid].get(cookie, [])
+                for stored_flow in self.stored_flows.get(dpid, {}).get(cookie, [])
             ]
             log.debug(
                 f"stored_flows_list on switch {switch.id} by cookie: {hex(cookie)}: "
