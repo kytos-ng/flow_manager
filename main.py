@@ -118,12 +118,16 @@ class Main(KytosNApp):
         The execute method is called by the run method of KytosNApp class.
         Users shouldn't call this method directly.
         """
+        self._load_flow_boxes()
+
+    def _load_flow_boxes(self) -> None:
+        """Load stored flow boxes."""
         threads = []
-        for box_id, box_attr in (
-            ("flows", "stored_flows"),
-            ("flows_archive", "archived_flows"),
+        for box_id, box_attr, data_key in (
+            ("flows", "stored_flows", "flow_persistence"),
+            ("flows_archived", "archived_flows", None),
         ):
-            t = Thread(target=self._load_flows, args=(box_id, box_attr))
+            t = Thread(target=self._load_flows, args=(box_id, box_attr, data_key))
             threads.append(t)
             t.start()
         for t in threads:
@@ -271,12 +275,14 @@ class Main(KytosNApp):
     ):
         """Load stored flows of a box_id."""
         try:
-            data = self.storehouse.get_data()[data_key]
+            data = self.storehouse.get_data()
+            if data_key:
+                data = data[data_key]
             if "id" in data:
                 del data["id"]
             setattr(self, box_attr, data)
-        except (KeyError, FileNotFoundError) as error:
-            log.info(f"There are no flows to load from {error}.")
+        except (KeyError, FileNotFoundError):
+            log.info(f"There are no flows to load from {box_id}.")
         else:
             log.info(f"Flows loaded from {box_attr}.")
 
@@ -293,7 +299,7 @@ class Main(KytosNApp):
             else [int(flow_dict.get("cookie", 0))]
         )
 
-        has_deleted_any_flow = False
+        deleted_flows = []
         for cookie in cookies:
             stored_flows = stored_flows_box[switch.id].get(cookie, [])
             if not stored_flows:
@@ -305,6 +311,7 @@ class Main(KytosNApp):
                 # No strict match
                 if match_flow(flow_dict, version, stored_flow["flow"]):
                     deleted_flows_idxs.add(i)
+                    deleted_flows.append(stored_flow["flow"])
 
             if not deleted_flows_idxs:
                 continue
@@ -314,18 +321,31 @@ class Main(KytosNApp):
                 for i, flow in enumerate(stored_flows)
                 if i not in deleted_flows_idxs
             ]
-            has_deleted_any_flow = True
 
             if stored_flows:
                 stored_flows_box[switch.id][cookie] = stored_flows
             else:
                 stored_flows_box[switch.id].pop(cookie, None)
 
-        if has_deleted_any_flow:
+        if deleted_flows:
             stored_flows_box["id"] = "flow_persistence"
             self.storehouse.save_flow(stored_flows_box)
             del stored_flows_box["id"]
             self.stored_flows = deepcopy(stored_flows_box)
+            self._add_archived_flows_store(switch.id, deleted_flows)
+
+    def _add_archived_flows_store(self, dpid, archived_flows) -> None:
+        """Store archived flows."""
+        for archived_flow in archived_flows:
+            cookie = archived_flow.get("cookie", 0)
+            if dpid not in self.archived_flows:
+                self.archived_flows[dpid] = {cookie: [archived_flow]}
+            else:
+                if cookie not in self.archived_flows[dpid]:
+                    self.archived_flows[dpid][cookie] = [archived_flow]
+                else:
+                    self.archived_flows[dpid][cookie].append(archived_flow)
+        self.storehouse.save_archive_flow(self.archived_flows)
 
     def _add_flow_store(self, flow_dict, switch):
         """Try to add a flow dict in the store idempotently."""
