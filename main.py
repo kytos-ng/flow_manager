@@ -226,7 +226,7 @@ class Main(KytosNApp):
             ]
             log.debug(
                 f"stored_flows_list on switch {switch.id} by cookie: {hex(cookie)}: "
-                f"{self.stored_flows[dpid].get(cookie, [])}"
+                f"{self.stored_flows.get(dpid, {}).get(cookie, [])}"
             )
 
             for installed_flow in flows:
