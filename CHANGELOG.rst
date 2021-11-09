@@ -24,10 +24,6 @@ Security
 [5.1.0] - 2021-11.05
 ********************
 
-Added
-=====
-- Added lock to avoid race flow mod race conditions in the consistency check
-
 Changed
 =======
 - ``stored_flows`` are now indexed by cookie, issue 34

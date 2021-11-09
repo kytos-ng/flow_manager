@@ -171,12 +171,11 @@ class Main(KytosNApp):
         """Check consistency of stored and installed flows given a switch."""
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
             return
-        with self._storehouse_lock:
-            log.debug(f"check_consistency on switch {switch.id} has started")
-            self.check_storehouse_consistency(switch)
-            if switch.dpid in self.stored_flows:
-                self.check_switch_consistency(switch)
-            log.debug(f"check_consistency on switch {switch.id} is done")
+        log.debug(f"check_consistency on switch {switch.id} has started")
+        self.check_storehouse_consistency(switch)
+        if switch.dpid in self.stored_flows:
+            self.check_switch_consistency(switch)
+        log.debug(f"check_consistency on switch {switch.id} is done")
 
     @staticmethod
     def switch_flows_by_cookie(switch):
