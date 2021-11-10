@@ -11,3 +11,8 @@ ENABLE_CONSISTENCY_CHECK = True
 # To filter by a cookie or `table_id` range [(value1, value2)]
 CONSISTENCY_COOKIE_IGNORED_RANGE = []
 CONSISTENCY_TABLE_ID_IGNORED_RANGE = []
+
+# Maximum number of flows to archive per switch
+ARCHIVED_MAX_FLOWS_PER_SWITCH = 2000
+# Number of old flows to delete whenever 'ARCHIVED_MAX_FLOWS_PER_SWITCH' overflows
+ARCHIVED_ROTATION_DELETED = 500

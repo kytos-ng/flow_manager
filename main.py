@@ -11,7 +11,11 @@ from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.flow_manager.storehouse import StoreHouse
 from napps.kytos.of_core.flow import FlowFactory
-from napps.kytos.of_core.settings import STATS_INTERVAL
+from napps.kytos.of_core.settings import (
+    STATS_INTERVAL,
+    ARCHIVED_MAX_FLOWS_PER_SWITCH,
+    ARCHIVED_ROTATION_DELETED,
+)
 from pyof.foundation.base import UBIntBase
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
@@ -338,8 +342,20 @@ class Main(KytosNApp):
             self.stored_flows = deepcopy(stored_flows_box)
             self._add_archived_flows_store(switch.id, deleted_flows)
 
-    def _add_archived_flows_store(self, dpid, archived_flows) -> None:
+    def _add_archived_flows_store(
+        self,
+        dpid,
+        archived_flows,
+        max_len=ARCHIVED_MAX_FLOWS_PER_SWITCH,
+        max_deleted=ARCHIVED_ROTATION_DELETED,
+    ) -> None:
         """Store archived flows."""
+        if not archived_flows:
+            return
+
+        if len(self.archived_flows[dpid]) + len(archived_flows) > max_len:
+            self.archived_flows[dpid] = self.archived_flows[max_deleted:]
+
         for archived_flow in archived_flows:
             if dpid not in self.archived_flows:
                 self.archived_flows[dpid] = [archived_flow]
@@ -358,6 +374,7 @@ class Main(KytosNApp):
         if switch.id not in stored_flows_box:
             stored_flows_box[switch.id] = OrderedDict()
 
+        overlapped_flows = []
         if not stored_flows_box[switch.id].get(cookie):
             stored_flows_box[switch.id][cookie] = [installed_flow]
         else:
@@ -371,6 +388,11 @@ class Main(KytosNApp):
                         match_flow(flow_dict, version, stored_flows[i]["flow"]),
                     )
                 ):
+                    overlapped_flow = dict(stored_flows[i])
+                    overlapped_flow["deleted_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
+                    overlapped_flow["reason"] = "overlap"
+                    overlapped_flows.append(overlapped_flow)
+
                     stored_flows_box[switch.id][cookie][i] = installed_flow
                     break
             else:
@@ -380,6 +402,8 @@ class Main(KytosNApp):
         self.storehouse.save_flow(stored_flows_box)
         del stored_flows_box["id"]
         self.stored_flows = deepcopy(stored_flows_box)
+
+        self._add_archived_flows_store(switch.id, overlapped_flows)
 
     def _store_changed_flows(self, command, flow_dict, switch):
         """Store changed flows.
