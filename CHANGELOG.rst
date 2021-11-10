@@ -21,6 +21,19 @@ Removed
 Security
 ========
 
+[5.2.0] - 2021-11.10
+********************
+
+Added
+=====
+- Added support for archiving overlapped and deleted flows, issue #33.
+- Updated settings to set the maximum number of archived flows per switch.
+
+Changed
+=======
+- Updated ``stored_flows`` box to stop using a random generated box, now it's named ``flows``. This is a breaking changing, but facilitates moving forward to also find for it, since it was assuming it only had one box in this namespace, which isn't the case anymore since we have to introduce a box for archived flows.
+
+
 [5.1.0] - 2021-11.08
 ********************
 
