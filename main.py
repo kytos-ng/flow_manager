@@ -4,18 +4,13 @@
 import itertools
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
-from threading import Lock
-from threading import Thread
+from threading import Lock, Thread
 
 from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.flow_manager.storehouse import StoreHouse
 from napps.kytos.of_core.flow import FlowFactory
-from napps.kytos.of_core.settings import (
-    STATS_INTERVAL,
-    ARCHIVED_MAX_FLOWS_PER_SWITCH,
-    ARCHIVED_ROTATION_DELETED,
-)
+from napps.kytos.of_core.settings import STATS_INTERVAL
 from pyof.foundation.base import UBIntBase
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
@@ -26,6 +21,8 @@ from kytos.core.helpers import get_time, listen_to, now
 
 from .exceptions import InvalidCommandError
 from .settings import (
+    ARCHIVED_MAX_FLOWS_PER_SWITCH,
+    ARCHIVED_ROTATION_DELETED,
     CONSISTENCY_COOKIE_IGNORED_RANGE,
     CONSISTENCY_TABLE_ID_IGNORED_RANGE,
     ENABLE_CONSISTENCY_CHECK,
