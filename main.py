@@ -311,7 +311,11 @@ class Main(KytosNApp):
                 # No strict match
                 if match_flow(flow_dict, version, stored_flow["flow"]):
                     deleted_flows_idxs.add(i)
-                    deleted_flows.append(stored_flow["flow"])
+
+                    deleted_flow = dict(stored_flow)
+                    deleted_flow["deleted_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
+                    deleted_flow["reason"] = "delete"
+                    deleted_flows.append(deleted_flow)
 
             if not deleted_flows_idxs:
                 continue
@@ -337,14 +341,10 @@ class Main(KytosNApp):
     def _add_archived_flows_store(self, dpid, archived_flows) -> None:
         """Store archived flows."""
         for archived_flow in archived_flows:
-            cookie = archived_flow.get("cookie", 0)
             if dpid not in self.archived_flows:
-                self.archived_flows[dpid] = {cookie: [archived_flow]}
+                self.archived_flows[dpid] = [archived_flow]
             else:
-                if cookie not in self.archived_flows[dpid]:
-                    self.archived_flows[dpid][cookie] = [archived_flow]
-                else:
-                    self.archived_flows[dpid][cookie].append(archived_flow)
+                self.archived_flows[dpid].append(archived_flow)
         self.storehouse.save_archived_flow(self.archived_flows)
 
     def _add_flow_store(self, flow_dict, switch):
