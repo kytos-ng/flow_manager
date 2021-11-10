@@ -128,11 +128,11 @@ class Main(KytosNApp):
             ("flows", "stored_flows", "flow_persistence"),
             ("flows_archived", "archived_flows", None),
         ):
-            t = Thread(target=self._load_flows, args=(box_id, set_attr, data_key))
-            threads.append(t)
-            t.start()
-        for t in threads:
-            t.join()
+            thread = Thread(target=self._load_flows, args=(box_id, set_attr, data_key))
+            threads.append(thread)
+            thread.start()
+        for thread in threads:
+            thread.join()
 
     def shutdown(self):
         """Shutdown routine of the NApp."""

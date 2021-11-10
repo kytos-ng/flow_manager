@@ -57,9 +57,7 @@ class TestStoreHouse(TestCase):
         mock_event = MagicMock()
         data = {"flows": "flows"}
         mock_error = MagicMock()
-        self.napp._get_or_create_a_box_from_list_of_boxes(
-            mock_event, data, mock_error
-        )
+        self.napp._get_or_create_a_box_from_list_of_boxes(mock_event, data, mock_error)
         mock_get_stored_box.assert_called()
         self.napp._get_or_create_a_box_from_list_of_boxes(mock_event, {}, mock_error)
         mock_create_box.assert_called()
