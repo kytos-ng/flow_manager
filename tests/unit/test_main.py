@@ -451,6 +451,7 @@ class TestMain(TestCase):
         self.assertDictEqual(
             self.napp.archived_flows[dpid][0]["flow"], stored_flow["flow"]
         )
+        assert self.napp.archived_flows[dpid][0]["reason"] == "overlap"
 
     @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
     def test_add_overlapping_flow_diff_priority(self, *args):
@@ -625,6 +626,7 @@ class TestMain(TestCase):
         self.napp.check_switch_consistency(switch)
         mock_install_flows.assert_not_called()
 
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_archived_flow")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_check_storehouse_consistency(self, *args):
@@ -632,7 +634,7 @@ class TestMain(TestCase):
 
         This test checks the case when a flow is missing in storehouse.
         """
-        (mock_flow_factory, mock_install_flows) = args
+        (mock_flow_factory, mock_install_flows, mock_save_archived_flow) = args
         cookie_exception_interval = [(0x2B00000000000011, 0x2B000000000000FF)]
         self.napp.cookie_exception_range = cookie_exception_interval
         dpid = "00:00:00:00:00:00:00:01"
@@ -650,6 +652,7 @@ class TestMain(TestCase):
         self.napp.stored_flows = {dpid: {0: stored_flows}}
         self.napp.check_storehouse_consistency(switch)
         mock_install_flows.assert_called()
+        mock_save_archived_flow.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
@@ -725,6 +728,7 @@ class TestMain(TestCase):
         mock_save_archived_flow.assert_called()
         self.assertEqual(len(self.napp.stored_flows[dpid]), 1)
         self.assertEqual(len(self.napp.archived_flows[dpid]), 1)
+        assert self.napp.archived_flows[dpid][0]["reason"] == "delete"
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
@@ -1036,11 +1040,12 @@ class TestMain(TestCase):
         mock_save_archived_flow.assert_called()
         self.assertEqual(len(self.napp.stored_flows[dpid]), 0)
 
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_archived_flow")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_consistency_cookie_ignored_range(self, *args):
         """Test the consistency `cookie` ignored range."""
-        (mock_flow_factory, mock_install_flows) = args
+        (mock_flow_factory, mock_install_flows, _) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         cookie_ignored_interval = [
@@ -1068,11 +1073,12 @@ class TestMain(TestCase):
             self.napp.check_storehouse_consistency(switch)
             self.assertEqual(mock_install_flows.call_count, called)
 
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_archived_flow")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_consistency_table_id_ignored_range(self, *args):
         """Test the consistency `table_id` ignored range."""
-        (mock_flow_factory, mock_install_flows) = args
+        (mock_flow_factory, mock_install_flows, _) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         table_id_ignored_interval = [(1, 2), 3]
@@ -1097,7 +1103,7 @@ class TestMain(TestCase):
             self.assertEqual(mock_install_flows.call_count, called)
 
     @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_archived_flow")
-    def test_archived_flows_rotation(self, *args) -> None:
+    def test_archived_flows_rotation(self, *args):
         """Test archive flows rotation."""
         _ = args
 
