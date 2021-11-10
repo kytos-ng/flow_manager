@@ -269,7 +269,10 @@ class Main(KytosNApp):
                         f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
                     )
                     archived_flows.append(
-                        new_archive_flow(installed_flow.as_dict(), reason="alien")
+                        new_archive_flow(
+                            {"flow": installed_flow.as_dict(include_id=False)},
+                            reason="alien",
+                        )
                     )
                     continue
 
@@ -282,7 +285,10 @@ class Main(KytosNApp):
                         f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
                     )
                     archived_flows.append(
-                        new_archive_flow(installed_flow.as_dict(), reason="alien")
+                        new_archive_flow(
+                            {"flow": installed_flow.as_dict(include_id=False)},
+                            reason="alien",
+                        )
                     )
 
             if archived_flows:
