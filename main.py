@@ -262,33 +262,35 @@ class Main(KytosNApp):
                         f"Consistency check: alien flow on switch {dpid}, dpid"
                         " not indexed"
                     )
-                    flow = {"flows": [installed_flow.as_dict()]}
-                    command = "delete_strict"
-                    self._install_flows(command, flow, [switch], save=False)
-                    log.info(
-                        f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
-                    )
                     archived_flows.append(
                         new_archive_flow(
                             {"flow": installed_flow.as_dict(include_id=False)},
                             reason="alien",
                         )
+                    )
+
+                    flow = {"flows": [installed_flow.as_dict()]}
+                    command = "delete_strict"
+                    self._install_flows(command, flow, [switch], save=False)
+                    log.info(
+                        f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
                     )
                     continue
 
                 if installed_flow not in stored_flows_list:
                     log.info(f"Consistency check: alien flow on switch {dpid}")
-                    flow = {"flows": [installed_flow.as_dict()]}
-                    command = "delete_strict"
-                    self._install_flows(command, flow, [switch], save=False)
-                    log.info(
-                        f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
-                    )
                     archived_flows.append(
                         new_archive_flow(
                             {"flow": installed_flow.as_dict(include_id=False)},
                             reason="alien",
                         )
+                    )
+
+                    flow = {"flows": [installed_flow.as_dict()]}
+                    command = "delete_strict"
+                    self._install_flows(command, flow, [switch], save=False)
+                    log.info(
+                        f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
                     )
 
             if archived_flows:
