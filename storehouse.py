@@ -39,18 +39,18 @@ class StoreHouse:
 
         self.list_stored_boxes()
 
-    def get_data(self):
+    def get_data(self, attr="box"):
         """Return the persistence box data."""
         # Wait retrieve or create box in storehouse
         i = 0
-        while not self.box and i < BOX_RESTORE_ATTEMPTS:
+        while not getattr(self, attr) and i < BOX_RESTORE_ATTEMPTS:
             time.sleep(self.box_restore_timer)
             i += 1
-        if not self.box:
+        if not getattr(self, attr):
             error = "Error retrieving persistence box from storehouse."
             log.error(error)
             raise FileNotFoundError(error)
-        return self.box.data
+        return getattr(getattr(self, attr), "data")
 
     def create_box(self, box_id=None):
         """Create a persistence box to store administrative changes."""
@@ -130,8 +130,8 @@ class StoreHouse:
 
         log.info(f"Flow saved in {self.namespace}.{data.box_id}")
 
-    def save_archive_flow(self, stored_flows):
-        """Save archive flows in storehouse."""
+    def save_archived_flow(self, stored_flows):
+        """Save archived flows in storehouse."""
         self.box_archived.data = stored_flows
         content = {
             "namespace": self.namespace,

@@ -123,11 +123,11 @@ class Main(KytosNApp):
     def _load_flow_boxes(self) -> None:
         """Load stored flow boxes."""
         threads = []
-        for box_id, box_attr, data_key in (
+        for box_id, set_attr, data_key in (
             ("flows", "stored_flows", "flow_persistence"),
             ("flows_archived", "archived_flows", None),
         ):
-            t = Thread(target=self._load_flows, args=(box_id, box_attr, data_key))
+            t = Thread(target=self._load_flows, args=(box_id, set_attr, data_key))
             threads.append(t)
             t.start()
         for t in threads:
@@ -271,20 +271,20 @@ class Main(KytosNApp):
 
     # pylint: disable=attribute-defined-outside-init
     def _load_flows(
-        self, box_id="flows", box_attr="stored_flows", data_key="flow_persistence"
+        self, box_id="flows", set_attr="stored_flows", data_key="flow_persistence"
     ):
-        """Load stored flows of a box_id."""
+        """Load stored flows of a box in an attribute."""
         try:
-            data = self.storehouse.get_data()
+            data = self.storehouse.get_data(attr=set_attr)
             if data_key:
                 data = data[data_key]
             if "id" in data:
                 del data["id"]
-            setattr(self, box_attr, data)
+            setattr(self, set_attr, data)
         except (KeyError, FileNotFoundError):
             log.info(f"There are no flows to load from {box_id}.")
         else:
-            log.info(f"Flows loaded from {box_attr}.")
+            log.info(f"Flows loaded from {box_id}.")
 
     def _del_matched_flows_store(self, flow_dict, switch):
         """Try to delete matching stored flows given a flow dict."""
@@ -345,7 +345,7 @@ class Main(KytosNApp):
                     self.archived_flows[dpid][cookie] = [archived_flow]
                 else:
                     self.archived_flows[dpid][cookie].append(archived_flow)
-        self.storehouse.save_archive_flow(self.archived_flows)
+        self.storehouse.save_archived_flow(self.archived_flows)
 
     def _add_flow_store(self, flow_dict, switch):
         """Try to add a flow dict in the store idempotently."""
