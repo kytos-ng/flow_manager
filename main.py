@@ -276,7 +276,7 @@ class Main(KytosNApp):
     ):
         """Load stored flows of a box in an attribute."""
         try:
-            data = self.storehouse.get_data(attr=set_attr)
+            data = self.storehouse.get_data(attr=self.storehouse.box_id_to_attr[box_id])
             if data_key:
                 data = data[data_key]
             if "id" in data:
@@ -350,8 +350,11 @@ class Main(KytosNApp):
         if not archived_flows:
             return
 
-        if len(self.archived_flows[dpid]) + len(archived_flows) > max_len:
-            self.archived_flows[dpid] = self.archived_flows[max_deleted:]
+        if (
+            dpid in self.archived_flows
+            and len(self.archived_flows[dpid]) + len(archived_flows) > max_len
+        ):
+            self.archived_flows[dpid] = self.archived_flows[dpid][max_deleted:]
 
         for archived_flow in archived_flows:
             if dpid not in self.archived_flows:
