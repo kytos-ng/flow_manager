@@ -344,7 +344,7 @@ class Main(KytosNApp):
         dpid,
         archived_flows,
         max_len=ARCHIVED_MAX_FLOWS_PER_SWITCH,
-        max_deleted=ARCHIVED_ROTATION_DELETED,
+        offset_delete=ARCHIVED_ROTATION_DELETED,
     ) -> None:
         """Store archived flows."""
         if not archived_flows:
@@ -354,7 +354,7 @@ class Main(KytosNApp):
             dpid in self.archived_flows
             and len(self.archived_flows[dpid]) + len(archived_flows) > max_len
         ):
-            self.archived_flows[dpid] = self.archived_flows[dpid][max_deleted:]
+            self.archived_flows[dpid] = self.archived_flows[dpid][offset_delete:]
 
         for archived_flow in archived_flows:
             if dpid not in self.archived_flows:
