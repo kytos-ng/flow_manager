@@ -82,6 +82,14 @@ def _valid_consistency_ignored(consistency_ignored_list):
     return True
 
 
+def new_archive_flow(dict_flow, reason):
+    """Build an archive flow given an stored dict flow."""
+    archive_flow = dict(dict_flow)
+    archive_flow["deleted_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
+    archive_flow["reason"] = reason
+    return archive_flow
+
+
 class Main(KytosNApp):
     """Main class to be used by Kytos controller."""
 
@@ -244,6 +252,7 @@ class Main(KytosNApp):
                 f"{self.stored_flows.get(dpid, {}).get(cookie, [])}"
             )
 
+            archived_flows = []
             for installed_flow in flows:
                 if self.is_ignored(installed_flow.table_id, self.tab_id_ignored_range):
                     continue
@@ -259,6 +268,9 @@ class Main(KytosNApp):
                     log.info(
                         f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
                     )
+                    archived_flows.append(
+                        new_archive_flow(installed_flow.as_dict(), reason="alien")
+                    )
                     continue
 
                 if installed_flow not in stored_flows_list:
@@ -269,6 +281,13 @@ class Main(KytosNApp):
                     log.info(
                         f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
                     )
+                    archived_flows.append(
+                        new_archive_flow(installed_flow.as_dict(), reason="alien")
+                    )
+
+            if archived_flows:
+                with self._storehouse_lock:
+                    self._add_archived_flows_store(switch.id, archived_flows)
 
     # pylint: disable=attribute-defined-outside-init
     def _load_flows(
@@ -300,7 +319,7 @@ class Main(KytosNApp):
             else [int(flow_dict.get("cookie", 0))]
         )
 
-        deleted_flows = []
+        archived_flows = []
         for cookie in cookies:
             stored_flows = stored_flows_box[switch.id].get(cookie, [])
             if not stored_flows:
@@ -312,11 +331,9 @@ class Main(KytosNApp):
                 # No strict match
                 if match_flow(flow_dict, version, stored_flow["flow"]):
                     deleted_flows_idxs.add(i)
-
-                    deleted_flow = dict(stored_flow)
-                    deleted_flow["deleted_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
-                    deleted_flow["reason"] = "delete"
-                    deleted_flows.append(deleted_flow)
+                    archived_flows.append(
+                        new_archive_flow(stored_flow, reason="delete")
+                    )
 
             if not deleted_flows_idxs:
                 continue
@@ -332,12 +349,12 @@ class Main(KytosNApp):
             else:
                 stored_flows_box[switch.id].pop(cookie, None)
 
-        if deleted_flows:
+        if archived_flows:
             stored_flows_box["id"] = "flow_persistence"
             self.storehouse.save_flow(stored_flows_box)
             del stored_flows_box["id"]
             self.stored_flows = deepcopy(stored_flows_box)
-            self._add_archived_flows_store(switch.id, deleted_flows)
+            self._add_archived_flows_store(switch.id, archived_flows)
 
     def _add_archived_flows_store(
         self,
@@ -345,7 +362,7 @@ class Main(KytosNApp):
         archived_flows,
         max_len=ARCHIVED_MAX_FLOWS_PER_SWITCH,
         offset_delete=ARCHIVED_ROTATION_DELETED,
-    ) -> None:
+    ):
         """Store archived flows."""
         if not archived_flows:
             return
@@ -374,7 +391,7 @@ class Main(KytosNApp):
         if switch.id not in stored_flows_box:
             stored_flows_box[switch.id] = OrderedDict()
 
-        overlapped_flows = []
+        archived_flows = []
         if not stored_flows_box[switch.id].get(cookie):
             stored_flows_box[switch.id][cookie] = [installed_flow]
         else:
@@ -388,11 +405,9 @@ class Main(KytosNApp):
                         match_flow(flow_dict, version, stored_flows[i]["flow"]),
                     )
                 ):
-                    overlapped_flow = dict(stored_flows[i])
-                    overlapped_flow["deleted_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
-                    overlapped_flow["reason"] = "overlap"
-                    overlapped_flows.append(overlapped_flow)
-
+                    archived_flows.append(
+                        new_archive_flow(stored_flows[i], reason="overlap")
+                    )
                     stored_flows_box[switch.id][cookie][i] = installed_flow
                     break
             else:
@@ -403,7 +418,7 @@ class Main(KytosNApp):
         del stored_flows_box["id"]
         self.stored_flows = deepcopy(stored_flows_box)
 
-        self._add_archived_flows_store(switch.id, overlapped_flows)
+        self._add_archived_flows_store(switch.id, archived_flows)
 
     def _store_changed_flows(self, command, flow_dict, switch):
         """Store changed flows.
