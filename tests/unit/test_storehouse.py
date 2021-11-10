@@ -55,13 +55,13 @@ class TestStoreHouse(TestCase):
         """Test create_box."""
         (mock_create_box, mock_get_stored_box) = args
         mock_event = MagicMock()
-        mock_data = MagicMock()
+        data = {"flows": "flows"}
         mock_error = MagicMock()
         self.napp._get_or_create_a_box_from_list_of_boxes(
-            mock_event, mock_data, mock_error
+            mock_event, data, mock_error
         )
         mock_get_stored_box.assert_called()
-        self.napp._get_or_create_a_box_from_list_of_boxes(mock_event, None, mock_error)
+        self.napp._get_or_create_a_box_from_list_of_boxes(mock_event, {}, mock_error)
         mock_create_box.assert_called()
 
     @patch("napps.kytos.flow_manager.storehouse.KytosEvent")

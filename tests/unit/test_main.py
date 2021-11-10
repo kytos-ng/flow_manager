@@ -408,10 +408,11 @@ class TestMain(TestCase):
         self.napp.check_switch_consistency(switch)
         mock_install_flows.assert_called()
 
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_archived_flow")
     @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
     def test_add_overlapping_flow(self, *args):
         """Test add an overlapping flow."""
-        (_,) = args
+        (mock_save_flow, mock_save_archived_flow) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
@@ -449,6 +450,8 @@ class TestMain(TestCase):
         self.napp._add_flow_store(flow_dict, switch)
         assert len(self.napp.stored_flows[dpid]) == 1
         assert self.napp.stored_flows[dpid][0x20][0]["flow"]["actions"] == new_actions
+        mock_save_flow.assert_called()
+        mock_save_archived_flow.assert_called()
 
     @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
     def test_add_overlapping_flow_diff_priority(self, *args):
@@ -682,13 +685,14 @@ class TestMain(TestCase):
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_archived_flow")
     @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
     def test_no_strict_delete(self, *args):
         """Test the non-strict matching method.
 
         Test non-strict matching to delete a Flow using a cookie.
         """
-        (mock_save_flow, _, _) = args
+        (mock_save_flow, mock_save_archived_flow, _, _) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
@@ -719,17 +723,19 @@ class TestMain(TestCase):
 
         self.napp._store_changed_flows(command, flow_to_install, switch)
         mock_save_flow.assert_called()
+        mock_save_archived_flow.assert_called()
         self.assertEqual(len(self.napp.stored_flows), 1)
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_archived_flow")
     @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
     def test_no_strict_delete_with_ipv4(self, *args):
         """Test the non-strict matching method.
 
         Test non-strict matching to delete a Flow using IPv4.
         """
-        (mock_save_flow, _, _) = args
+        (mock_save_flow, mock_save_archived_flow, _, _) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
@@ -763,6 +769,7 @@ class TestMain(TestCase):
 
         self.napp._store_changed_flows(command, flow_to_install, switch)
         mock_save_flow.assert_called()
+        mock_save_archived_flow.assert_called()
         expected_stored = {
             4961162389751548787: [
                 {
@@ -778,13 +785,14 @@ class TestMain(TestCase):
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_archived_flow")
     @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
     def test_no_strict_delete_in_port(self, *args):
         """Test the non-strict matching method.
 
         Test non-strict matching to delete a Flow matching in_port.
         """
-        (mock_save_flow, _, _) = args
+        (mock_save_flow, mock_save_archived_flow, _, _) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
@@ -826,6 +834,7 @@ class TestMain(TestCase):
 
         self.napp._store_changed_flows(command, flow_to_install, switch)
         mock_save_flow.assert_called()
+        mock_save_archived_flow.assert_called()
 
         expected_stored = {
             0: [
@@ -838,13 +847,14 @@ class TestMain(TestCase):
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_archived_flow")
     @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
     def test_no_strict_delete_all_if_empty_match(self, *args):
         """Test the non-strict matching method.
 
         Test non-strict matching to delete all if empty match is given.
         """
-        (mock_save_flow, _, _) = args
+        (mock_save_flow, mock_save_archived_flow, _, _) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
@@ -878,6 +888,7 @@ class TestMain(TestCase):
 
         self.napp._store_changed_flows(command, flow_to_install, switch)
         mock_save_flow.assert_called()
+        mock_save_archived_flow.assert_called()
 
         expected_stored = {}
         self.assertDictEqual(self.napp.stored_flows[dpid], expected_stored)
@@ -945,13 +956,14 @@ class TestMain(TestCase):
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_archived_flow")
     @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
     def test_no_strict_delete_of10(self, *args):
         """Test the non-strict matching method.
 
         Test non-strict matching to delete a Flow using OF10.
         """
-        (mock_save_flow, _, _) = args
+        (mock_save_flow, mock_save_archived_flow, _, _) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x01)
         switch.id = dpid
@@ -1008,6 +1020,7 @@ class TestMain(TestCase):
 
         self.napp._store_changed_flows(command, flow_to_install, switch)
         mock_save_flow.assert_called()
+        mock_save_archived_flow.assert_called()
         self.assertEqual(len(self.napp.stored_flows[dpid]), 0)
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
