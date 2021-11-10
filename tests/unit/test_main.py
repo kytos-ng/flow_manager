@@ -1095,3 +1095,23 @@ class TestMain(TestCase):
             self.napp.stored_flows = {dpid: {0: [flow]}}
             self.napp.check_storehouse_consistency(switch)
             self.assertEqual(mock_install_flows.call_count, called)
+
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_archived_flow")
+    def test_archived_flows_rotation(self, *args) -> None:
+        """Test archive flows rotation."""
+        _ = args
+
+        n_flows = 10
+        max_len = 10
+        extra_flows = 3
+        offset_delete = 5
+        dpid = "1"
+
+        self.napp.archived_flows[dpid] = [{} for f in range(n_flows)]
+        deleted_flows = [{} for f in range(extra_flows)]
+
+        self.napp._add_archived_flows_store(dpid, deleted_flows, max_len, offset_delete)
+        assert (
+            len(self.napp.archived_flows[dpid])
+            == (max_len - offset_delete) + extra_flows
+        )
