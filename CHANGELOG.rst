@@ -21,14 +21,14 @@ Removed
 Security
 ========
 
-[5.1.1] - 2021-11.08
+[5.1.0] - 2021-11.08
 ********************
 
 Added
 =====
 - Augmented ``_add_flow_store`` to overwrite overlapping flows
 
-[5.1.0] - 2021-11.05
+[5.0.0] - 2021-11.05
 ********************
 
 Changed
