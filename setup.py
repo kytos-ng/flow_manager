@@ -24,7 +24,7 @@ if "bdist_wheel" in sys.argv:
 BASE_ENV = Path(os.environ.get("VIRTUAL_ENV", "/"))
 
 NAPP_NAME = "flow_manager"
-NAPP_VERSION = "4.1.2"
+NAPP_VERSION = "5.0.0"
 
 # Kytos var folder
 VAR_PATH = BASE_ENV / "var" / "lib" / "kytos"
