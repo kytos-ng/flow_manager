@@ -418,23 +418,18 @@ class TestMain(TestCase):
         switch.id = dpid
         cookie = 0x20
 
-        self.napp.stored_flows = {
-            dpid: {
-                cookie: [
-                    {
-                        "flow": {
-                            "priority": 10,
-                            "cookie": 84114904,
-                            "match": {
-                                "ipv4_src": "192.168.1.1",
-                                "ipv4_dst": "192.168.0.2",
-                            },
-                            "actions": [{"action_type": "output", "port": 2}],
-                        }
-                    }
-                ]
+        stored_flow = {
+            "flow": {
+                "priority": 10,
+                "cookie": 84114904,
+                "match": {
+                    "ipv4_src": "192.168.1.1",
+                    "ipv4_dst": "192.168.0.2",
+                },
+                "actions": [{"action_type": "output", "port": 2}],
             }
         }
+        self.napp.stored_flows = {dpid: {cookie: [stored_flow]}}
 
         new_actions = [{"action_type": "output", "port": 3}]
         flow_dict = {
@@ -452,6 +447,10 @@ class TestMain(TestCase):
         assert self.napp.stored_flows[dpid][0x20][0]["flow"]["actions"] == new_actions
         mock_save_flow.assert_called()
         mock_save_archived_flow.assert_called()
+        assert len(self.napp.archived_flows[dpid]) == 1
+        self.assertDictEqual(
+            self.napp.archived_flows[dpid][0]["flow"], stored_flow["flow"]
+        )
 
     @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
     def test_add_overlapping_flow_diff_priority(self, *args):
@@ -724,7 +723,8 @@ class TestMain(TestCase):
         self.napp._store_changed_flows(command, flow_to_install, switch)
         mock_save_flow.assert_called()
         mock_save_archived_flow.assert_called()
-        self.assertEqual(len(self.napp.stored_flows), 1)
+        self.assertEqual(len(self.napp.stored_flows[dpid]), 1)
+        self.assertEqual(len(self.napp.archived_flows[dpid]), 1)
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
@@ -782,6 +782,10 @@ class TestMain(TestCase):
             ]
         }
         self.assertDictEqual(self.napp.stored_flows[dpid], expected_stored)
+        self.assertDictEqual(
+            self.napp.archived_flows[dpid][0]["flow"],
+            stored_flows[84114904][0]["flow"],
+        )
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
@@ -844,6 +848,14 @@ class TestMain(TestCase):
             ]
         }
         self.assertDictEqual(self.napp.stored_flows[dpid], expected_stored)
+        self.assertEqual(len(self.napp.archived_flows[dpid]), 2)
+
+        self.assertDictEqual(
+            self.napp.archived_flows[dpid][0]["flow"], stored_flow[0][0]["flow"]
+        )
+        self.assertDictEqual(
+            self.napp.archived_flows[dpid][1]["flow"], stored_flow[0][2]["flow"]
+        )
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
@@ -892,6 +904,7 @@ class TestMain(TestCase):
 
         expected_stored = {}
         self.assertDictEqual(self.napp.stored_flows[dpid], expected_stored)
+        self.assertEqual(len(self.napp.archived_flows[dpid]), 2)
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
