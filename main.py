@@ -16,9 +16,9 @@ from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
 from werkzeug.exceptions import (
     BadRequest,
+    FailedDependency,
     NotFound,
     UnsupportedMediaType,
-    FailedDependency,
 )
 
 from kytos.core import KytosEvent, KytosNApp, log, rest
@@ -572,8 +572,8 @@ class Main(KytosNApp):
             self._install_flows(command, flows_dict, [switch])
             return jsonify({"response": "FlowMod Messages Sent"}), 202
 
-        except SwitchNotConnectedError as e:
-            raise FailedDependency(str(e))
+        except SwitchNotConnectedError as error:
+            raise FailedDependency(str(error))
 
     def _install_flows(self, command, flows_dict, switches=[], save=True):
         """Execute all procedures to install flows in the switches.
