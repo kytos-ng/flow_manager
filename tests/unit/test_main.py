@@ -13,6 +13,7 @@ from kytos.lib.helpers import (
     get_switch_mock,
     get_test_client,
 )
+from napps.kytos.flow_manager.exceptions import SwitchNotConnectedError
 
 
 # pylint: disable=protected-access, too-many-public-methods
@@ -163,6 +164,17 @@ class TestMain(TestCase):
 
         self.assertEqual(mock_install_flows.call_count, 0)
 
+    @patch("napps.kytos.flow_manager.main.Main._install_flows")
+    def test_rest_flow_mod_add_switch_not_connected(self, mock_install_flows):
+        """Test sending a flow mod when a swith isn't connected."""
+        api = get_test_client(self.napp.controller, self.napp)
+        mock_install_flows.side_effect = SwitchNotConnectedError
+
+        url = f"{self.API_URL}/v2/flows"
+        response = api.post(url, json={"flows": [{"priority": 25}]})
+
+        self.assertEqual(response.status_code, 424)
+
     def test_get_all_switches_enabled(self):
         """Test _get_all_switches_enabled method."""
         switches = self.napp._get_all_switches_enabled()
@@ -277,6 +289,18 @@ class TestMain(TestCase):
         self.napp._send_flow_mod(switch, flow_mod)
 
         mock_buffers_put.assert_called()
+
+    @patch("kytos.core.buffers.KytosEventBuffer.put")
+    def test_send_flow_mod_error(self, mock_buffers_put):
+        """Test _send_flow_mod method error."""
+        switch = get_switch_mock("00:00:00:00:00:00:00:01", 0x04)
+        switch.is_connected = MagicMock(return_value=False)
+        flow_mod = MagicMock()
+
+        with self.assertRaises(SwitchNotConnectedError):
+            self.napp._send_flow_mod(switch, flow_mod)
+
+        mock_buffers_put.assert_not_called()
 
     @patch("kytos.core.buffers.KytosEventBuffer.put")
     def test_send_napp_event(self, mock_buffers_put):
