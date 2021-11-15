@@ -11,7 +11,6 @@ from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.flow_manager.storehouse import StoreHouse
 from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.settings import STATS_INTERVAL
-from pyof.foundation.base import UBIntBase
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
 from werkzeug.exceptions import (
@@ -31,58 +30,7 @@ from .settings import (
     ENABLE_CONSISTENCY_CHECK,
     FLOWS_DICT_MAX_SIZE,
 )
-
-
-def cast_fields(flow_dict):
-    """Make casting the match fields from UBInt() to native int ."""
-    match = flow_dict["match"]
-    for field, value in match.items():
-        if isinstance(value, UBIntBase):
-            match[field] = int(value)
-    flow_dict["match"] = match
-    return flow_dict
-
-
-def _validate_range(values):
-    """Check that the range of flows ignored by the consistency is valid."""
-    if len(values) != 2:
-        msg = f"The tuple must have 2 items, not {len(values)}"
-        raise ValueError(msg)
-    first, second = values
-    if second < first:
-        msg = f"The first value is bigger than the second: {values}"
-        raise ValueError(msg)
-    if not isinstance(first, int) or not isinstance(second, int):
-        msg = f"Expected a tuple of integers, received {values}"
-        raise TypeError(msg)
-
-
-def _valid_consistency_ignored(consistency_ignored_list):
-    """Check the format of the list of ignored consistency flows.
-
-    Check that the list of ignored flows in the consistency check
-    is well formatted. Returns True, if the list is well
-    formatted, otherwise return False.
-    """
-    msg = (
-        "The list of ignored flows in the consistency check"
-        "is not well formatted, it will be ignored: %s"
-    )
-    for consistency_ignored in consistency_ignored_list:
-        if isinstance(consistency_ignored, tuple):
-            try:
-                _validate_range(consistency_ignored)
-            except (TypeError, ValueError) as error:
-                log.warn(msg, error)
-                return False
-        elif not isinstance(consistency_ignored, (int, tuple)):
-            error_msg = (
-                "The elements must be of class int or tuple"
-                f" but they are: {type(consistency_ignored)}"
-            )
-            log.warn(msg, error_msg)
-            return False
-    return True
+from .utils import _valid_consistency_ignored, cast_fields
 
 
 class Main(KytosNApp):
@@ -495,7 +443,10 @@ class Main(KytosNApp):
         except SwitchNotConnectedError as error:
             raise FailedDependency(str(error))
 
-    def _install_flows(self, command, flows_dict, switches=[], save=True):
+    # pylint: disable=fixme
+    def _install_flows(
+        self, command, flows_dict, switches=[], save=True, reraise_conn=True
+    ):
         """Execute all procedures to install flows in the switches.
 
         Args:
@@ -503,6 +454,7 @@ class Main(KytosNApp):
             flows_dict: Dictionary with flows to be installed in the switches.
             switches: A list of switches
             save: A boolean to save flows in the storehouse (True) or not
+            reraise_conn: True to reraise switch connection errors
         """
         for switch in switches:
             serializer = FlowFactory.get_class(switch)
@@ -517,13 +469,21 @@ class Main(KytosNApp):
                     flow_mod = flow.as_of_add_flow_mod()
                 else:
                     raise InvalidCommandError
-                self._send_flow_mod(flow.switch, flow_mod)
+
+                try:
+                    self._send_flow_mod(flow.switch, flow_mod)
+                except SwitchNotConnectedError:
+                    if not save or reraise_conn:
+                        raise
                 self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
 
+                # TODO issue 2, only call _send_napp_event when get reply from switch
                 self._send_napp_event(switch, flow, command)
-                if save:
-                    with self._storehouse_lock:
-                        self._store_changed_flows(command, flow_dict, switch)
+
+                if not save:
+                    continue
+                with self._storehouse_lock:
+                    self._store_changed_flows(command, flow_dict, switch)
 
     def _add_flow_mod_sent(self, xid, flow, command):
         """Add the flow mod to the list of flow mods sent."""

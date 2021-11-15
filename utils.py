@@ -1,17 +1,8 @@
 """kytos/flow_manager utils."""
 
 from kytos.core import log
-from kytos.core.helpers import now
 
 from pyof.foundation.base import UBIntBase
-
-
-def new_archive_flow(dict_flow, reason):
-    """Build an archive flow given an stored dict flow."""
-    archive_flow = dict(dict_flow)
-    archive_flow["deleted_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
-    archive_flow["reason"] = reason
-    return archive_flow
 
 
 def cast_fields(flow_dict):
