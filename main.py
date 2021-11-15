@@ -4,6 +4,7 @@
 import itertools
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
+from enum import Enum
 from threading import Lock
 
 from flask import jsonify, request
@@ -31,6 +32,14 @@ from .settings import (
     FLOWS_DICT_MAX_SIZE,
 )
 from .utils import _valid_consistency_ignored, cast_fields
+
+
+class FlowEntryState(Enum):
+    """Enum for stored Flow Entry states."""
+
+    pending = "pending"  # initial state, it has been stored, but not confirmed yet
+    removed = "removed"  # final state, when the deletion has been confirmed
+    installed = "installed"  # final state, when the installtion has been confirmed
 
 
 class Main(KytosNApp):
