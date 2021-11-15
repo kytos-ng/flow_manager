@@ -482,7 +482,7 @@ class Main(KytosNApp):
                 try:
                     self._send_flow_mod(flow.switch, flow_mod)
                 except SwitchNotConnectedError:
-                    if not save or reraise_conn:
+                    if reraise_conn:
                         raise
                 self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
 
