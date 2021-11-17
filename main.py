@@ -31,14 +31,13 @@ from .settings import (
     ENABLE_CONSISTENCY_CHECK,
     FLOWS_DICT_MAX_SIZE,
 )
-from .utils import _valid_consistency_ignored, cast_fields
+from .utils import _valid_consistency_ignored, cast_fields, new_flow_dict
 
 
 class FlowEntryState(Enum):
     """Enum for stored Flow Entry states."""
 
     pending = "pending"  # initial state, it has been stored, but not confirmed yet
-    removed = "removed"  # final state, when the deletion has been confirmed
     installed = "installed"  # final state, when the installtion has been confirmed
 
 
@@ -278,9 +277,7 @@ class Main(KytosNApp):
 
     def _add_flow_store(self, flow_dict, switch):
         """Try to add a flow dict in the store idempotently."""
-        installed_flow = {}
-        installed_flow["flow"] = flow_dict
-        installed_flow["created_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
+        installed_flow = new_flow_dict(flow_dict, state=FlowEntryState.pending.value)
 
         stored_flows_box = deepcopy(self.stored_flows)
         cookie = int(flow_dict.get("cookie", 0))

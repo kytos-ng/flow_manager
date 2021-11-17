@@ -1,8 +1,18 @@
 """kytos/flow_manager utils."""
 
 from kytos.core import log
+from kytos.core.helpers import now
 
 from pyof.foundation.base import UBIntBase
+
+
+def new_flow_dict(flow_dict, state="pending"):
+    """Create a new flow dict to be stored."""
+    flow = {}
+    flow["flow"] = flow_dict
+    flow["created_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
+    flow["state"] = state
+    return flow
 
 
 def cast_fields(flow_dict):
