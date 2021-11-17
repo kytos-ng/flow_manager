@@ -928,7 +928,7 @@ class TestMain(TestCase):
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_consistency_cookie_ignored_range(self, *args):
         """Test the consistency `cookie` ignored range."""
-        (mock_flow_factory, mock_install_flows) = args
+        (_, mock_install_flows) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         cookie_ignored_interval = [
@@ -957,7 +957,7 @@ class TestMain(TestCase):
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_consistency_table_id_ignored_range(self, *args):
         """Test the consistency `table_id` ignored range."""
-        (mock_flow_factory, mock_install_flows) = args
+        (_, mock_install_flows) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         table_id_ignored_interval = [(1, 2), 3]
