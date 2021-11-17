@@ -166,10 +166,16 @@ class Main(KytosNApp):
 
                 log.info(f"Consistency check: missing flow on switch {dpid}.")
                 flow = {"flows": [stored_flow["flow"]]}
-                self._install_flows("add", flow, [switch], save=False)
-                log.info(
-                    f"Flow forwarded to switch {dpid} to be installed. Flow: {flow}"
-                )
+                try:
+                    self._install_flows("add", flow, [switch], save=False)
+                    log.info(
+                        f"Flow forwarded to switch {dpid} to be installed. Flow: {flow}"
+                    )
+                except SwitchNotConnectedError:
+                    log.error(
+                        f"Failed to forward flow to switch {dpid} to be installed. "
+                        f"Flow: {flow}"
+                    )
 
     def check_storehouse_consistency(self, switch):
         """Check consistency of installed flows for a specific switch."""
@@ -200,20 +206,33 @@ class Main(KytosNApp):
                     )
                     flow = {"flows": [installed_flow.as_dict()]}
                     command = "delete_strict"
-                    self._install_flows(command, flow, [switch], save=False)
-                    log.info(
-                        f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
-                    )
-                    continue
+                    try:
+                        self._install_flows(command, flow, [switch], save=False)
+                        log.info(
+                            f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
+                        )
+                        continue
+                    except SwitchNotConnectedError:
+                        log.error(
+                            f"Failed to forward flow to switch {dpid} to be deleted. "
+                            f"Flow: {flow}"
+                        )
 
                 if installed_flow not in stored_flows_list:
                     log.info(f"Consistency check: alien flow on switch {dpid}")
                     flow = {"flows": [installed_flow.as_dict()]}
                     command = "delete_strict"
-                    self._install_flows(command, flow, [switch], save=False)
-                    log.info(
-                        f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
-                    )
+                    try:
+                        self._install_flows(command, flow, [switch], save=False)
+                        log.info(
+                            f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
+                        )
+                        continue
+                    except SwitchNotConnectedError:
+                        log.error(
+                            f"Failed to forward flow to switch {dpid} to be deleted. "
+                            f"Flow: {flow}"
+                        )
 
     # pylint: disable=attribute-defined-outside-init
     def _load_flows(self):
