@@ -372,6 +372,7 @@ class Main(KytosNApp):
 
         return jsonify(switch_flows)
 
+    # pylint: disable=fixme
     @listen_to("kytos.flow_manager.flows.(install|delete)")
     def event_flows_install_delete(self, event):
         """Install or delete flows in the switches through events.
@@ -393,13 +394,17 @@ class Main(KytosNApp):
             msg = f'Invalid event "{event.name}", should be install|delete'
             raise ValueError(msg)
 
+        force = bool(event.content.get("force", False))
         switch = self.controller.get_switch_by_dpid(dpid)
         try:
-            self._install_flows(command, flow_dict, [switch])
+            self._install_flows(command, flow_dict, [switch], reraise_conn=not force)
         except InvalidCommandError as error:
             log.error(
                 "Error installing or deleting Flow through" f" Kytos Event: {error}"
             )
+        except SwitchNotConnectedError:
+            # TODO handle event error
+            pass
 
     @rest("v2/flows", methods=["POST"])
     @rest("v2/flows/<dpid>", methods=["POST"])
@@ -449,6 +454,7 @@ class Main(KytosNApp):
                 result = "The request body is not well-formed."
                 raise BadRequest(result)
 
+        force = bool(flows_dict.get("force", False))
         log.info(
             f"Send FlowMod from request dpid: {dpid} command: {command}"
             f" flows_dict: {flows_dict}"
@@ -456,7 +462,10 @@ class Main(KytosNApp):
         try:
             if not dpid:
                 self._install_flows(
-                    command, flows_dict, self._get_all_switches_enabled()
+                    command,
+                    flows_dict,
+                    self._get_all_switches_enabled(),
+                    reraise_conn=not force,
                 )
                 return jsonify({"response": "FlowMod Messages Sent"}), 202
 
@@ -467,7 +476,7 @@ class Main(KytosNApp):
             if not switch.is_enabled() and command == "add":
                 return jsonify({"response": "switch is disabled."}), 404
 
-            self._install_flows(command, flows_dict, [switch])
+            self._install_flows(command, flows_dict, [switch], reraise_conn=not force)
             return jsonify({"response": "FlowMod Messages Sent"}), 202
 
         except SwitchNotConnectedError as error:
