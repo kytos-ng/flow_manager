@@ -184,10 +184,10 @@ class TestMain(TestCase):
     def test_rest_flow_mod_add_switch_not_connected_force(self, *args):
         """Test sending a flow mod when a swith isn't connected with force option."""
         (
-            mock_flow_factory,
+            _,
             mock_send_flow_mod,
-            mock_add_flow_mod_sent,
-            mock_send_napp_event,
+            _,
+            _,
             mock_store_changed_flows,
         ) = args
 
@@ -503,7 +503,7 @@ class TestMain(TestCase):
         assert self.napp.stored_flows[dpid][0x20][0]["flow"]["actions"] == new_actions
         assert (
             self.napp.stored_flows[dpid][0x20][0]["state"]
-            == FlowEntryState.pending.value
+            == FlowEntryState.PENDING.value
         )
         assert self.napp.stored_flows[dpid][0x20][0]["created_at"]
 
@@ -549,7 +549,7 @@ class TestMain(TestCase):
         assert len(self.napp.stored_flows[dpid][cookie]) == 2
         assert (
             self.napp.stored_flows[dpid][cookie][1]["state"]
-            == FlowEntryState.pending.value
+            == FlowEntryState.PENDING.value
         )
         assert self.napp.stored_flows[dpid][cookie][1]["created_at"]
 

@@ -1,9 +1,9 @@
 """kytos/flow_manager utils."""
 
+from pyof.foundation.base import UBIntBase
+
 from kytos.core import log
 from kytos.core.helpers import now
-
-from pyof.foundation.base import UBIntBase
 
 
 def new_flow_dict(flow_dict, state="pending"):

@@ -37,8 +37,8 @@ from .utils import _valid_consistency_ignored, cast_fields, new_flow_dict
 class FlowEntryState(Enum):
     """Enum for stored Flow Entry states."""
 
-    pending = "pending"  # initial state, it has been stored, but not confirmed yet
-    installed = "installed"  # final state, when the installtion has been confirmed
+    PENDING = "pending"  # initial state, it has been stored, but not confirmed yet
+    INSTALLED = "installed"  # final state, when the installtion has been confirmed
 
 
 class Main(KytosNApp):
@@ -214,7 +214,8 @@ class Main(KytosNApp):
                     try:
                         self._install_flows(command, flow, [switch], save=False)
                         log.info(
-                            f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
+                            "Flow forwarded to switch {dpid} to be deleted. "
+                            f"Flow: {flow}"
                         )
                         continue
                     except SwitchNotConnectedError:
@@ -230,7 +231,8 @@ class Main(KytosNApp):
                     try:
                         self._install_flows(command, flow, [switch], save=False)
                         log.info(
-                            f"Flow forwarded to switch {dpid} to be deleted. Flow: {flow}"
+                            "Flow forwarded to switch {dpid} to be deleted. "
+                            f"Flow: {flow}"
                         )
                         continue
                     except SwitchNotConnectedError:
@@ -301,7 +303,7 @@ class Main(KytosNApp):
 
     def _add_flow_store(self, flow_dict, switch):
         """Try to add a flow dict in the store idempotently."""
-        installed_flow = new_flow_dict(flow_dict, state=FlowEntryState.pending.value)
+        installed_flow = new_flow_dict(flow_dict, state=FlowEntryState.PENDING.value)
 
         stored_flows_box = deepcopy(self.stored_flows)
         cookie = int(flow_dict.get("cookie", 0))
@@ -516,7 +518,7 @@ class Main(KytosNApp):
                         raise
                 self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
 
-                # TODO issue 2 and 7, only call _send_napp_event when get reply from switch
+                # TODO issue 2 and 7, only call this when get reply from switch
                 self._send_napp_event(switch, flow, command)
 
                 if not save:
