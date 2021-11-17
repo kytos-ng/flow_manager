@@ -100,11 +100,16 @@ class Main(KytosNApp):
             log.debug(f"Flow already resent to the switch {dpid}")
             return
         if dpid in self.stored_flows:
+            has_connection_failed = False
             for flow in self.stored_flows_list(dpid):
                 flows_dict = {"flows": [flow["flow"]]}
-                self._install_flows("add", flows_dict, [switch])
-            self.resent_flows.add(dpid)
-            log.info(f"Flows resent to Switch {dpid}")
+                try:
+                    self._install_flows("add", flows_dict, [switch])
+                except SwitchNotConnectedError:
+                    has_connection_failed = True
+            if not has_connection_failed:
+                self.resent_flows.add(dpid)
+                log.info(f"Flows resent to Switch {dpid}")
 
     @staticmethod
     def is_ignored(field, ignored_range):
@@ -502,7 +507,7 @@ class Main(KytosNApp):
                         raise
                 self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
 
-                # TODO issue 2, only call _send_napp_event when get reply from switch
+                # TODO issue 2 and 7, only call _send_napp_event when get reply from switch
                 self._send_napp_event(switch, flow, command)
 
                 if not save:
