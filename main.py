@@ -16,9 +16,9 @@ from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
 from werkzeug.exceptions import (
     BadRequest,
+    FailedDependency,
     NotFound,
     UnsupportedMediaType,
-    FailedDependency,
 )
 
 from kytos.core import KytosEvent, KytosNApp, log, rest
