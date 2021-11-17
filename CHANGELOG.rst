@@ -21,6 +21,14 @@ Removed
 Security
 ========
 
+[5.2.0] - 2021-11.17
+********************
+
+Added
+=====
+- Added support for ``force`` option when sending flow mods
+
+
 [5.1.0] - 2021-11.08
 ********************
 
