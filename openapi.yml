@@ -38,12 +38,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                flows:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/Flow'
+              $ref: '#/components/schemas/FlowsBody'
       responses:
         '202':
            description: FlowMod messages sent.
@@ -61,12 +56,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                flows:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/Flow'
+              $ref: '#/components/schemas/FlowsBody'
       responses:
         '202':
           description: FlowMod messages sent.
@@ -103,12 +93,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                flows:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/Flow'
+              $ref: '#/components/schemas/FlowsBody'
       parameters:
         - name: dpid
           in: path
@@ -133,12 +118,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                flows:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/Flow'
+              $ref: '#/components/schemas/FlowsBody'
       parameters:
         - name: dpid
           in: path
@@ -301,3 +281,14 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/Flow'
+    FlowsBody:
+      type: object
+      properties:
+        flows:
+          type: array
+          items:
+            $ref: '#/components/schemas/Flow'
+        force:
+          type: boolean
+          description: The force option is for ignoring switch connection errors, and delegating the flows to be automatically sent later on via consistency check.
+          default: false
