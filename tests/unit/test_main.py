@@ -14,6 +14,7 @@ from kytos.lib.helpers import (
     get_test_client,
 )
 from napps.kytos.flow_manager.exceptions import SwitchNotConnectedError
+from napps.kytos.flow_manager.main import FlowEntryState
 
 
 # pylint: disable=protected-access, too-many-public-methods
@@ -473,6 +474,11 @@ class TestMain(TestCase):
         self.napp._add_flow_store(flow_dict, switch)
         assert len(self.napp.stored_flows[dpid]) == 1
         assert self.napp.stored_flows[dpid][0x20][0]["flow"]["actions"] == new_actions
+        assert (
+            self.napp.stored_flows[dpid][0x20][0]["state"]
+            == FlowEntryState.pending.value
+        )
+        assert self.napp.stored_flows[dpid][0x20][0]["created_at"]
 
     @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
     def test_add_overlapping_flow_diff_priority(self, *args):
@@ -514,6 +520,11 @@ class TestMain(TestCase):
 
         self.napp._add_flow_store(flow_dict, switch)
         assert len(self.napp.stored_flows[dpid][cookie]) == 2
+        assert (
+            self.napp.stored_flows[dpid][cookie][1]["state"]
+            == FlowEntryState.pending.value
+        )
+        assert self.napp.stored_flows[dpid][cookie][1]["created_at"]
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
