@@ -456,7 +456,7 @@ class Main(KytosNApp):
 
         force = bool(flows_dict.get("force", False))
         log.info(
-            f"Send FlowMod from request dpid: {dpid} command: {command}"
+            f"Send FlowMod from request dpid: {dpid} command: {command} force: {force}"
             f" flows_dict: {flows_dict}"
         )
         try:
