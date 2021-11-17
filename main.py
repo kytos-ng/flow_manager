@@ -403,7 +403,7 @@ class Main(KytosNApp):
                 "Error installing or deleting Flow through" f" Kytos Event: {error}"
             )
         except SwitchNotConnectedError:
-            # TODO handle event error
+            # TODO handle event error, issue 2
             pass
 
     @rest("v2/flows", methods=["POST"])
