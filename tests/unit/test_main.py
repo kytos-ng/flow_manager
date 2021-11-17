@@ -176,6 +176,33 @@ class TestMain(TestCase):
 
         self.assertEqual(response.status_code, 424)
 
+    @patch("napps.kytos.flow_manager.main.Main._store_changed_flows")
+    @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
+    @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
+    @patch("napps.kytos.flow_manager.main.Main._send_flow_mod")
+    @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
+    def test_rest_flow_mod_add_switch_not_connected_force(self, *args):
+        """Test sending a flow mod when a swith isn't connected with force option."""
+        (
+            mock_flow_factory,
+            mock_send_flow_mod,
+            mock_add_flow_mod_sent,
+            mock_send_napp_event,
+            mock_store_changed_flows,
+        ) = args
+
+        api = get_test_client(self.napp.controller, self.napp)
+        mock_send_flow_mod.side_effect = SwitchNotConnectedError
+
+        url = f"{self.API_URL}/v2/flows"
+        flow_dict = {"flows": [{"priority": 25}]}
+        response = api.post(url, json=dict(flow_dict, **{"force": True}))
+
+        self.assertEqual(response.status_code, 202)
+        mock_store_changed_flows.assert_called_with(
+            "add", flow_dict["flows"][0], self.switch_01
+        )
+
     def test_get_all_switches_enabled(self):
         """Test _get_all_switches_enabled method."""
         switches = self.napp._get_all_switches_enabled()
