@@ -87,6 +87,14 @@ class Main(KytosNApp):
         """Ordered list of all stored flows given a dpid."""
         return itertools.chain(*list(self.stored_flows[dpid].values()))
 
+    def stored_flows_by_state(self, dpid, state):
+        """Stored flows dict filter by a state."""
+        filtered_flows = {}
+        for entry in self.stored_flows_list(dpid):
+            if entry.get("state") and entry["state"] == state:
+                filtered_flows[entry["_id"]] = entry
+        return filtered_flows
+
     @listen_to("kytos/of_core.handshake.completed")
     def resend_stored_flows(self, event):
         """Resend stored Flows."""
@@ -133,6 +141,35 @@ class Main(KytosNApp):
         """Check the consistency of a switch upon receiving flow stats."""
         self.check_consistency(event.content["switch"])
 
+    @listen_to("kytos/of_core.flow_stats.received")
+    def on_flow_stats_publish_installed_flows(self, event):
+        """Listen to flow stats to publish installed flows when they're confirmed."""
+        self.publish_installed_flows(event.content["switch"])
+
+    def publish_installed_flows(self, switch):
+        """Publish installed flows when they're confirmed."""
+        pending_flows = self.stored_flows_by_state(
+            switch.id, FlowEntryState.PENDING.value
+        )
+        if not pending_flows:
+            return
+
+        installed_flows = self.switch_flows_by_id(switch)
+
+        flow_ids_to_update = set()
+        for _id, pending_flow in pending_flows.items():
+            if _id not in installed_flows:
+                continue
+
+            installed_flow = installed_flows[_id]
+            flow_ids_to_update.add(_id)
+            self._send_napp_event(switch, installed_flow, "add")
+
+        with self._storehouse_lock:
+            self._update_flow_state_store(
+                switch.id, flow_ids_to_update, FlowEntryState.INSTALLED.value
+            )
+
     def check_consistency(self, switch):
         """Check consistency of stored and installed flows given a switch."""
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
@@ -150,6 +187,14 @@ class Main(KytosNApp):
         for cookie, flows in itertools.groupby(switch.flows, lambda x: x.cookie):
             for flow in flows:
                 installed_flows[cookie].append(flow)
+        return installed_flows
+
+    @staticmethod
+    def switch_flows_by_id(switch):
+        """Build switch.flows indexed by id."""
+        installed_flows = {}
+        for flow in switch.flows:
+            installed_flows[flow.id] = flow
         return installed_flows
 
     def check_switch_consistency(self, switch):
@@ -329,6 +374,26 @@ class Main(KytosNApp):
                     break
             else:
                 stored_flows_box[switch.id][cookie].append(installed_flow)
+
+        stored_flows_box["id"] = "flow_persistence"
+        self.storehouse.save_flow(stored_flows_box)
+        del stored_flows_box["id"]
+        self.stored_flows = deepcopy(stored_flows_box)
+
+    def _update_flow_state_store(self, dpid, flow_ids, state):
+        """Try to bulk update the state of some flow ids given a dpid."""
+        if not flow_ids:
+            return
+
+        stored_flows_box = deepcopy(self.stored_flows)
+        if dpid not in stored_flows_box:
+            return
+
+        for cookie in stored_flows_box[dpid]:
+            stored_flows = stored_flows_box[dpid][cookie]
+            for i, stored_flow in enumerate(stored_flows):
+                if stored_flow["_id"] in flow_ids:
+                    stored_flows_box[dpid][cookie][i]["state"] = state
 
         stored_flows_box["id"] = "flow_persistence"
         self.storehouse.save_flow(stored_flows_box)
@@ -520,9 +585,7 @@ class Main(KytosNApp):
                     if reraise_conn:
                         raise
                 self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
-
-                # TODO issue 2, only call this when the reply is confirmed
-                self._send_napp_event(switch, flow, command)
+                self._send_napp_event(switch, flow, "pending")
 
                 if not save:
                     continue
@@ -547,14 +610,17 @@ class Main(KytosNApp):
 
     def _send_napp_event(self, switch, flow, command, **kwargs):
         """Send an Event to other apps informing about a FlowMod."""
-        if command == "add":
-            name = "kytos/flow_manager.flow.added"
-        elif command in ("delete", "delete_strict"):
-            name = "kytos/flow_manager.flow.removed"
-        elif command == "error":
-            name = "kytos/flow_manager.flow.error"
-        else:
-            raise InvalidCommandError
+        command_events = {
+            "pending": "kytos/flow_manager.flow.pending",
+            "add": "kytos/flow_manager.flow.added",
+            "delete": "kytos/flow_manager.flow.removed",
+            "delete_strict": "kytos/flow_manager.flow.removed",
+            "error": "kytos/flow_manager.flow.error",
+        }
+        try:
+            name = command_events[command]
+        except KeyError as error:
+            raise InvalidCommandError(str(error))
         content = {"datapath": switch, "flow": flow}
         content.update(kwargs)
         event_app = KytosEvent(name, content)
