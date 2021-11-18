@@ -214,7 +214,7 @@ class Main(KytosNApp):
                     try:
                         self._install_flows(command, flow, [switch], save=False)
                         log.info(
-                            "Flow forwarded to switch {dpid} to be deleted. "
+                            f"Flow forwarded to switch {dpid} to be deleted. "
                             f"Flow: {flow}"
                         )
                         continue
@@ -231,7 +231,7 @@ class Main(KytosNApp):
                     try:
                         self._install_flows(command, flow, [switch], save=False)
                         log.info(
-                            "Flow forwarded to switch {dpid} to be deleted. "
+                            f"Flow forwarded to switch {dpid} to be deleted. "
                             f"Flow: {flow}"
                         )
                         continue
@@ -518,7 +518,7 @@ class Main(KytosNApp):
                         raise
                 self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
 
-                # TODO issue 2 and 7, only call this when get reply from switch
+                # TODO issue 2, only call this when the reply is confirmed
                 self._send_napp_event(switch, flow, command)
 
                 if not save:
