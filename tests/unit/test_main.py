@@ -250,7 +250,7 @@ class TestMain(TestCase):
 
         mock_send_flow_mod.assert_called_with(flow.switch, flow_mod)
         mock_add_flow_mod_sent.assert_called_with(flow_mod.header.xid, flow, "add")
-        mock_send_napp_event.assert_called_with(self.switch_01, flow, "add")
+        mock_send_napp_event.assert_called_with(self.switch_01, flow, "pending")
 
     @patch("napps.kytos.flow_manager.main.Main._store_changed_flows")
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
@@ -282,7 +282,7 @@ class TestMain(TestCase):
         mock_add_flow_mod_sent.assert_called_with(
             flow_mod.header.xid, flow, "delete_strict"
         )
-        mock_send_napp_event.assert_called_with(self.switch_01, flow, "delete_strict")
+        mock_send_napp_event.assert_called_with(self.switch_01, flow, "pending")
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     def test_event_add_flow(self, mock_install_flows):
