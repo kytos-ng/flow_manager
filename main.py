@@ -626,6 +626,12 @@ class Main(KytosNApp):
         event_app = KytosEvent(name, content)
         self.controller.buffers.app.put(event_app)
 
+    @listen_to("kytos/core.openflow.connection.error")
+    def on_openflow_connection_error(self, event):
+        switch = event.content["destination"].switch
+        flow = event.message
+        self._send_napp_event(switch, flow, "error")
+
     @listen_to(".*.of_core.*.ofpt_error")
     def handle_errors(self, event):
         """Receive OpenFlow error and send a event.
