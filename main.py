@@ -254,7 +254,7 @@ class Main(KytosNApp):
         else:
             log.info("Flows loaded.")
 
-    def _del_matched_flows_store(self, flow_dict, switch):
+    def _del_matched_flows_store(self, flow_dict, flow_id, switch):
         """Try to delete matching stored flows given a flow dict."""
         stored_flows_box = deepcopy(self.stored_flows)
 
@@ -301,9 +301,11 @@ class Main(KytosNApp):
             del stored_flows_box["id"]
             self.stored_flows = deepcopy(stored_flows_box)
 
-    def _add_flow_store(self, flow_dict, switch):
+    def _add_flow_store(self, flow_dict, flow_id, switch):
         """Try to add a flow dict in the store idempotently."""
-        installed_flow = new_flow_dict(flow_dict, state=FlowEntryState.PENDING.value)
+        installed_flow = new_flow_dict(
+            flow_dict, flow_id, state=FlowEntryState.PENDING.value
+        )
 
         stored_flows_box = deepcopy(self.stored_flows)
         cookie = int(flow_dict.get("cookie", 0))
@@ -333,12 +335,13 @@ class Main(KytosNApp):
         del stored_flows_box["id"]
         self.stored_flows = deepcopy(stored_flows_box)
 
-    def _store_changed_flows(self, command, flow_dict, switch):
+    def _store_changed_flows(self, command, flow_dict, flow_id, switch):
         """Store changed flows.
 
         Args:
             command: Flow command to be installed
             flow: flow dict to be stored
+            flow_id: corresponding FlowMod id (used for indexing)
             switch: Switch target
         """
         cmd_handlers = {
@@ -349,7 +352,7 @@ class Main(KytosNApp):
             raise ValueError(
                 f"Invalid command: {command}, supported: {list(cmd_handlers.keys())}"
             )
-        return cmd_handlers[command](flow_dict, switch)
+        return cmd_handlers[command](flow_dict, flow_id, switch)
 
     @rest("v2/flows")
     @rest("v2/flows/<dpid>")
@@ -524,7 +527,7 @@ class Main(KytosNApp):
                 if not save:
                     continue
                 with self._storehouse_lock:
-                    self._store_changed_flows(command, flow_dict, switch)
+                    self._store_changed_flows(command, flow_dict, flow.id, switch)
 
     def _add_flow_mod_sent(self, xid, flow, command):
         """Add the flow mod to the list of flow mods sent."""

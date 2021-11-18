@@ -6,9 +6,10 @@ from kytos.core import log
 from kytos.core.helpers import now
 
 
-def new_flow_dict(flow_dict, state="pending"):
+def new_flow_dict(flow_dict, _id=None, state="pending"):
     """Create a new flow dict to be stored."""
     flow = {}
+    flow["_id"] = _id
     flow["flow"] = flow_dict
     flow["created_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
     flow["state"] = state
