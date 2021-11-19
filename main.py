@@ -64,6 +64,7 @@ class Main(KytosNApp):
         self.storehouse = StoreHouse(self.controller)
 
         self._storehouse_lock = Lock()
+        self._flow_mods_sent_lock = Lock()
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {cookie_val: [
@@ -588,7 +589,8 @@ class Main(KytosNApp):
                 except SwitchNotConnectedError:
                     if reraise_conn:
                         raise
-                self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
+                with self._flow_mods_sent_lock:
+                    self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
                 self._send_napp_event(switch, flow, "pending")
 
                 if not save:
@@ -637,7 +639,17 @@ class Main(KytosNApp):
         """Listen to openflow connection error and publish the flow error."""
         switch = event.content["destination"].switch
         flow = event.message
-        self._send_napp_event(switch, flow, "error")
+        try:
+            _, error_command = self._flow_mods_sent[event.message.header.xid]
+        except KeyError:
+            error_command = "unknown"
+        self._send_napp_event(
+            switch,
+            flow,
+            "error",
+            error_command=error_command,
+            error_exception=event.content.get("exception"),
+        )
 
     @listen_to(".*.of_core.*.ofpt_error")
     def handle_errors(self, event):
