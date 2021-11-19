@@ -88,7 +88,7 @@ class Main(KytosNApp):
         return itertools.chain(*list(self.stored_flows[dpid].values()))
 
     def stored_flows_by_state(self, dpid, state):
-        """Stored flows dict filter by a state."""
+        """Get stored flows dict filter by a state."""
         filtered_flows = {}
         for entry in self.stored_flows_list(dpid):
             if entry.get("state") and entry["state"] == state:
@@ -164,7 +164,7 @@ class Main(KytosNApp):
         installed_flows = self.switch_flows_by_id(switch)
 
         flow_ids_to_update = set()
-        for _id, pending_flow in pending_flows.items():
+        for _id in pending_flows:
             if _id not in installed_flows:
                 continue
 
@@ -306,7 +306,7 @@ class Main(KytosNApp):
         else:
             log.info("Flows loaded.")
 
-    def _del_matched_flows_store(self, flow_dict, flow_id, switch):
+    def _del_matched_flows_store(self, flow_dict, _flow_id, switch):
         """Try to delete matching stored flows given a flow dict."""
         stored_flows_box = deepcopy(self.stored_flows)
 
@@ -636,6 +636,7 @@ class Main(KytosNApp):
 
     @listen_to("kytos/core.openflow.connection.error")
     def on_openflow_connection_error(self, event):
+        """Listen to openflow connection error and publish the flow error."""
         switch = event.content["destination"].switch
         flow = event.message
         self._send_napp_event(switch, flow, "error")
