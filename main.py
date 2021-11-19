@@ -472,9 +472,8 @@ class Main(KytosNApp):
             log.error(
                 "Error installing or deleting Flow through" f" Kytos Event: {error}"
             )
-        except SwitchNotConnectedError:
-            # TODO handle event error, issue 2
-            pass
+        except SwitchNotConnectedError as error:
+            self._send_napp_event(switch, error.flow, "error")
 
     @rest("v2/flows", methods=["POST"])
     @rest("v2/flows/<dpid>", methods=["POST"])
@@ -600,7 +599,9 @@ class Main(KytosNApp):
 
     def _send_flow_mod(self, switch, flow_mod):
         if not switch.is_connected():
-            raise SwitchNotConnectedError(f"switch {switch.id} isn't connected")
+            raise SwitchNotConnectedError(
+                f"switch {switch.id} isn't connected", flow_mod
+            )
 
         event_name = "kytos/flow_manager.messages.out.ofpt_flow_mod"
         content = {"destination": switch.connection, "message": flow_mod}
