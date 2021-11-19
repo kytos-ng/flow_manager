@@ -7,3 +7,8 @@ class InvalidCommandError(Exception):
 
 class SwitchNotConnectedError(Exception):
     """Exception raised when a switch's connection isn't connected."""
+
+    def __init__(self, message, flow=None):
+        self.message = message
+        self.flow = flow
+        super().__init__(message)
