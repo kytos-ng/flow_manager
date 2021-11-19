@@ -171,7 +171,9 @@ class TestMain(TestCase):
     def test_rest_flow_mod_add_switch_not_connected(self, mock_install_flows):
         """Test sending a flow mod when a swith isn't connected."""
         api = get_test_client(self.napp.controller, self.napp)
-        mock_install_flows.side_effect = SwitchNotConnectedError
+        mock_install_flows.side_effect = SwitchNotConnectedError(
+            "error", flow=MagicMock()
+        )
 
         url = f"{self.API_URL}/v2/flows"
         response = api.post(url, json={"flows": [{"priority": 25}]})
@@ -194,7 +196,9 @@ class TestMain(TestCase):
         ) = args
 
         api = get_test_client(self.napp.controller, self.napp)
-        mock_send_flow_mod.side_effect = SwitchNotConnectedError
+        mock_send_flow_mod.side_effect = SwitchNotConnectedError(
+            "error", flow=MagicMock()
+        )
 
         _id = str(uuid4())
         serializer = MagicMock()
