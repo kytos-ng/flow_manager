@@ -449,7 +449,6 @@ class Main(KytosNApp):
 
         return jsonify(switch_flows)
 
-    # pylint: disable=fixme
     @listen_to("kytos.flow_manager.flows.(install|delete)")
     def event_flows_install_delete(self, event):
         """Install or delete flows in the switches through events.
@@ -558,7 +557,6 @@ class Main(KytosNApp):
         except SwitchNotConnectedError as error:
             raise FailedDependency(str(error))
 
-    # pylint: disable=fixme
     def _install_flows(
         self, command, flows_dict, switches=[], save=True, reraise_conn=True
     ):
