@@ -141,6 +141,13 @@ class Main(KytosNApp):
         """Check the consistency of a switch upon receiving flow stats."""
         self.check_consistency(event.content["switch"])
 
+    @listen_to("kytos/of_core.v0x0[14].messages.in.ofpt_flow_removed")
+    def on_ofpt_flow_removed(self, event):
+        """Listen to OFPT_FLOW_REMOVED and publish to subscribers."""
+        switch = event.source.switch
+        flow = event.message
+        self._send_napp_event(switch, flow, "delete")
+
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_publish_installed_flows(self, event):
         """Listen to flow stats to publish installed flows when they're confirmed."""
