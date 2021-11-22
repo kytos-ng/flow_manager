@@ -200,10 +200,7 @@ class Main(KytosNApp):
     @staticmethod
     def switch_flows_by_id(switch):
         """Build switch.flows indexed by id."""
-        installed_flows = {}
-        for flow in switch.flows:
-            installed_flows[flow.id] = flow
-        return installed_flows
+        return {flow.id: flow for flow in switch.flows}
 
     def check_switch_consistency(self, switch):
         """Check consistency of stored flows for a specific switch."""
