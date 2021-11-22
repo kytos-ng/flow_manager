@@ -92,7 +92,7 @@ class Main(KytosNApp):
         """Get stored flows dict filter by a state."""
         filtered_flows = {}
         for entry in self.stored_flows_list(dpid):
-            if entry.get("state") and entry["state"] == state:
+            if entry.get("state") == state:
                 filtered_flows[entry["_id"]] = entry
         return filtered_flows
 
