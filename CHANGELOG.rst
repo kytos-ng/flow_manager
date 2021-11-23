@@ -21,6 +21,14 @@ Removed
 Security
 ========
 
+[5.4.0] - 2021-11.23
+********************
+
+Added
+=====
+- Added thread concurrency control per switch when executing check_consistency
+
+
 [5.3.0] - 2021-11.21
 ********************
 
