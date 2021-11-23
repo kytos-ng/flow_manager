@@ -5,7 +5,6 @@ import itertools
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from enum import Enum
-from queue import Queue
 from threading import Lock
 
 from flask import jsonify, request
@@ -66,7 +65,7 @@ class Main(KytosNApp):
 
         self._storehouse_lock = Lock()
         self._flow_mods_sent_lock = Lock()
-        self._check_consistency_queues = defaultdict(Queue)
+        self._check_consistency_exec_at = {}
         self._check_consistency_locks = defaultdict(Lock)
 
         # Format of stored flow data:
@@ -186,17 +185,25 @@ class Main(KytosNApp):
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
             return
         with self._check_consistency_locks[switch.id]:
-            if not self._check_consistency_queues[switch.id].empty():
-                log.debug(f"skipping concurrent check_consistency exec on {switch.id}")
+            exec_at = self._check_consistency_exec_at.get(
+                switch.id, "0001-01-01T00:00:00"
+            )
+            exec_time_diff = (now() - get_time(exec_at)).seconds
+            if exec_time_diff <= STATS_INTERVAL / 2:
+                log.info(
+                    f"Skipping recent consistency check exec on switch {switch.id}, "
+                    f"last checked at {exec_at}, diff in secs: {exec_time_diff}"
+                )
                 return
 
-            self._check_consistency_queues[switch.id].put(1)
-            log.debug(f"check_consistency on switch {switch.id} has started")
-            self.check_storehouse_consistency(switch)
-            if switch.dpid in self.stored_flows:
-                self.check_switch_consistency(switch)
-            log.debug(f"check_consistency on switch {switch.id} is done")
-            self._check_consistency_queues[switch.id].get()
+            self._check_consistency_exec_at[switch.id] = now().strftime(
+                "%Y-%m-%dT%H:%M:%S"
+            )
+        log.debug(f"check_consistency on switch {switch.id} has started")
+        self.check_storehouse_consistency(switch)
+        if switch.dpid in self.stored_flows:
+            self.check_switch_consistency(switch)
+        log.debug(f"check_consistency on switch {switch.id} is done")
 
     @staticmethod
     def switch_flows_by_cookie(switch):
