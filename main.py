@@ -5,6 +5,7 @@ import itertools
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from enum import Enum
+from queue import Queue
 from threading import Lock
 
 from flask import jsonify, request
@@ -65,6 +66,7 @@ class Main(KytosNApp):
 
         self._storehouse_lock = Lock()
         self._flow_mods_sent_lock = Lock()
+        self._check_consistency_queues = defaultdict(Queue)
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {cookie_val: [
@@ -182,11 +184,17 @@ class Main(KytosNApp):
         """Check consistency of stored and installed flows given a switch."""
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
             return
+        if not self._check_consistency_queues[switch.id].empty():
+            log.debug(f"skipping concurrent check_consistency exec on {switch.id}")
+            return
+
+        self._check_consistency_queues[switch.id].put(1)
         log.debug(f"check_consistency on switch {switch.id} has started")
         self.check_storehouse_consistency(switch)
         if switch.dpid in self.stored_flows:
             self.check_switch_consistency(switch)
         log.debug(f"check_consistency on switch {switch.id} is done")
+        self._check_consistency_queues[switch.id].get()
 
     @staticmethod
     def switch_flows_by_cookie(switch):
