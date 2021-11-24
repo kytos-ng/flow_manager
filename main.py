@@ -24,6 +24,7 @@ from werkzeug.exceptions import (
 from kytos.core import KytosEvent, KytosNApp, log, rest
 from kytos.core.helpers import get_time, listen_to, now
 
+from .barrier_request import new_barrier_request
 from .exceptions import InvalidCommandError, SwitchNotConnectedError
 from .settings import (
     CONSISTENCY_COOKIE_IGNORED_RANGE,
@@ -33,7 +34,6 @@ from .settings import (
     FLOWS_DICT_MAX_SIZE,
 )
 from .utils import _valid_consistency_ignored, cast_fields, new_flow_dict
-from .barrier_request import new_barrier_request
 
 
 class FlowEntryState(Enum):
@@ -204,7 +204,6 @@ class Main(KytosNApp):
 
     def _publish_installed_flow(self, switch, flow):
         """Publish installed flow when it's confirmed."""
-
         self._send_napp_event(switch, flow, "add")
         with self._storehouse_lock:
             self._update_flow_state_store(
@@ -214,7 +213,6 @@ class Main(KytosNApp):
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_publish_installed_flows(self, event):
         """Listen to flow stats to publish installed flows when they're confirmed."""
-
         self.publish_installed_flows(event.content["switch"])
 
     def publish_installed_flows(self, switch):
