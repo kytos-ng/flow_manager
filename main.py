@@ -11,7 +11,7 @@ from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.flow_manager.storehouse import StoreHouse
 from napps.kytos.of_core.flow import FlowFactory
-from napps.kytos.of_core.settings import STATS_INTERVAL, ENABLE_BARRIER_REQUEST
+from napps.kytos.of_core.settings import STATS_INTERVAL
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
 from werkzeug.exceptions import (
@@ -28,6 +28,7 @@ from .exceptions import InvalidCommandError, SwitchNotConnectedError
 from .settings import (
     CONSISTENCY_COOKIE_IGNORED_RANGE,
     CONSISTENCY_TABLE_ID_IGNORED_RANGE,
+    ENABLE_BARRIER_REQUEST,
     ENABLE_CONSISTENCY_CHECK,
     FLOWS_DICT_MAX_SIZE,
 )
