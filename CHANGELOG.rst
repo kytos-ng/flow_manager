@@ -21,6 +21,17 @@ Removed
 Security
 ========
 
+[5.5.0] - 2021-11.24
+********************
+
+Added
+=====
+- Added support for ofpt_barrier_request and ofpt_barrier_reply
+- Mapped barrier reply xid with flow mod xid to correlate them, and to also to confirm installed flows in an event-driver manner.
+- Stored in memory errors of flow mod xids to correlate them when a barrier reply is received.
+- Added thread locks accordingly for the dictionaries used.
+- Added support to delete the stored_flow once an ofpt_error when receiving a barrier reply, to avoid this flow to keep being sent via consistency check.
+
 [5.4.0] - 2021-11.23
 ********************
 
