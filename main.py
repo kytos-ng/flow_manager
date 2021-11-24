@@ -69,7 +69,9 @@ class Main(KytosNApp):
         self._flow_mods_sent_lock = Lock()
         self._check_consistency_exec_at = {}
         self._check_consistency_locks = defaultdict(Lock)
-        self._pending_barrier_reply = defaultdict(set)
+
+        self._pending_barrier_reply = defaultdict(dict)
+        self._pending_barrier_locks = defaultdict(Lock)
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {cookie_val: [
@@ -156,20 +158,54 @@ class Main(KytosNApp):
 
     @listen_to("kytos/of_core.v0x0[14].messages.in.ofpt_barrier_reply")
     def on_ofpt_barrier_reply(self, event):
-        """Listen to OFPT_BARRIER_REPLY."""
+        """Listen to OFPT_BARRIER_REPLY.
+
+        When a switch receives a Barrier message it must first complete all commands,
+        sent before the Barrier message before executing any commands after it. Messages
+        before a barrier must be fully processed before the barrier, including sending
+        any resulting replies or errors. So, we can leverage this to confirm that a
+        particular flow has been confirmed without having to scan for pending flows.
+
+        """
+        if not ENABLE_BARRIER_REQUEST:
+            return
+
         switch = event.source.switch
         message = event.message
-        try:
-            xid = int(message.header.xid)
-            self._pending_barrier_reply[switch.id].remove(xid)
-        except KeyError:
-            log.error(f"Failed to remove pending barrier reply {xid}")
-            return
+        xid = int(message.header.xid)
+        with self._pending_barrier_locks[switch.id]:
+            flow_xid = self._pending_barrier_reply[switch.id].pop(xid, None)
+            if not flow_xid:
+                log.error(
+                    f"Failed to pop barrier reply xid: {xid}, flow xid: {flow_xid}"
+                )
+                return
+        with self._flow_mods_sent_lock:
+            if flow_xid not in self._flow_mods_sent:
+                log.error(
+                    f"Flow xid: {flow_xid} not in flow mods sent. Inconsistent state"
+                )
+                return
+            flow, _ = self._flow_mods_sent[flow_xid]
+        # TODO ofpt_error could be sent first.
+        self._publish_installed_flow(switch, flow)
+
+    def _publish_installed_flow(self, switch, flow):
+        """Publish installed flow when it's confirmed."""
+
+        self._send_napp_event(switch, flow, "add")
+        with self._storehouse_lock:
+            self._update_flow_state_store(
+                switch.id, set([flow.id]), FlowEntryState.INSTALLED.value
+            )
 
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_publish_installed_flows(self, event):
         """Listen to flow stats to publish installed flows when they're confirmed."""
-        self.publish_installed_flows(event.content["switch"])
+
+        # if barrier is enabled, the confirmation is done when receiving a barrier reply
+        if not ENABLE_BARRIER_REQUEST:
+            self.publish_installed_flows(event.content["switch"])
 
     def publish_installed_flows(self, switch):
         """Publish installed flows when they're confirmed."""
@@ -650,9 +686,11 @@ class Main(KytosNApp):
             )
 
         barrier_request = new_barrier_request(switch.connection.protocol.version)
-        self._pending_barrier_reply[switch.id].add(barrier_request.header.xid)
-        content = {"destination": switch.connection, "message": barrier_request}
+        barrier_xid = barrier_request.header.xid
+        with self._pending_barrier_locks[switch.id]:
+            self._pending_barrier_reply[switch.id][barrier_xid] = flow_mod.header.xid
 
+        content = {"destination": switch.connection, "message": barrier_request}
         event = KytosEvent(name=event_name, content=content)
         self.controller.buffers.msg_out.put(event)
 
