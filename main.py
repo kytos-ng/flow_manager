@@ -154,6 +154,18 @@ class Main(KytosNApp):
         flow = event.message
         self._send_napp_event(switch, flow, "delete")
 
+    @listen_to("kytos/of_core.v0x0[14].messages.in.ofpt_barrier_reply")
+    def on_ofpt_barrier_reply(self, event):
+        """Listen to OFPT_BARRIER_REPLY."""
+        switch = event.source.switch
+        message = event.message
+        try:
+            xid = int(message.header.xid)
+            self._pending_barrier_reply[switch.id].remove(xid)
+        except KeyError:
+            log.error(f"Failed to remove pending barrier reply {xid}")
+            return
+
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_publish_installed_flows(self, event):
         """Listen to flow stats to publish installed flows when they're confirmed."""
@@ -638,7 +650,7 @@ class Main(KytosNApp):
             )
 
         barrier_request = new_barrier_request(switch.connection.protocol.version)
-        self.pending_barrier_reply[switch.id].add(barrier_request.header.xid)
+        self._pending_barrier_reply[switch.id].add(barrier_request.header.xid)
         content = {"destination": switch.connection, "message": barrier_request}
 
         event = KytosEvent(name=event_name, content=content)
