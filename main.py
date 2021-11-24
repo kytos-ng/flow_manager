@@ -201,13 +201,6 @@ class Main(KytosNApp):
             error_kwargs = self._flow_mods_sent_error.get(flow_xid)
         if not error_kwargs:
             self._publish_installed_flow(switch, flow)
-            return
-
-        log.warning(
-            f"Deleting flow: {flow.as_dict()}, xid: {flow_xid}, cookie: {flow.cookie}, "
-            f"error: {error_kwargs}"
-        )
-        self._del_stored_flow_by_id(switch.id, flow.cookie, flow.id)
 
     def _publish_installed_flow(self, switch, flow):
         """Publish installed flow when it's confirmed."""
@@ -839,4 +832,9 @@ class Main(KytosNApp):
             }
             with self._flow_mods_sent_error_locks[switch.id]:
                 self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
+            log.warning(
+                f"Deleting flow: {flow.as_dict()}, xid: {xid}, cookie: {flow.cookie}, "
+                f"error: {error_kwargs}"
+            )
+            self._del_stored_flow_by_id(switch.id, flow.cookie, flow.id)
             self._send_napp_event(flow.switch, flow, "error", **error_kwargs)
