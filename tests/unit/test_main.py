@@ -371,8 +371,9 @@ class TestMain(TestCase):
 
         self.assertEqual(mock_buffers_put.call_count, 4)
 
+    @patch("napps.kytos.flow_manager.main.Main._del_stored_flow_by_id")
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
-    def test_handle_errors(self, mock_send_napp_event):
+    def test_handle_errors(self, mock_send_napp_event, mock_del_stored):
         """Test handle_errors method."""
         flow = MagicMock()
         self.napp._flow_mods_sent[0] = (flow, "add")
@@ -405,6 +406,7 @@ class TestMain(TestCase):
             error_code=5,
             error_type=2,
         )
+        mock_del_stored.assert_called()
 
     @patch("napps.kytos.flow_manager.main.StoreHouse.get_data")
     def test_load_flows(self, mock_storehouse):
