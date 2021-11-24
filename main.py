@@ -32,6 +32,7 @@ from .settings import (
     FLOWS_DICT_MAX_SIZE,
 )
 from .utils import _valid_consistency_ignored, cast_fields, new_flow_dict
+from .barrier_request import new_barrier_request
 
 
 class FlowEntryState(Enum):
@@ -67,6 +68,7 @@ class Main(KytosNApp):
         self._flow_mods_sent_lock = Lock()
         self._check_consistency_exec_at = {}
         self._check_consistency_locks = defaultdict(Lock)
+        self._pending_barrier_reply = defaultdict(set)
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {cookie_val: [
@@ -617,6 +619,16 @@ class Main(KytosNApp):
         if len(self._flow_mods_sent) >= self._flow_mods_sent_max_size:
             self._flow_mods_sent.popitem(last=False)
         self._flow_mods_sent[xid] = (flow, command)
+
+    def _send_barrier_request(self, switch):
+        event_name = "kytos/flow_manager.messages.out.ofpt_barrier_request"
+
+        barrier_request = new_barrier_request(switch.connection.protocol.version)
+        self.pending_barrier_reply[switch.id].add(barrier_request.header.xid)
+        content = {"destination": switch.connection, "message": barrier_request}
+
+        event = KytosEvent(name=event_name, content=content)
+        self.controller.buffers.msg_out.put(event)
 
     def _send_flow_mod(self, switch, flow_mod):
         if not switch.is_connected():
