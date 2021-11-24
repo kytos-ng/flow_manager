@@ -11,7 +11,7 @@ from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.flow_manager.storehouse import StoreHouse
 from napps.kytos.of_core.flow import FlowFactory
-from napps.kytos.of_core.settings import STATS_INTERVAL
+from napps.kytos.of_core.settings import STATS_INTERVAL, ENABLE_BARRIER_REQUEST
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
 from werkzeug.exceptions import (
@@ -575,7 +575,13 @@ class Main(KytosNApp):
             raise FailedDependency(str(error))
 
     def _install_flows(
-        self, command, flows_dict, switches=[], save=True, reraise_conn=True
+        self,
+        command,
+        flows_dict,
+        switches=[],
+        save=True,
+        reraise_conn=True,
+        send_barrier=ENABLE_BARRIER_REQUEST,
     ):
         """Execute all procedures to install flows in the switches.
 
@@ -585,6 +591,7 @@ class Main(KytosNApp):
             switches: A list of switches
             save: A boolean to save flows in the storehouse (True) or not
             reraise_conn: True to reraise switch connection errors
+            send_barrier: True to send barrier_request
         """
         for switch in switches:
             serializer = FlowFactory.get_class(switch)
@@ -602,6 +609,8 @@ class Main(KytosNApp):
 
                 try:
                     self._send_flow_mod(flow.switch, flow_mod)
+                    if send_barrier:
+                        self._send_barrier_request(flow.switch, flow_mod)
                 except SwitchNotConnectedError:
                     if reraise_conn:
                         raise
@@ -620,8 +629,12 @@ class Main(KytosNApp):
             self._flow_mods_sent.popitem(last=False)
         self._flow_mods_sent[xid] = (flow, command)
 
-    def _send_barrier_request(self, switch):
+    def _send_barrier_request(self, switch, flow_mod):
         event_name = "kytos/flow_manager.messages.out.ofpt_barrier_request"
+        if not switch.is_connected():
+            raise SwitchNotConnectedError(
+                f"switch {switch.id} isn't connected", flow_mod
+            )
 
         barrier_request = new_barrier_request(switch.connection.protocol.version)
         self.pending_barrier_reply[switch.id].add(barrier_request.header.xid)
