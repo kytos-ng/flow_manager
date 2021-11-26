@@ -91,6 +91,8 @@ class Main(KytosNApp):
     def stored_flows_by_state(self, dpid, state):
         """Get stored flows dict filter by a state."""
         filtered_flows = {}
+        if dpid not in self.stored_flows:
+            return filtered_flows
         for entry in self.stored_flows_list(dpid):
             if entry.get("state") == state:
                 filtered_flows[entry["_id"]] = entry
