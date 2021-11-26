@@ -928,7 +928,7 @@ class TestMain(TestCase):
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_consistency_cookie_ignored_range(self, *args):
         """Test the consistency `cookie` ignored range."""
-        (mock_flow_factory, mock_install_flows) = args
+        (_, mock_install_flows) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         cookie_ignored_interval = [
@@ -938,48 +938,38 @@ class TestMain(TestCase):
         self.napp.cookie_ignored_range = cookie_ignored_interval
         flow = MagicMock()
         expected = [
-            {"cookie": 0x2B00000000000010, "called": 1},
-            {"cookie": 0x2B00000000000013, "called": 0},
-            {"cookie": 0x2B00000000000100, "called": 0},
-            {"cookie": 0x2B00000000000101, "called": 1},
+            (0x2B00000000000010, 1),
+            (0x2B00000000000013, 0),
+            (0x2B00000000000100, 0),
+            (0x2B00000000000101, 1),
         ]
-        # ignored flow
-        for i in expected:
-            mock_install_flows.call_count = 0
-            cookie = i["cookie"]
-            called = i["called"]
-            flow.cookie = cookie
-            flow.as_dict.return_value = {"flow_1": "data", "cookie": cookie}
-            switch.flows = [flow]
-            mock_flow_factory.return_value = flow
-            self.napp.stored_flows = {dpid: {0: [flow]}}
-            self.napp.check_storehouse_consistency(switch)
-            self.assertEqual(mock_install_flows.call_count, called)
+        for cookie, called in expected:
+            with self.subTest(cookie=cookie, called=called):
+                mock_install_flows.call_count = 0
+                flow.cookie = cookie
+                flow.as_dict.return_value = {"flow_1": "data", "cookie": cookie}
+                switch.flows = [flow]
+                self.napp.stored_flows = {dpid: {0: [flow]}}
+                self.napp.check_storehouse_consistency(switch)
+                self.assertEqual(mock_install_flows.call_count, called)
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_consistency_table_id_ignored_range(self, *args):
         """Test the consistency `table_id` ignored range."""
-        (mock_flow_factory, mock_install_flows) = args
+        (_, mock_install_flows) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         table_id_ignored_interval = [(1, 2), 3]
         self.napp.tab_id_ignored_range = table_id_ignored_interval
+
         flow = MagicMock()
-        expected = [
-            {"table_id": 0, "called": 1},
-            {"table_id": 3, "called": 0},
-            {"table_id": 4, "called": 1},
-        ]
-        # ignored flow
-        for i in expected:
-            table_id = i["table_id"]
-            called = i["called"]
-            mock_install_flows.call_count = 0
-            flow.table_id = table_id
-            flow.as_dict.return_value = {"flow_1": "data", "cookie": table_id}
-            switch.flows = [flow]
-            mock_flow_factory.return_value = flow
-            self.napp.stored_flows = {dpid: {0: [flow]}}
-            self.napp.check_storehouse_consistency(switch)
-            self.assertEqual(mock_install_flows.call_count, called)
+        expected = [(0, 1), (3, 0), (4, 1)]
+        for table_id, called in expected:
+            with self.subTest(table_id=table_id, called=called):
+                mock_install_flows.call_count = 0
+                flow.table_id = table_id
+                switch.flows = [flow]
+                self.napp.stored_flows = {dpid: {0: [flow]}}
+                self.napp.check_storehouse_consistency(switch)
+                self.assertEqual(mock_install_flows.call_count, called)
