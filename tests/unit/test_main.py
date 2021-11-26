@@ -376,11 +376,13 @@ class TestMain(TestCase):
     def test_handle_errors(self, mock_send_napp_event, mock_del_stored):
         """Test handle_errors method."""
         flow = MagicMock()
+        flow.as_dict.return_value = {}
+        flow.cookie = 0
         self.napp._flow_mods_sent[0] = (flow, "add")
 
         switch = get_switch_mock("00:00:00:00:00:00:00:01")
         switch.connection = get_connection_mock(
-            0x04, get_switch_mock("00:00:00:00:00:00:00:02")
+            0x04, get_switch_mock("00:00:00:00:00:00:00:01")
         )
 
         protocol = MagicMock()

@@ -784,12 +784,16 @@ class Main(KytosNApp):
         )
 
     @listen_to(".*.of_core.*.ofpt_error")
-    def handle_errors(self, event):
+    def on_handle_errors(self, event):
         """Receive OpenFlow error and send a event.
 
         The event is sent only if the error is related to a request made
         by flow_manager.
         """
+        self.handle_errors(event)
+
+    def handle_errors(self, event):
+        """handle OpenFlow error."""
         message = event.content["message"]
 
         connection = event.source
