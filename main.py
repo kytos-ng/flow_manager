@@ -330,12 +330,12 @@ class Main(KytosNApp):
         else:
             version = switch.connection.protocol.version
             stored_flows = stored_flows_box[switch.id].get(cookie, [])
-            for i, _ in enumerate(stored_flows):
+            for i, stored_flow in enumerate(stored_flows):
                 if all(
                     (
-                        stored_flows[i]["flow"].get("priority", 0)
+                        stored_flow["flow"].get("priority", 0)
                         == flow_dict.get("priority", 0),
-                        match_flow(flow_dict, version, stored_flows[i]["flow"]),
+                        match_flow(flow_dict, version, stored_flow["flow"]),
                     )
                 ):
                     stored_flows_box[switch.id][cookie][i] = installed_flow
