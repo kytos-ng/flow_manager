@@ -487,7 +487,7 @@ class Main(KytosNApp):
                 return jsonify({"response": "dpid not found."}), 404
 
             if not switch.is_enabled() and command == "add":
-                return jsonify({"response": "switch is disabled."}), 404
+                raise NotFound("switch is disabled.")
 
             self._install_flows(command, flows_dict, [switch])
             return jsonify({"response": "FlowMod Messages Sent"}), 202
