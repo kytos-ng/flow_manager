@@ -451,6 +451,73 @@ class TestMain(TestCase):
         assert self.napp.stored_flows[dpid][0x20][0]["flow"]["actions"] == new_actions
 
     @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
+    def test_add_overlapping_flow_multiple_stored(self, *args):
+        """Test add an overlapping flow with multiple flows stored."""
+        (_,) = args
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        cookie = 0x20
+
+        stored_flows_list = [
+            {
+                "flow": {
+                    "actions": [{"action_type": "output", "port": 2}],
+                    "match": {"dl_vlan": 100, "in_port": 1},
+                    "priority": 10,
+                },
+            },
+            {
+                "flow": {
+                    "actions": [{"action_type": "output", "port": 3}],
+                    "match": {"dl_vlan": 200, "in_port": 1},
+                    "priority": 10,
+                },
+            },
+            {
+                "flow": {
+                    "actions": [{"action_type": "output", "port": 4}],
+                    "match": {"dl_vlan": 300, "in_port": 1},
+                    "priority": 10,
+                },
+            },
+            {
+                "flow": {
+                    "actions": [{"action_type": "output", "port": 4}],
+                    "match": {"in_port": 1},
+                    "priority": 10,
+                },
+            },
+        ]
+
+        self.napp.stored_flows = {dpid: {cookie: list(stored_flows_list)}}
+
+        new_actions = [{"action_type": "output", "port": 3}]
+        overlapping_flow = {
+            "priority": 10,
+            "cookie": cookie,
+            "match": {
+                "in_port": 1,
+            },
+            "actions": new_actions,
+        }
+
+        self.napp._add_flow_store(overlapping_flow, switch)
+        assert len(self.napp.stored_flows[dpid][cookie]) == len(stored_flows_list)
+
+        # only the last flow is expected to be strictly matched
+        self.assertDictEqual(
+            self.napp.stored_flows[dpid][cookie][len(stored_flows_list) - 1]["flow"],
+            overlapping_flow,
+        )
+
+        # all flows except the last one should still be the same
+        for i in range(0, len(stored_flows_list) - 1):
+            self.assertDictEqual(
+                self.napp.stored_flows[dpid][cookie][i], stored_flows_list[i]
+            )
+
+    @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
     def test_add_overlapping_flow_diff_priority(self, *args):
         """Test that a different priority wouldn't overlap."""
         (_,) = args
