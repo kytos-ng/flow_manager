@@ -21,6 +21,17 @@ def match_flow(flow_to_install, version, stored_flow_dict):
     raise NotImplementedError(f"Unsupported OpenFlow version {version}")
 
 
+def match_strict_flow(flow_to_install, version, stored_flow_dict) -> None:
+    """Match the flow strictly.
+
+    It has support for only for (OF 1.3) flows.
+    If all fields match, return the flow, otherwise return False.
+    """
+    if version != 0x04:
+        raise NotImplementedError(f"Unsupported OpenFlow version {version}")
+    return match13_strict(flow_to_install, stored_flow_dict)
+
+
 def _get_match_fields(flow_dict):
     """Generate match fields."""
     match_fields = {}
