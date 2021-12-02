@@ -116,16 +116,23 @@ def match10_no_strict(flow_dict, args):
     return flow_dict
 
 
-def match13_no_strict(flow_to_install, stored_flow_dict):
-    """Match a flow that is either exact or more specific (non-strict) (OF1.3).
-
-    Return the flow if any fields match, otherwise, return False.
-    """
+def _match_cookie(flow_to_install, stored_flow_dict):
+    """Check if a the cookie and its mask matches between the flows."""
     cookie = flow_to_install.get("cookie", 0) & flow_to_install.get("cookie_mask", 0)
     cookie_stored = stored_flow_dict.get("cookie", 0) & flow_to_install.get(
         "cookie_mask", 0
     )
     if cookie and cookie != cookie_stored:
+        return False
+    return True
+
+
+def match13_no_strict(flow_to_install, stored_flow_dict):
+    """Match a flow that is either exact or more specific (non-strict) (OF1.3).
+
+    Return the flow if any fields match, otherwise, return False.
+    """
+    if not _match_cookie(flow_to_install, stored_flow_dict):
         return False
 
     if "match" not in flow_to_install or "match" not in stored_flow_dict:
@@ -149,11 +156,7 @@ def match13_strict(flow_to_install, stored_flow_dict):
 
     Return the flow if all fields match, otherwise, return False.
     """
-    cookie = flow_to_install.get("cookie", 0) & flow_to_install.get("cookie_mask", 0)
-    cookie_stored = stored_flow_dict.get("cookie", 0) & flow_to_install.get(
-        "cookie_mask", 0
-    )
-    if cookie and cookie != cookie_stored:
+    if not _match_cookie(flow_to_install, stored_flow_dict):
         return False
     if flow_to_install.get("priority", 0) != stored_flow_dict.get("priority", 0):
         return False
