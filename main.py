@@ -14,12 +14,17 @@ from napps.kytos.of_core.settings import STATS_INTERVAL
 from pyof.foundation.base import UBIntBase
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
-from werkzeug.exceptions import BadRequest, NotFound, UnsupportedMediaType
+from werkzeug.exceptions import (
+    BadRequest,
+    FailedDependency,
+    NotFound,
+    UnsupportedMediaType,
+)
 
 from kytos.core import KytosEvent, KytosNApp, log, rest
 from kytos.core.helpers import get_time, listen_to, now
 
-from .exceptions import InvalidCommandError
+from .exceptions import InvalidCommandError, SwitchNotConnectedError
 from .settings import (
     CONSISTENCY_COOKIE_IGNORED_RANGE,
     CONSISTENCY_TABLE_ID_IGNORED_RANGE,
@@ -470,21 +475,25 @@ class Main(KytosNApp):
             f"Send FlowMod from request dpid: {dpid} command: {command}"
             f" flows_dict: {flows_dict}"
         )
-        if dpid:
+        try:
+            if not dpid:
+                self._install_flows(
+                    command, flows_dict, self._get_all_switches_enabled()
+                )
+                return jsonify({"response": "FlowMod Messages Sent"}), 202
+
             switch = self.controller.get_switch_by_dpid(dpid)
             if not switch:
                 return jsonify({"response": "dpid not found."}), 404
-            elif switch.is_enabled() is False:
-                if command == "delete":
-                    self._install_flows(command, flows_dict, [switch])
-                else:
-                    return jsonify({"response": "switch is disabled."}), 404
-            else:
-                self._install_flows(command, flows_dict, [switch])
-        else:
-            self._install_flows(command, flows_dict, self._get_all_switches_enabled())
 
-        return jsonify({"response": "FlowMod Messages Sent"}), 202
+            if not switch.is_enabled() and command == "add":
+                raise NotFound("switch is disabled.")
+
+            self._install_flows(command, flows_dict, [switch])
+            return jsonify({"response": "FlowMod Messages Sent"}), 202
+
+        except SwitchNotConnectedError as error:
+            raise FailedDependency(str(error))
 
     def _install_flows(self, command, flows_dict, switches=[], save=True):
         """Execute all procedures to install flows in the switches.
@@ -523,8 +532,10 @@ class Main(KytosNApp):
         self._flow_mods_sent[xid] = (flow, command)
 
     def _send_flow_mod(self, switch, flow_mod):
-        event_name = "kytos/flow_manager.messages.out.ofpt_flow_mod"
+        if not switch.is_connected():
+            raise SwitchNotConnectedError(f"switch {switch.id} isn't connected")
 
+        event_name = "kytos/flow_manager.messages.out.ofpt_flow_mod"
         content = {"destination": switch.connection, "message": flow_mod}
 
         event = KytosEvent(name=event_name, content=content)
