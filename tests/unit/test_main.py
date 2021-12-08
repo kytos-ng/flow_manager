@@ -582,7 +582,8 @@ class TestMain(TestCase):
             "actions": new_actions,
         }
 
-        self.napp._add_flow_store(overlapping_flow, switch)
+        _id = str(uuid4())
+        self.napp._add_flow_store(overlapping_flow, _id, switch)
         assert len(self.napp.stored_flows[dpid][cookie]) == len(stored_flows_list)
 
         # only the last flow is expected to be strictly matched
