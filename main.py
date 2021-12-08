@@ -8,7 +8,7 @@ from enum import Enum
 from threading import Lock
 
 from flask import jsonify, request
-from napps.kytos.flow_manager.match import match_flow
+from napps.kytos.flow_manager.match import match_flow, match_strict_flow
 from napps.kytos.flow_manager.storehouse import StoreHouse
 from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.settings import STATS_INTERVAL
@@ -386,12 +386,12 @@ class Main(KytosNApp):
         else:
             version = switch.connection.protocol.version
             stored_flows = stored_flows_box[switch.id].get(cookie, [])
-            for i, _ in enumerate(stored_flows):
+            for i, stored_flow in enumerate(stored_flows):
                 if all(
                     (
-                        stored_flows[i]["flow"].get("priority", 0)
+                        stored_flow["flow"].get("priority", 0)
                         == flow_dict.get("priority", 0),
-                        match_flow(flow_dict, version, stored_flows[i]["flow"]),
+                        match_strict_flow(flow_dict, version, stored_flow["flow"]),
                     )
                 ):
                     stored_flows_box[switch.id][cookie][i] = installed_flow
@@ -566,7 +566,7 @@ class Main(KytosNApp):
                 return jsonify({"response": "dpid not found."}), 404
 
             if not switch.is_enabled() and command == "add":
-                return jsonify({"response": "switch is disabled."}), 404
+                raise NotFound("switch is disabled.")
 
             self._install_flows(command, flows_dict, [switch], reraise_conn=not force)
             return jsonify({"response": "FlowMod Messages Sent"}), 202
