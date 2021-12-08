@@ -14,6 +14,7 @@ from kytos.lib.helpers import (
     get_test_client,
 )
 from napps.kytos.flow_manager.exceptions import SwitchNotConnectedError
+from napps.kytos.flow_manager.main import FlowEntryState
 
 
 # pylint: disable=protected-access, too-many-public-methods
@@ -175,6 +176,33 @@ class TestMain(TestCase):
 
         self.assertEqual(response.status_code, 424)
 
+    @patch("napps.kytos.flow_manager.main.Main._store_changed_flows")
+    @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
+    @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
+    @patch("napps.kytos.flow_manager.main.Main._send_flow_mod")
+    @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
+    def test_rest_flow_mod_add_switch_not_connected_force(self, *args):
+        """Test sending a flow mod when a swith isn't connected with force option."""
+        (
+            _,
+            mock_send_flow_mod,
+            _,
+            _,
+            mock_store_changed_flows,
+        ) = args
+
+        api = get_test_client(self.napp.controller, self.napp)
+        mock_send_flow_mod.side_effect = SwitchNotConnectedError
+
+        url = f"{self.API_URL}/v2/flows"
+        flow_dict = {"flows": [{"priority": 25}]}
+        response = api.post(url, json=dict(flow_dict, **{"force": True}))
+
+        self.assertEqual(response.status_code, 202)
+        mock_store_changed_flows.assert_called_with(
+            "add", flow_dict["flows"][0], self.switch_01
+        )
+
     def test_get_all_switches_enabled(self):
         """Test _get_all_switches_enabled method."""
         switches = self.napp._get_all_switches_enabled()
@@ -255,7 +283,9 @@ class TestMain(TestCase):
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
         self.napp.event_flows_install_delete(event)
-        mock_install_flows.assert_called_with("add", mock_flow_dict, [switch])
+        mock_install_flows.assert_called_with(
+            "add", mock_flow_dict, [switch], reraise_conn=True
+        )
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     def test_event_flows_install_delete(self, mock_install_flows):
@@ -269,7 +299,9 @@ class TestMain(TestCase):
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
         self.napp.event_flows_install_delete(event)
-        mock_install_flows.assert_called_with("delete", mock_flow_dict, [switch])
+        mock_install_flows.assert_called_with(
+            "delete", mock_flow_dict, [switch], reraise_conn=True
+        )
 
     def test_add_flow_mod_sent(self):
         """Test _add_flow_mod_sent method."""
@@ -473,6 +505,11 @@ class TestMain(TestCase):
         self.napp._add_flow_store(flow_dict, switch)
         assert len(self.napp.stored_flows[dpid]) == 1
         assert self.napp.stored_flows[dpid][0x20][0]["flow"]["actions"] == new_actions
+        assert (
+            self.napp.stored_flows[dpid][0x20][0]["state"]
+            == FlowEntryState.PENDING.value
+        )
+        assert self.napp.stored_flows[dpid][0x20][0]["created_at"]
 
     @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
     def test_add_overlapping_flow_multiple_stored(self, *args):
@@ -581,6 +618,11 @@ class TestMain(TestCase):
 
         self.napp._add_flow_store(flow_dict, switch)
         assert len(self.napp.stored_flows[dpid][cookie]) == 2
+        assert (
+            self.napp.stored_flows[dpid][cookie][1]["state"]
+            == FlowEntryState.PENDING.value
+        )
+        assert self.napp.stored_flows[dpid][cookie][1]["created_at"]
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
