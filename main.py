@@ -8,7 +8,7 @@ from enum import Enum
 from threading import Lock
 
 from flask import jsonify, request
-from napps.kytos.flow_manager.match import match_flow
+from napps.kytos.flow_manager.match import match_flow, match_strict_flow
 from napps.kytos.flow_manager.storehouse import StoreHouse
 from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.settings import STATS_INTERVAL
@@ -320,7 +320,7 @@ class Main(KytosNApp):
                     (
                         stored_flow["flow"].get("priority", 0)
                         == flow_dict.get("priority", 0),
-                        match_flow(flow_dict, version, stored_flow["flow"]),
+                        match_strict_flow(flow_dict, version, stored_flow["flow"]),
                     )
                 ):
                     stored_flows_box[switch.id][cookie][i] = installed_flow
