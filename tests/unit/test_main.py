@@ -1344,6 +1344,38 @@ class TestMain(TestCase):
             == flow_mod.header.xid
         )
 
+    @patch("napps.kytos.flow_manager.main.Main._publish_installed_flow")
+    @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
+    def test_on_ofpt_barrier_reply(self, mock_save_flow, mock_publish):
+        """Test on_ofpt barrier reply."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+
+        flow_mod = MagicMock()
+        flow_mod.header.xid = 123
+
+        self.napp._send_barrier_request(switch, flow_mod)
+        assert (
+            list(self.napp._pending_barrier_reply[switch.id].values())[0]
+            == flow_mod.header.xid
+        )
+
+        barrier_xid = list(self.napp._pending_barrier_reply[switch.id].keys())[0]
+        self.napp._add_flow_mod_sent(flow_mod.header.xid, flow_mod, "add")
+
+        event = MagicMock()
+        event.message.header.xid = barrier_xid
+        assert barrier_xid
+        assert (
+            self.napp._pending_barrier_reply[switch.id][barrier_xid]
+            == flow_mod.header.xid
+        )
+        event.source.switch = switch
+
+        self.napp._on_ofpt_barrier_reply(event)
+        mock_publish.assert_called()
+
     @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
     def test_update_flow_state_store(self, mock_save_flow):
         """Test update flow state store."""
@@ -1391,3 +1423,43 @@ class TestMain(TestCase):
         mock.event.content = {"destination": switch}
         self.napp._on_openflow_connection_error(mock)
         mock_send_napp_event.assert_called()
+
+    @patch("napps.kytos.flow_manager.main.Main._update_flow_state_store")
+    @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
+    def test_publish_installed_flows(self, mock_send_napp_event, mock_update_flow):
+        """Test publish_installed_flows."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+
+        flow1 = MagicMock()
+        flow1.id = "1"
+        flow2 = MagicMock()
+        flow2.id = "2"
+
+        switch.flows = [flow1, flow2]
+
+        stored_flow = {
+            "_id": "1",
+            "state": "pending",
+            "flow": {
+                "match": {
+                    "ipv4_src": "192.168.2.1",
+                },
+            },
+        }
+        stored_flow2 = {
+            "_id": "2",
+            "state": "pending",
+            "flow": {
+                "match": {
+                    "ipv4_src": "192.168.2.2",
+                },
+            },
+        }
+        cookie = 0
+        self.napp.stored_flows = {dpid: {cookie: [stored_flow, stored_flow2]}}
+        assert len(self.napp.stored_flows[dpid][cookie]) == 2
+        self.napp.publish_installed_flows(switch)
+        assert mock_send_napp_event.call_count == 2
+        assert mock_update_flow.call_count == 1

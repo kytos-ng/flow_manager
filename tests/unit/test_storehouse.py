@@ -64,6 +64,9 @@ class TestStoreHouse(TestCase):
         self.napp._get_or_create_a_box_from_list_of_boxes(mock_event, None, mock_error)
         mock_create_box.assert_called()
 
+        # simulate a callback call for coverage
+        self.napp._create_box_callback(MagicMock(), MagicMock(), 1)
+
     @patch("napps.kytos.flow_manager.storehouse.KytosEvent")
     @patch("kytos.core.buffers.KytosEventBuffer.put")
     def test_get_stored_box(self, *args):
@@ -74,6 +77,9 @@ class TestStoreHouse(TestCase):
         mock_event.assert_called()
         mock_buffers_put.assert_called()
 
+        # simulate a callback call for coverage
+        self.napp._get_box_callback(MagicMock(), MagicMock(), 1)
+
     @patch("napps.kytos.flow_manager.storehouse.KytosEvent")
     @patch("kytos.core.buffers.KytosEventBuffer.put")
     def test_save_flow(self, *args):
@@ -83,3 +89,7 @@ class TestStoreHouse(TestCase):
         self.napp.save_flow(mock_status)
         mock_event.assert_called()
         mock_buffers_put.assert_called()
+
+        # simulate a callback call for coverage
+        self.napp._save_flow_callback(MagicMock(), MagicMock(), 1)
+
