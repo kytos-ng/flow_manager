@@ -157,6 +157,10 @@ class Main(KytosNApp):
     @listen_to("kytos/of_core.v0x0[14].messages.in.ofpt_flow_removed")
     def on_ofpt_flow_removed(self, event):
         """Listen to OFPT_FLOW_REMOVED and publish to subscribers."""
+        self._on_ofpt_flow_removed(event)
+
+    def _on_ofpt_flow_removed(self, event):
+        """Publish kytos/flow_manager.flow.removed event to subscribers."""
         switch = event.source.switch
         flow = event.message
         self._send_napp_event(switch, flow, "delete")
@@ -495,7 +499,7 @@ class Main(KytosNApp):
             if stored_flow["_id"] == flow_id:
                 index_deleted = i
                 break
-        if not index_deleted:
+        if index_deleted is None:
             return
 
         new_flow_list = []
@@ -764,6 +768,10 @@ class Main(KytosNApp):
     @listen_to("kytos/core.openflow.connection.error")
     def on_openflow_connection_error(self, event):
         """Listen to openflow connection error and publish the flow error."""
+        self._on_openflow_connection_error(event)
+
+    def _on_openflow_connection_error(self, event):
+        """Publish core.openflow.connection.error."""
         switch = event.content["destination"].switch
         flow = event.message
         try:
