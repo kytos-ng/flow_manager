@@ -1329,7 +1329,7 @@ class TestMain(TestCase):
         self.assertDictEqual(self.napp.stored_flows[dpid][cookie][0], stored_flow2)
 
     @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
-    def test_send_barrier_request(self, mock_save_flow):
+    def test_send_barrier_request(self, _):
         """Test send barrier request."""
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
@@ -1346,7 +1346,7 @@ class TestMain(TestCase):
 
     @patch("napps.kytos.flow_manager.main.Main._publish_installed_flow")
     @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
-    def test_on_ofpt_barrier_reply(self, mock_save_flow, mock_publish):
+    def test_on_ofpt_barrier_reply(self, _, mock_publish):
         """Test on_ofpt barrier reply."""
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)

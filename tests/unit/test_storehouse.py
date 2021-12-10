@@ -92,4 +92,3 @@ class TestStoreHouse(TestCase):
 
         # simulate a callback call for coverage
         self.napp._save_flow_callback(MagicMock(), MagicMock(), 1)
-
