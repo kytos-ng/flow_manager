@@ -178,7 +178,10 @@ class Main(KytosNApp):
         """
         if not ENABLE_BARRIER_REQUEST:
             return
+        self._on_ofpt_barrier_reply(event)
 
+    def _on_ofpt_barrier_reply(self, event):
+        """Process on_ofpt_barrier_reply event."""
         switch = event.source.switch
         message = event.message
         xid = int(message.header.xid)
