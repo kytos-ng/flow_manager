@@ -1,15 +1,6 @@
 """Match for OF 1.3."""
 
 
-def _get_match_fields(flow_dict):
-    """Generate match fields."""
-    match_fields = {}
-    if "match" in flow_dict:
-        for key, value in flow_dict["match"].items():
-            match_fields[key] = value
-    return match_fields
-
-
 def _match_cookie(flow_to_install, stored_flow_dict):
     """Check if a the cookie and its mask matches between the flows."""
     cookie = flow_to_install.get("cookie", 0) & flow_to_install.get("cookie_mask", 0)
