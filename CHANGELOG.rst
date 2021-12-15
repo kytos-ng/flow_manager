@@ -21,6 +21,16 @@ Removed
 Security
 ========
 
+[5.6.0] - 2021-12-15
+********************
+
+Added
+=====
+- Added support for retrying ``kytos/core.openflow.connection.error``
+- Added new high level error event ``kytos/flow_manager.openflow.connection.error`` 
+- Added retry configuration options
+
+
 [5.5.0] - 2021-11.24
 ********************
 
