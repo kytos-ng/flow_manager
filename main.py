@@ -28,6 +28,9 @@ from kytos.core.helpers import get_time, listen_to, now
 from .barrier_request import new_barrier_request
 from .exceptions import InvalidCommandError, SwitchNotConnectedError
 from .settings import (
+    CONN_ERR_MAX_RETRIES,
+    CONN_ERR_MIN_WAIT,
+    CONN_ERR_MULTIPLIER,
     CONSISTENCY_COOKIE_IGNORED_RANGE,
     CONSISTENCY_TABLE_ID_IGNORED_RANGE,
     ENABLE_BARRIER_REQUEST,
@@ -37,8 +40,8 @@ from .settings import (
 from .utils import (
     _valid_consistency_ignored,
     cast_fields,
-    new_flow_dict,
     get_min_wait_diff,
+    new_flow_dict,
 )
 
 
@@ -257,9 +260,9 @@ class Main(KytosNApp):
     def _retry_on_openflow_connection_error(
         self,
         event,
-        max_retries=3,
-        min_wait=0.2,
-        multiplier=2,
+        max_retries=CONN_ERR_MAX_RETRIES,
+        min_wait=CONN_ERR_MIN_WAIT,
+        multiplier=CONN_ERR_MULTIPLIER,
         send_barrier=ENABLE_BARRIER_REQUEST,
     ):
         """Try to retry on openflow connection error event."""
