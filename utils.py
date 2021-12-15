@@ -1,4 +1,5 @@
 """kytos/flow_manager utils."""
+import time
 
 from pyof.foundation.base import UBIntBase
 
@@ -66,3 +67,14 @@ def _valid_consistency_ignored(consistency_ignored_list):
             log.warn(msg, error_msg)
             return False
     return True
+
+
+def get_min_wait_diff(datetime_t2, datetime_t1, min_wait):
+    """Compute the min wait diff given two datetimes in secs, where t2 >= t1 in secs."""
+    if (datetime_t2 <= datetime_t1) or min_wait <= 0:
+        return 0
+    datetime_diff = (datetime_t2 - datetime_t1).total_seconds()
+    min_wait_diff = datetime_diff - min_wait
+    if min_wait_diff <= 0:
+        return 0
+    return min_wait_diff
