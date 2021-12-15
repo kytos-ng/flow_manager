@@ -1,5 +1,4 @@
 """kytos/flow_manager utils."""
-import time
 
 from pyof.foundation.base import UBIntBase
 

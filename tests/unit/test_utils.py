@@ -35,9 +35,9 @@ class TestUtils(TestCase):
     def test_get_min_wait_diff_early_return(self):
         """Test get_min_wait diff early return."""
         test_data = [(1, 2, 3), (3, 4, 0)]
-        for t2, t1, min_wait in test_data:
-            with self.subTest(t2=t2, t1=t1, min_wait=min_wait):
-                assert get_min_wait_diff(t2, t1, min_wait) == 0
+        for dt_t2, dt_t1, min_wait in test_data:
+            with self.subTest(dt_t2=dt_t2, dt_t1=dt_t1, min_wait=min_wait):
+                assert get_min_wait_diff(dt_t2, dt_t1, min_wait) == 0
 
     def test_get_min_wait_diff(self):
         """Test get_min_wait diff values."""
@@ -45,8 +45,9 @@ class TestUtils(TestCase):
             (timedelta(seconds=8), timedelta(seconds=2), 4),
             (timedelta(seconds=8), timedelta(seconds=2), 6),
         ]
-        for t2, t1, min_wait in test_data:
-            with self.subTest(t2=t2, t1=t1, min_wait=min_wait):
-                get_min_wait_diff(t2, t1, min_wait) == (
-                    t2 - t1
-                ).total_seconds() - min_wait
+        for dt_t2, dt_t1, min_wait in test_data:
+            with self.subTest(dt_t2=dt_t2, dt_t1=dt_t1, min_wait=min_wait):
+                assert (
+                    get_min_wait_diff(dt_t2, dt_t1, min_wait)
+                    == (dt_t2 - dt_t1).total_seconds() - min_wait
+                )
