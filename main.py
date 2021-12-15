@@ -856,27 +856,6 @@ class Main(KytosNApp):
             **error_kwargs,
         )
 
-    def _on_openflow_connection_error(self, event):
-        """Publish core.openflow.connection.error."""
-        switch = event.content["destination"].switch
-        flow = event.message
-        try:
-            _, error_command = self._flow_mods_sent[event.message.header.xid]
-        except KeyError:
-            error_command = "unknown"
-        error_kwargs = {
-            "error_command": error_command,
-            "error_exception": event.content.get("exception"),
-        }
-        with self._flow_mods_sent_error_locks[switch.id]:
-            self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
-        self._send_napp_event(
-            switch,
-            flow,
-            "error",
-            **error_kwargs,
-        )
-
     @listen_to(".*.of_core.*.ofpt_error")
     def on_handle_errors(self, event):
         """Receive OpenFlow error and send a event.
