@@ -74,7 +74,7 @@ class Main(KytosNApp):
         self._pending_barrier_locks = defaultdict(Lock)
 
         self._flow_mods_sent_error = {}
-        self._flow_mods_sent_error_locks = defaultdict(Lock)
+        self._flow_mods_sent_error_lock = Lock()
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {cookie_val: [
@@ -206,7 +206,7 @@ class Main(KytosNApp):
         hasn't been sent out or processed yet this can happen if the network latency
         is super low.
         """
-        with self._flow_mods_sent_error_locks[switch.id]:
+        with self._flow_mods_sent_error_lock:
             error_kwargs = self._flow_mods_sent_error.get(flow_xid)
         if not error_kwargs:
             self._publish_installed_flow(switch, flow)
@@ -785,7 +785,7 @@ class Main(KytosNApp):
             "error_command": error_command,
             "error_exception": event.content.get("exception"),
         }
-        with self._flow_mods_sent_error_locks[switch.id]:
+        with self._flow_mods_sent_error_lock:
             self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
         self._send_napp_event(
             switch,
@@ -845,7 +845,7 @@ class Main(KytosNApp):
                 "error_type": error_type,
                 "error_code": error_code,
             }
-            with self._flow_mods_sent_error_locks[switch.id]:
+            with self._flow_mods_sent_error_lock:
                 self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
             log.warning(
                 f"Deleting flow: {flow.as_dict()}, xid: {xid}, cookie: {flow.cookie}, "
