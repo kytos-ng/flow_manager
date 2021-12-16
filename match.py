@@ -1,8 +1,7 @@
 """Switch match."""
 
 from napps.kytos.flow_manager.v0x01.match import match10_no_strict
-from napps.kytos.flow_manager.v0x04.match import match13_no_strict
-from napps.kytos.flow_manager.v0x04.match import match13_strict
+from napps.kytos.flow_manager.v0x04.match import match13_no_strict, match13_strict
 
 
 def match_flow(flow_to_install, version, stored_flow_dict):
