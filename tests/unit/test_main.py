@@ -1,9 +1,10 @@
 """Test Main methods."""
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
-# pylint: disable=too-many-lines,fixme
-# TODO split this test suite in smaller ones
+from napps.kytos.flow_manager.exceptions import SwitchNotConnectedError
+from napps.kytos.flow_manager.main import FlowEntryState
 
 from kytos.core.helpers import now
 from kytos.lib.helpers import (
@@ -13,8 +14,9 @@ from kytos.lib.helpers import (
     get_switch_mock,
     get_test_client,
 )
-from napps.kytos.flow_manager.exceptions import SwitchNotConnectedError
-from napps.kytos.flow_manager.main import FlowEntryState
+
+# pylint: disable=too-many-lines,fixme
+# TODO split this test suite in smaller ones
 
 
 # pylint: disable=protected-access, too-many-public-methods
@@ -169,7 +171,9 @@ class TestMain(TestCase):
     def test_rest_flow_mod_add_switch_not_connected(self, mock_install_flows):
         """Test sending a flow mod when a swith isn't connected."""
         api = get_test_client(self.napp.controller, self.napp)
-        mock_install_flows.side_effect = SwitchNotConnectedError
+        mock_install_flows.side_effect = SwitchNotConnectedError(
+            "error", flow=MagicMock()
+        )
 
         url = f"{self.API_URL}/v2/flows"
         response = api.post(url, json={"flows": [{"priority": 25}]})
@@ -184,7 +188,7 @@ class TestMain(TestCase):
     def test_rest_flow_mod_add_switch_not_connected_force(self, *args):
         """Test sending a flow mod when a swith isn't connected with force option."""
         (
-            _,
+            mock_flow_factory,
             mock_send_flow_mod,
             _,
             _,
@@ -192,7 +196,17 @@ class TestMain(TestCase):
         ) = args
 
         api = get_test_client(self.napp.controller, self.napp)
-        mock_send_flow_mod.side_effect = SwitchNotConnectedError
+        mock_send_flow_mod.side_effect = SwitchNotConnectedError(
+            "error", flow=MagicMock()
+        )
+
+        _id = str(uuid4())
+        serializer = MagicMock()
+        flow = MagicMock()
+
+        flow.id.return_value = _id
+        serializer.from_dict.return_value = flow
+        mock_flow_factory.return_value = serializer
 
         url = f"{self.API_URL}/v2/flows"
         flow_dict = {"flows": [{"priority": 25}]}
@@ -200,7 +214,10 @@ class TestMain(TestCase):
 
         self.assertEqual(response.status_code, 202)
         mock_store_changed_flows.assert_called_with(
-            "add", flow_dict["flows"][0], self.switch_01
+            "add",
+            flow_dict["flows"][0],
+            mock_flow_factory().from_dict().id,
+            self.switch_01,
         )
 
     def test_get_all_switches_enabled(self):
@@ -237,7 +254,7 @@ class TestMain(TestCase):
 
         mock_send_flow_mod.assert_called_with(flow.switch, flow_mod)
         mock_add_flow_mod_sent.assert_called_with(flow_mod.header.xid, flow, "add")
-        mock_send_napp_event.assert_called_with(self.switch_01, flow, "add")
+        mock_send_napp_event.assert_called_with(self.switch_01, flow, "pending")
 
     @patch("napps.kytos.flow_manager.main.Main._store_changed_flows")
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
@@ -269,7 +286,7 @@ class TestMain(TestCase):
         mock_add_flow_mod_sent.assert_called_with(
             flow_mod.header.xid, flow, "delete_strict"
         )
-        mock_send_napp_event.assert_called_with(self.switch_01, flow, "delete_strict")
+        mock_send_napp_event.assert_called_with(self.switch_01, flow, "pending")
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     def test_event_add_flow(self, mock_install_flows):
@@ -432,11 +449,11 @@ class TestMain(TestCase):
             ]
         }
         self.napp.stored_flows = {dpid: stored_flows}
-        self.napp._store_changed_flows(command, flows, switch)
+        self.napp._store_changed_flows(command, flows, str(uuid4()), switch)
         mock_save_flow.assert_called()
 
         self.napp.stored_flows = {}
-        self.napp._store_changed_flows(command, flows, switch)
+        self.napp._store_changed_flows(command, flows, str(uuid4()), switch)
         mock_save_flow.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
@@ -502,13 +519,15 @@ class TestMain(TestCase):
             "actions": new_actions,
         }
 
-        self.napp._add_flow_store(flow_dict, switch)
+        _id = str(uuid4())
+        self.napp._add_flow_store(flow_dict, _id, switch)
         assert len(self.napp.stored_flows[dpid]) == 1
         assert self.napp.stored_flows[dpid][0x20][0]["flow"]["actions"] == new_actions
         assert (
             self.napp.stored_flows[dpid][0x20][0]["state"]
             == FlowEntryState.PENDING.value
         )
+        assert self.napp.stored_flows[dpid][0x20][0]["_id"] == _id
         assert self.napp.stored_flows[dpid][0x20][0]["created_at"]
 
     @patch("napps.kytos.flow_manager.storehouse.StoreHouse.save_flow")
@@ -563,7 +582,8 @@ class TestMain(TestCase):
             "actions": new_actions,
         }
 
-        self.napp._add_flow_store(overlapping_flow, switch)
+        _id = str(uuid4())
+        self.napp._add_flow_store(overlapping_flow, _id, switch)
         assert len(self.napp.stored_flows[dpid][cookie]) == len(stored_flows_list)
 
         # only the last flow is expected to be strictly matched
@@ -616,12 +636,14 @@ class TestMain(TestCase):
             "actions": new_actions,
         }
 
-        self.napp._add_flow_store(flow_dict, switch)
+        _id = str(uuid4())
+        self.napp._add_flow_store(flow_dict, _id, switch)
         assert len(self.napp.stored_flows[dpid][cookie]) == 2
         assert (
             self.napp.stored_flows[dpid][cookie][1]["state"]
             == FlowEntryState.PENDING.value
         )
+        assert self.napp.stored_flows[dpid][0x20][1]["_id"] == _id
         assert self.napp.stored_flows[dpid][cookie][1]["created_at"]
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
@@ -809,7 +831,7 @@ class TestMain(TestCase):
         command = "delete"
         self.napp.stored_flows = {dpid: stored_flows}
 
-        self.napp._store_changed_flows(command, flow_to_install, switch)
+        self.napp._store_changed_flows(command, flow_to_install, str(uuid4()), switch)
         mock_save_flow.assert_not_called()
         self.assertDictEqual(self.napp.stored_flows[dpid][0][0], stored_flow)
 
@@ -850,7 +872,7 @@ class TestMain(TestCase):
         command = "delete"
         self.napp.stored_flows = {dpid: stored_flows}
 
-        self.napp._store_changed_flows(command, flow_to_install, switch)
+        self.napp._store_changed_flows(command, flow_to_install, str(uuid4()), switch)
         mock_save_flow.assert_called()
         self.assertEqual(len(self.napp.stored_flows), 1)
 
@@ -894,7 +916,7 @@ class TestMain(TestCase):
         command = "delete"
         self.napp.stored_flows = {dpid: stored_flows}
 
-        self.napp._store_changed_flows(command, flow_to_install, switch)
+        self.napp._store_changed_flows(command, flow_to_install, str(uuid4()), switch)
         mock_save_flow.assert_called()
         expected_stored = {
             4961162389751548787: [
@@ -957,7 +979,7 @@ class TestMain(TestCase):
         command = "delete"
         self.napp.stored_flows = {dpid: stored_flow}
 
-        self.napp._store_changed_flows(command, flow_to_install, switch)
+        self.napp._store_changed_flows(command, flow_to_install, str(uuid4()), switch)
         mock_save_flow.assert_called()
 
         expected_stored = {
@@ -1009,7 +1031,7 @@ class TestMain(TestCase):
         command = "delete"
         self.napp.stored_flows = {dpid: stored_flow}
 
-        self.napp._store_changed_flows(command, flow_to_install, switch)
+        self.napp._store_changed_flows(command, flow_to_install, str(uuid4()), switch)
         mock_save_flow.assert_called()
 
         expected_stored = {}
@@ -1050,7 +1072,7 @@ class TestMain(TestCase):
         command = "delete"
         self.napp.stored_flows = {dpid: stored_flows}
 
-        self.napp._store_changed_flows(command, flow_to_install, switch)
+        self.napp._store_changed_flows(command, flow_to_install, str(uuid4()), switch)
         mock_save_flow.assert_not_called()
         expected_stored = {
             0: [
@@ -1139,7 +1161,7 @@ class TestMain(TestCase):
         command = "delete"
         self.napp.stored_flows = {dpid: stored_flows}
 
-        self.napp._store_changed_flows(command, flow_to_install, switch)
+        self.napp._store_changed_flows(command, flow_to_install, str(uuid4()), switch)
         mock_save_flow.assert_called()
         self.assertEqual(len(self.napp.stored_flows[dpid]), 0)
 

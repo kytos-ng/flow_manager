@@ -64,6 +64,7 @@ class Main(KytosNApp):
         self.storehouse = StoreHouse(self.controller)
 
         self._storehouse_lock = Lock()
+        self._flow_mods_sent_lock = Lock()
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {cookie_val: [
@@ -86,6 +87,16 @@ class Main(KytosNApp):
     def stored_flows_list(self, dpid):
         """Ordered list of all stored flows given a dpid."""
         return itertools.chain(*list(self.stored_flows[dpid].values()))
+
+    def stored_flows_by_state(self, dpid, state):
+        """Get stored flows dict filter by a state."""
+        filtered_flows = {}
+        if dpid not in self.stored_flows:
+            return filtered_flows
+        for entry in self.stored_flows_list(dpid):
+            if entry.get("state") == state:
+                filtered_flows[entry["_id"]] = entry
+        return filtered_flows
 
     @listen_to("kytos/of_core.handshake.completed")
     def resend_stored_flows(self, event):
@@ -133,6 +144,42 @@ class Main(KytosNApp):
         """Check the consistency of a switch upon receiving flow stats."""
         self.check_consistency(event.content["switch"])
 
+    @listen_to("kytos/of_core.v0x0[14].messages.in.ofpt_flow_removed")
+    def on_ofpt_flow_removed(self, event):
+        """Listen to OFPT_FLOW_REMOVED and publish to subscribers."""
+        switch = event.source.switch
+        flow = event.message
+        self._send_napp_event(switch, flow, "delete")
+
+    @listen_to("kytos/of_core.flow_stats.received")
+    def on_flow_stats_publish_installed_flows(self, event):
+        """Listen to flow stats to publish installed flows when they're confirmed."""
+        self.publish_installed_flows(event.content["switch"])
+
+    def publish_installed_flows(self, switch):
+        """Publish installed flows when they're confirmed."""
+        pending_flows = self.stored_flows_by_state(
+            switch.id, FlowEntryState.PENDING.value
+        )
+        if not pending_flows:
+            return
+
+        installed_flows = self.switch_flows_by_id(switch)
+
+        flow_ids_to_update = set()
+        for _id in pending_flows:
+            if _id not in installed_flows:
+                continue
+
+            installed_flow = installed_flows[_id]
+            flow_ids_to_update.add(_id)
+            self._send_napp_event(switch, installed_flow, "add")
+
+        with self._storehouse_lock:
+            self._update_flow_state_store(
+                switch.id, flow_ids_to_update, FlowEntryState.INSTALLED.value
+            )
+
     def check_consistency(self, switch):
         """Check consistency of stored and installed flows given a switch."""
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
@@ -151,6 +198,11 @@ class Main(KytosNApp):
             for flow in flows:
                 installed_flows[cookie].append(flow)
         return installed_flows
+
+    @staticmethod
+    def switch_flows_by_id(switch):
+        """Build switch.flows indexed by id."""
+        return {flow.id: flow for flow in switch.flows}
 
     def check_switch_consistency(self, switch):
         """Check consistency of stored flows for a specific switch."""
@@ -254,7 +306,7 @@ class Main(KytosNApp):
         else:
             log.info("Flows loaded.")
 
-    def _del_matched_flows_store(self, flow_dict, switch):
+    def _del_matched_flows_store(self, flow_dict, _flow_id, switch):
         """Try to delete matching stored flows given a flow dict."""
         stored_flows_box = deepcopy(self.stored_flows)
 
@@ -301,9 +353,11 @@ class Main(KytosNApp):
             del stored_flows_box["id"]
             self.stored_flows = deepcopy(stored_flows_box)
 
-    def _add_flow_store(self, flow_dict, switch):
+    def _add_flow_store(self, flow_dict, flow_id, switch):
         """Try to add a flow dict in the store idempotently."""
-        installed_flow = new_flow_dict(flow_dict, state=FlowEntryState.PENDING.value)
+        installed_flow = new_flow_dict(
+            flow_dict, flow_id, state=FlowEntryState.PENDING.value
+        )
 
         stored_flows_box = deepcopy(self.stored_flows)
         cookie = int(flow_dict.get("cookie", 0))
@@ -333,12 +387,33 @@ class Main(KytosNApp):
         del stored_flows_box["id"]
         self.stored_flows = deepcopy(stored_flows_box)
 
-    def _store_changed_flows(self, command, flow_dict, switch):
+    def _update_flow_state_store(self, dpid, flow_ids, state):
+        """Try to bulk update the state of some flow ids given a dpid."""
+        if not flow_ids:
+            return
+
+        stored_flows_box = deepcopy(self.stored_flows)
+        if dpid not in stored_flows_box:
+            return
+
+        for cookie in stored_flows_box[dpid]:
+            stored_flows = stored_flows_box[dpid][cookie]
+            for i, stored_flow in enumerate(stored_flows):
+                if stored_flow["_id"] in flow_ids:
+                    stored_flows_box[dpid][cookie][i]["state"] = state
+
+        stored_flows_box["id"] = "flow_persistence"
+        self.storehouse.save_flow(stored_flows_box)
+        del stored_flows_box["id"]
+        self.stored_flows = deepcopy(stored_flows_box)
+
+    def _store_changed_flows(self, command, flow_dict, flow_id, switch):
         """Store changed flows.
 
         Args:
             command: Flow command to be installed
             flow: flow dict to be stored
+            flow_id: corresponding FlowMod id (used for indexing)
             switch: Switch target
         """
         cmd_handlers = {
@@ -349,7 +424,7 @@ class Main(KytosNApp):
             raise ValueError(
                 f"Invalid command: {command}, supported: {list(cmd_handlers.keys())}"
             )
-        return cmd_handlers[command](flow_dict, switch)
+        return cmd_handlers[command](flow_dict, flow_id, switch)
 
     @rest("v2/flows")
     @rest("v2/flows/<dpid>")
@@ -374,7 +449,6 @@ class Main(KytosNApp):
 
         return jsonify(switch_flows)
 
-    # pylint: disable=fixme
     @listen_to("kytos.flow_manager.flows.(install|delete)")
     def event_flows_install_delete(self, event):
         """Install or delete flows in the switches through events.
@@ -404,9 +478,8 @@ class Main(KytosNApp):
             log.error(
                 "Error installing or deleting Flow through" f" Kytos Event: {error}"
             )
-        except SwitchNotConnectedError:
-            # TODO handle event error, issue 2
-            pass
+        except SwitchNotConnectedError as error:
+            self._send_napp_event(switch, error.flow, "error")
 
     @rest("v2/flows", methods=["POST"])
     @rest("v2/flows/<dpid>", methods=["POST"])
@@ -484,7 +557,6 @@ class Main(KytosNApp):
         except SwitchNotConnectedError as error:
             raise FailedDependency(str(error))
 
-    # pylint: disable=fixme
     def _install_flows(
         self, command, flows_dict, switches=[], save=True, reraise_conn=True
     ):
@@ -516,15 +588,14 @@ class Main(KytosNApp):
                 except SwitchNotConnectedError:
                     if reraise_conn:
                         raise
-                self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
-
-                # TODO issue 2, only call this when the reply is confirmed
-                self._send_napp_event(switch, flow, command)
+                with self._flow_mods_sent_lock:
+                    self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
+                self._send_napp_event(switch, flow, "pending")
 
                 if not save:
                     continue
                 with self._storehouse_lock:
-                    self._store_changed_flows(command, flow_dict, switch)
+                    self._store_changed_flows(command, flow_dict, flow.id, switch)
 
     def _add_flow_mod_sent(self, xid, flow, command):
         """Add the flow mod to the list of flow mods sent."""
@@ -534,7 +605,9 @@ class Main(KytosNApp):
 
     def _send_flow_mod(self, switch, flow_mod):
         if not switch.is_connected():
-            raise SwitchNotConnectedError(f"switch {switch.id} isn't connected")
+            raise SwitchNotConnectedError(
+                f"switch {switch.id} isn't connected", flow_mod
+            )
 
         event_name = "kytos/flow_manager.messages.out.ofpt_flow_mod"
         content = {"destination": switch.connection, "message": flow_mod}
@@ -544,18 +617,38 @@ class Main(KytosNApp):
 
     def _send_napp_event(self, switch, flow, command, **kwargs):
         """Send an Event to other apps informing about a FlowMod."""
-        if command == "add":
-            name = "kytos/flow_manager.flow.added"
-        elif command in ("delete", "delete_strict"):
-            name = "kytos/flow_manager.flow.removed"
-        elif command == "error":
-            name = "kytos/flow_manager.flow.error"
-        else:
-            raise InvalidCommandError
+        command_events = {
+            "pending": "kytos/flow_manager.flow.pending",
+            "add": "kytos/flow_manager.flow.added",
+            "delete": "kytos/flow_manager.flow.removed",
+            "delete_strict": "kytos/flow_manager.flow.removed",
+            "error": "kytos/flow_manager.flow.error",
+        }
+        try:
+            name = command_events[command]
+        except KeyError as error:
+            raise InvalidCommandError(str(error))
         content = {"datapath": switch, "flow": flow}
         content.update(kwargs)
         event_app = KytosEvent(name, content)
         self.controller.buffers.app.put(event_app)
+
+    @listen_to("kytos/core.openflow.connection.error")
+    def on_openflow_connection_error(self, event):
+        """Listen to openflow connection error and publish the flow error."""
+        switch = event.content["destination"].switch
+        flow = event.message
+        try:
+            _, error_command = self._flow_mods_sent[event.message.header.xid]
+        except KeyError:
+            error_command = "unknown"
+        self._send_napp_event(
+            switch,
+            flow,
+            "error",
+            error_command=error_command,
+            error_exception=event.content.get("exception"),
+        )
 
     @listen_to(".*.of_core.*.ofpt_error")
     def handle_errors(self, event):

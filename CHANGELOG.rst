@@ -21,6 +21,23 @@ Removed
 Security
 ========
 
+[5.3.0] - 2021-11.21
+********************
+
+Added
+=====
+- Started listening to ``kytos/core.openflow.connection.error`` and propagating the error
+- Added listen_to for ofpt_flow_removed
+- Publish the event ``kytos/flow_manager.flow.removed`` on OFPT_FLOW_REMOVED
+- Parametrized and added ``_id`` on stored flows to confirm flow operations
+- Parametrized the flow on ``SwitchNotConnectedError`` exception
+- Added support to update flow ``state`` and flows are confirmed by the consistency check
+
+Changed
+=======
+
+- Publish the event ``kytos/flow_manager.flow.added`` only when the flow is confirmed
+
 [5.2.0] - 2021-11.17
 ********************
 
