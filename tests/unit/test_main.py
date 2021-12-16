@@ -1,4 +1,5 @@
 """Test Main methods."""
+import threading
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -1214,3 +1215,33 @@ class TestMain(TestCase):
                 self.napp.stored_flows = {dpid: {0: [flow]}}
                 self.napp.check_storehouse_consistency(switch)
                 self.assertEqual(mock_install_flows.call_count, called)
+
+    def test_check_consistency_concurrency_control(self):
+        """Test check consistency concurrency control, only a single
+        thread per switch is expected within a delta T."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        n_threads = 10
+
+        check_store = MagicMock()
+        check_switch = MagicMock()
+        self.napp.check_storehouse_consistency = check_store
+        self.napp.check_switch_consistency = check_switch
+
+        # upfront a call
+        self.napp.check_consistency(switch)
+
+        threads = []
+        for _ in range(n_threads):
+            thread = threading.Thread(
+                target=self.napp.check_consistency, args=(switch,)
+            )
+            threads.append(thread)
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        # only a single call to check_storehouse_consistency is expected
+        assert check_store.call_count == 1
