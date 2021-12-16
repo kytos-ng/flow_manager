@@ -1257,3 +1257,209 @@ class TestMain(TestCase):
 
         # only a single call to check_storehouse_consistency is expected
         assert check_store.call_count == 1
+
+    def test_stored_flows_by_state(self):
+        """Test stored_flows_by_state method."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        stored_flow = {
+            "_id": "1",
+            "state": "installed",
+            "flow": {
+                "match": {
+                    "ipv4_src": "192.168.2.1",
+                },
+            },
+        }
+        stored_flow2 = {
+            "_id": "2",
+            "state": "pending",
+            "flow": {
+                "match": {
+                    "ipv4_src": "192.168.2.2",
+                },
+            },
+        }
+        self.napp.stored_flows = {dpid: {0: [stored_flow, stored_flow2]}}
+        filtered = self.napp.stored_flows_by_state(dpid, "installed")
+        assert len(filtered) == 1
+        self.assertDictEqual(filtered["1"], stored_flow)
+
+    @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
+    def test_on_ofpt_flow_removed(self, mock_send_napp_event):
+        """Test on_ofpt_flow_removed."""
+        mock = MagicMock()
+        mock.source.switch = "switch"
+        mock.message = {}
+        self.napp._on_ofpt_flow_removed(mock)
+        mock_send_napp_event.assert_called_with("switch", {}, "delete")
+
+    @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
+    def test_del_stored_flow_by_id(self, mock_save_flow):
+        """Test delete stored flow by id."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        stored_flow = {
+            "_id": "1",
+            "state": "installed",
+            "flow": {
+                "match": {
+                    "ipv4_src": "192.168.2.1",
+                },
+            },
+        }
+        stored_flow2 = {
+            "_id": "2",
+            "state": "pending",
+            "flow": {
+                "match": {
+                    "ipv4_src": "192.168.2.2",
+                },
+            },
+        }
+        cookie = 0
+        mock_save_flow.return_value = lambda x: x
+        self.napp.stored_flows = {dpid: {cookie: [stored_flow, stored_flow2]}}
+
+        assert len(self.napp.stored_flows[dpid][cookie]) == 2
+        self.napp._del_stored_flow_by_id(dpid, cookie, "1")
+        assert len(self.napp.stored_flows[dpid][cookie]) == 1
+        self.assertDictEqual(self.napp.stored_flows[dpid][cookie][0], stored_flow2)
+
+    @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
+    def test_send_barrier_request(self, _):
+        """Test send barrier request."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+
+        flow_mod = MagicMock()
+        flow_mod.header.xid = 123
+
+        self.napp._send_barrier_request(switch, flow_mod)
+        assert (
+            list(self.napp._pending_barrier_reply[switch.id].values())[0]
+            == flow_mod.header.xid
+        )
+
+    @patch("napps.kytos.flow_manager.main.Main._publish_installed_flow")
+    @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
+    def test_on_ofpt_barrier_reply(self, _, mock_publish):
+        """Test on_ofpt barrier reply."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+
+        flow_mod = MagicMock()
+        flow_mod.header.xid = 123
+
+        self.napp._send_barrier_request(switch, flow_mod)
+        assert (
+            list(self.napp._pending_barrier_reply[switch.id].values())[0]
+            == flow_mod.header.xid
+        )
+
+        barrier_xid = list(self.napp._pending_barrier_reply[switch.id].keys())[0]
+        self.napp._add_flow_mod_sent(flow_mod.header.xid, flow_mod, "add")
+
+        event = MagicMock()
+        event.message.header.xid = barrier_xid
+        assert barrier_xid
+        assert (
+            self.napp._pending_barrier_reply[switch.id][barrier_xid]
+            == flow_mod.header.xid
+        )
+        event.source.switch = switch
+
+        self.napp._on_ofpt_barrier_reply(event)
+        mock_publish.assert_called()
+
+    @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
+    def test_update_flow_state_store(self, mock_save_flow):
+        """Test update flow state store."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        stored_flow = {
+            "_id": "1",
+            "state": "pending",
+            "flow": {
+                "match": {
+                    "ipv4_src": "192.168.2.1",
+                },
+            },
+        }
+        stored_flow2 = {
+            "_id": "2",
+            "state": "pending",
+            "flow": {
+                "match": {
+                    "ipv4_src": "192.168.2.2",
+                },
+            },
+        }
+        cookie = 0
+        mock_save_flow.return_value = lambda x: x
+        self.napp.stored_flows = {dpid: {cookie: [stored_flow, stored_flow2]}}
+
+        assert len(self.napp.stored_flows[dpid][cookie]) == 2
+        self.napp._update_flow_state_store(dpid, ["1"], "installed")
+        assert len(self.napp.stored_flows[dpid][cookie]) == 2
+
+        expected = dict(stored_flow)
+        expected["state"] = "installed"
+        self.assertDictEqual(self.napp.stored_flows[dpid][cookie][0], expected)
+
+    @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
+    def test_on_openflow_connection_error(self, mock_send_napp_event):
+        """Test on_openflow_connection_error."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+
+        mock = MagicMock()
+        mock.event.content = {"destination": switch}
+        self.napp._on_openflow_connection_error(mock)
+        mock_send_napp_event.assert_called()
+
+    @patch("napps.kytos.flow_manager.main.Main._update_flow_state_store")
+    @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
+    def test_publish_installed_flows(self, mock_send_napp_event, mock_update_flow):
+        """Test publish_installed_flows."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+
+        flow1 = MagicMock()
+        flow1.id = "1"
+        flow2 = MagicMock()
+        flow2.id = "2"
+
+        switch.flows = [flow1, flow2]
+
+        stored_flow = {
+            "_id": "1",
+            "state": "pending",
+            "flow": {
+                "match": {
+                    "ipv4_src": "192.168.2.1",
+                },
+            },
+        }
+        stored_flow2 = {
+            "_id": "2",
+            "state": "pending",
+            "flow": {
+                "match": {
+                    "ipv4_src": "192.168.2.2",
+                },
+            },
+        }
+        cookie = 0
+        self.napp.stored_flows = {dpid: {cookie: [stored_flow, stored_flow2]}}
+        assert len(self.napp.stored_flows[dpid][cookie]) == 2
+        self.napp.publish_installed_flows(switch)
+        assert mock_send_napp_event.call_count == 2
+        assert mock_update_flow.call_count == 1

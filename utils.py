@@ -32,12 +32,12 @@ def _validate_range(values):
         msg = f"The tuple must have 2 items, not {len(values)}"
         raise ValueError(msg)
     first, second = values
-    if second < first:
-        msg = f"The first value is bigger than the second: {values}"
-        raise ValueError(msg)
     if not isinstance(first, int) or not isinstance(second, int):
         msg = f"Expected a tuple of integers, received {values}"
         raise TypeError(msg)
+    if second < first:
+        msg = f"The first value is bigger than the second: {values}"
+        raise ValueError(msg)
 
 
 def _valid_consistency_ignored(consistency_ignored_list):
