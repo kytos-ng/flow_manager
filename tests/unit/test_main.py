@@ -184,6 +184,7 @@ class TestMain(TestCase):
     @patch("napps.kytos.flow_manager.main.Main._store_changed_flows")
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
+    @patch("napps.kytos.flow_manager.main.Main._send_barrier_request")
     @patch("napps.kytos.flow_manager.main.Main._send_flow_mod")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_rest_flow_mod_add_switch_not_connected_force(self, *args):
@@ -191,6 +192,7 @@ class TestMain(TestCase):
         (
             mock_flow_factory,
             mock_send_flow_mod,
+            _,
             _,
             _,
             mock_store_changed_flows,
@@ -230,6 +232,7 @@ class TestMain(TestCase):
     @patch("napps.kytos.flow_manager.main.Main._store_changed_flows")
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
+    @patch("napps.kytos.flow_manager.main.Main._send_barrier_request")
     @patch("napps.kytos.flow_manager.main.Main._send_flow_mod")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_install_flows(self, *args):
@@ -237,6 +240,7 @@ class TestMain(TestCase):
         (
             mock_flow_factory,
             mock_send_flow_mod,
+            mock_send_barrier_request,
             mock_add_flow_mod_sent,
             mock_send_napp_event,
             _,
@@ -256,10 +260,12 @@ class TestMain(TestCase):
         mock_send_flow_mod.assert_called_with(flow.switch, flow_mod)
         mock_add_flow_mod_sent.assert_called_with(flow_mod.header.xid, flow, "add")
         mock_send_napp_event.assert_called_with(self.switch_01, flow, "pending")
+        mock_send_barrier_request.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._store_changed_flows")
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
+    @patch("napps.kytos.flow_manager.main.Main._send_barrier_request")
     @patch("napps.kytos.flow_manager.main.Main._send_flow_mod")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_install_flows_with_delete_strict(self, *args):
@@ -267,6 +273,7 @@ class TestMain(TestCase):
         (
             mock_flow_factory,
             mock_send_flow_mod,
+            mock_send_barrier_request,
             mock_add_flow_mod_sent,
             mock_send_napp_event,
             _,
@@ -288,6 +295,7 @@ class TestMain(TestCase):
             flow_mod.header.xid, flow, "delete_strict"
         )
         mock_send_napp_event.assert_called_with(self.switch_01, flow, "pending")
+        mock_send_barrier_request.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     def test_event_add_flow(self, mock_install_flows):
@@ -363,15 +371,18 @@ class TestMain(TestCase):
 
         self.assertEqual(mock_buffers_put.call_count, 4)
 
+    @patch("napps.kytos.flow_manager.main.Main._del_stored_flow_by_id")
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
-    def test_handle_errors(self, mock_send_napp_event):
+    def test_handle_errors(self, mock_send_napp_event, mock_del_stored):
         """Test handle_errors method."""
         flow = MagicMock()
+        flow.as_dict.return_value = {}
+        flow.cookie = 0
         self.napp._flow_mods_sent[0] = (flow, "add")
 
         switch = get_switch_mock("00:00:00:00:00:00:00:01")
         switch.connection = get_connection_mock(
-            0x04, get_switch_mock("00:00:00:00:00:00:00:02")
+            0x04, get_switch_mock("00:00:00:00:00:00:00:01")
         )
 
         protocol = MagicMock()
@@ -397,6 +408,7 @@ class TestMain(TestCase):
             error_code=5,
             error_type=2,
         )
+        mock_del_stored.assert_called()
 
     @patch("napps.kytos.flow_manager.main.StoreHouse.get_data")
     def test_load_flows(self, mock_storehouse):

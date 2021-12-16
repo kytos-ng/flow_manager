@@ -24,10 +24,12 @@ from werkzeug.exceptions import (
 from kytos.core import KytosEvent, KytosNApp, log, rest
 from kytos.core.helpers import get_time, listen_to, now
 
+from .barrier_request import new_barrier_request
 from .exceptions import InvalidCommandError, SwitchNotConnectedError
 from .settings import (
     CONSISTENCY_COOKIE_IGNORED_RANGE,
     CONSISTENCY_TABLE_ID_IGNORED_RANGE,
+    ENABLE_BARRIER_REQUEST,
     ENABLE_CONSISTENCY_CHECK,
     FLOWS_DICT_MAX_SIZE,
 )
@@ -67,6 +69,12 @@ class Main(KytosNApp):
         self._flow_mods_sent_lock = Lock()
         self._check_consistency_exec_at = {}
         self._check_consistency_locks = defaultdict(Lock)
+
+        self._pending_barrier_reply = defaultdict(dict)
+        self._pending_barrier_locks = defaultdict(Lock)
+
+        self._flow_mods_sent_error = {}
+        self._flow_mods_sent_error_locks = defaultdict(Lock)
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {cookie_val: [
@@ -152,6 +160,57 @@ class Main(KytosNApp):
         switch = event.source.switch
         flow = event.message
         self._send_napp_event(switch, flow, "delete")
+
+    @listen_to("kytos/of_core.v0x0[14].messages.in.ofpt_barrier_reply")
+    def on_ofpt_barrier_reply(self, event):
+        """Listen to OFPT_BARRIER_REPLY.
+
+        When a switch receives a Barrier message it must first complete all commands,
+        sent before the Barrier message before executing any commands after it. Messages
+        before a barrier must be fully processed before the barrier, including sending
+        any resulting replies or errors. So, we can leverage this to confirm that a
+        particular flow has been confirmed without having to scan for pending flows.
+
+        """
+        if not ENABLE_BARRIER_REQUEST:
+            return
+
+        switch = event.source.switch
+        message = event.message
+        xid = int(message.header.xid)
+        with self._pending_barrier_locks[switch.id]:
+            flow_xid = self._pending_barrier_reply[switch.id].pop(xid, None)
+            if not flow_xid:
+                log.error(
+                    f"Failed to pop barrier reply xid: {xid}, flow xid: {flow_xid}"
+                )
+                return
+        with self._flow_mods_sent_lock:
+            if flow_xid not in self._flow_mods_sent:
+                log.error(
+                    f"Flow xid: {flow_xid} not in flow mods sent. Inconsistent state"
+                )
+                return
+            flow, _ = self._flow_mods_sent[flow_xid]
+
+        """
+        It should only publish installed flow if it the original FlowMod xid hasn't
+        errored out. OFPT_ERROR messages could be received first if the barrier request
+        hasn't been sent out or processed yet this can happen if the network latency
+        is super low.
+        """
+        with self._flow_mods_sent_error_locks[switch.id]:
+            error_kwargs = self._flow_mods_sent_error.get(flow_xid)
+        if not error_kwargs:
+            self._publish_installed_flow(switch, flow)
+
+    def _publish_installed_flow(self, switch, flow):
+        """Publish installed flow when it's confirmed."""
+        self._send_napp_event(switch, flow, "add")
+        with self._storehouse_lock:
+            self._update_flow_state_store(
+                switch.id, set([flow.id]), FlowEntryState.INSTALLED.value
+            )
 
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_publish_installed_flows(self, event):
@@ -424,6 +483,33 @@ class Main(KytosNApp):
         del stored_flows_box["id"]
         self.stored_flows = deepcopy(stored_flows_box)
 
+    def _del_stored_flow_by_id(self, dpid, cookie, flow_id):
+        """Try to delete a stored flow by its id."""
+        stored_flows_box = deepcopy(self.stored_flows)
+        if dpid not in stored_flows_box:
+            return
+
+        stored_flows = stored_flows_box[dpid].get(cookie, [])
+        index_deleted = None
+        for i, stored_flow in enumerate(stored_flows):
+            if stored_flow["_id"] == flow_id:
+                index_deleted = i
+                break
+        if not index_deleted:
+            return
+
+        new_flow_list = []
+        for i, stored_flow in enumerate(stored_flows):
+            if i == index_deleted:
+                continue
+            new_flow_list.append(stored_flow)
+        stored_flows_box[dpid][cookie] = new_flow_list
+
+        stored_flows_box["id"] = "flow_persistence"
+        self.storehouse.save_flow(stored_flows_box)
+        del stored_flows_box["id"]
+        self.stored_flows = deepcopy(stored_flows_box)
+
     def _store_changed_flows(self, command, flow_dict, flow_id, switch):
         """Store changed flows.
 
@@ -575,7 +661,13 @@ class Main(KytosNApp):
             raise FailedDependency(str(error))
 
     def _install_flows(
-        self, command, flows_dict, switches=[], save=True, reraise_conn=True
+        self,
+        command,
+        flows_dict,
+        switches=[],
+        save=True,
+        reraise_conn=True,
+        send_barrier=ENABLE_BARRIER_REQUEST,
     ):
         """Execute all procedures to install flows in the switches.
 
@@ -585,6 +677,7 @@ class Main(KytosNApp):
             switches: A list of switches
             save: A boolean to save flows in the storehouse (True) or not
             reraise_conn: True to reraise switch connection errors
+            send_barrier: True to send barrier_request
         """
         for switch in switches:
             serializer = FlowFactory.get_class(switch)
@@ -602,6 +695,8 @@ class Main(KytosNApp):
 
                 try:
                     self._send_flow_mod(flow.switch, flow_mod)
+                    if send_barrier:
+                        self._send_barrier_request(flow.switch, flow_mod)
                 except SwitchNotConnectedError:
                     if reraise_conn:
                         raise
@@ -619,6 +714,22 @@ class Main(KytosNApp):
         if len(self._flow_mods_sent) >= self._flow_mods_sent_max_size:
             self._flow_mods_sent.popitem(last=False)
         self._flow_mods_sent[xid] = (flow, command)
+
+    def _send_barrier_request(self, switch, flow_mod):
+        event_name = "kytos/flow_manager.messages.out.ofpt_barrier_request"
+        if not switch.is_connected():
+            raise SwitchNotConnectedError(
+                f"switch {switch.id} isn't connected", flow_mod
+            )
+
+        barrier_request = new_barrier_request(switch.connection.protocol.version)
+        barrier_xid = barrier_request.header.xid
+        with self._pending_barrier_locks[switch.id]:
+            self._pending_barrier_reply[switch.id][barrier_xid] = flow_mod.header.xid
+
+        content = {"destination": switch.connection, "message": barrier_request}
+        event = KytosEvent(name=event_name, content=content)
+        self.controller.buffers.msg_out.put(event)
 
     def _send_flow_mod(self, switch, flow_mod):
         if not switch.is_connected():
@@ -659,21 +770,30 @@ class Main(KytosNApp):
             _, error_command = self._flow_mods_sent[event.message.header.xid]
         except KeyError:
             error_command = "unknown"
+        error_kwargs = {
+            "error_command": error_command,
+            "error_exception": event.content.get("exception"),
+        }
+        with self._flow_mods_sent_error_locks[switch.id]:
+            self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
         self._send_napp_event(
             switch,
             flow,
             "error",
-            error_command=error_command,
-            error_exception=event.content.get("exception"),
+            **error_kwargs,
         )
 
     @listen_to(".*.of_core.*.ofpt_error")
-    def handle_errors(self, event):
+    def on_handle_errors(self, event):
         """Receive OpenFlow error and send a event.
 
         The event is sent only if the error is related to a request made
         by flow_manager.
         """
+        self.handle_errors(event)
+
+    def handle_errors(self, event):
+        """handle OpenFlow error."""
         message = event.content["message"]
 
         connection = event.source
@@ -709,11 +829,16 @@ class Main(KytosNApp):
         except KeyError:
             pass
         else:
-            self._send_napp_event(
-                flow.switch,
-                flow,
-                "error",
-                error_command=error_command,
-                error_type=error_type,
-                error_code=error_code,
+            error_kwargs = {
+                "error_command": error_command,
+                "error_type": error_type,
+                "error_code": error_code,
+            }
+            with self._flow_mods_sent_error_locks[switch.id]:
+                self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
+            log.warning(
+                f"Deleting flow: {flow.as_dict()}, xid: {xid}, cookie: {flow.cookie}, "
+                f"error: {error_kwargs}"
             )
+            self._del_stored_flow_by_id(switch.id, flow.cookie, flow.id)
+            self._send_napp_event(flow.switch, flow, "error", **error_kwargs)
