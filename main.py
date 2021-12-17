@@ -881,7 +881,7 @@ class Main(KytosNApp):
         self._send_napp_event(
             switch,
             flow,
-            "connection_error",
+            "error",
             **error_kwargs,
         )
 
