@@ -4,7 +4,10 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from napps.kytos.flow_manager.exceptions import SwitchNotConnectedError
+from napps.kytos.flow_manager.exceptions import (
+    InvalidCommandError,
+    SwitchNotConnectedError,
+)
 from napps.kytos.flow_manager.main import FlowEntryState
 
 from kytos.core.helpers import now
@@ -1585,3 +1588,19 @@ class TestMain(TestCase):
         mock_ev.event.content = {"destination": switch}
         self.napp._send_openflow_connection_error(mock_ev)
         assert mock_send.call_count == 1
+
+    def test_build_flow_mod_from_command(self):
+        """Test build_flow_mod_from_command."""
+        mock = MagicMock()
+        values = [
+            ("add", mock.as_of_add_flow_mod),
+            ("delete", mock.as_of_delete_flow_mod),
+            ("delete_strict", mock.as_of_strict_delete_flow_mod),
+        ]
+        for command, mock_method in values:
+            with self.subTest(command=command, mock_method=mock_method):
+                self.napp.build_flow_mod_from_command(mock, command)
+                assert mock_method.call_count == 1
+
+        with self.assertRaises(InvalidCommandError):
+            self.napp.build_flow_mod_from_command(mock, "invalid_command")

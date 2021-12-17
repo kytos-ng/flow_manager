@@ -73,7 +73,7 @@ def get_min_wait_diff(datetime_t2, datetime_t1, min_wait):
     if (datetime_t2 <= datetime_t1) or min_wait <= 0:
         return 0
     datetime_diff = (datetime_t2 - datetime_t1).total_seconds()
-    min_wait_diff = datetime_diff - min_wait
+    min_wait_diff = min_wait - datetime_diff
     if min_wait_diff <= 0:
         return 0
     return min_wait_diff
