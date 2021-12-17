@@ -30,7 +30,7 @@ Added
 
 Changed
 =======
-- Changed ``_flow_mods_sent_error_locks`` and ``_pending_barrier_locks`` to be safer
+- Changed ``_flow_mods_sent_error_locks``, ``_pending_barrier_locks``, and ``_check_consistency_locks`` to be safer
 
 [5.5.0] - 2021-11.24
 ********************
