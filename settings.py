@@ -15,5 +15,5 @@ CONSISTENCY_TABLE_ID_IGNORED_RANGE = []
 
 # Retries options for `kytos/core.openflow.connection.error`
 CONN_ERR_MAX_RETRIES = 3
-CONN_ERR_MIN_WAIT = 0.5  # minimum wait between iterations in seconds
+CONN_ERR_MIN_WAIT = 1  # minimum wait between iterations in seconds
 CONN_ERR_MULTIPLIER = 2  # multiplier for the accumulated wait on each iteration
