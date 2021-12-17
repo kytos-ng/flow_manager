@@ -1453,7 +1453,7 @@ class TestMain(TestCase):
 
         mock = MagicMock()
         mock.event.content = {"destination": switch}
-        self.napp._on_openflow_connection_error(mock)
+        self.napp._send_openflow_connection_error(mock)
         mock_send_napp_event.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._update_flow_state_store")
@@ -1542,7 +1542,7 @@ class TestMain(TestCase):
         mock_ev = MagicMock()
         mock_ev.event.content = {"destination": switch}
         min_wait = 0.2
-        assert self.napp._retry_on_openflow_connection_error(
+        assert not self.napp._retry_on_openflow_connection_error(
             mock_ev,
             max_retries=3,
             min_wait=min_wait,
@@ -1556,15 +1556,19 @@ class TestMain(TestCase):
         max_retries = 0
         min_wait = 0.2
         multiplier = 2
-        assert not self.napp._retry_on_openflow_connection_error(
-            {}, max_retries, min_wait, multiplier
-        )
+        with self.assertRaises(ValueError) as exc:
+            self.napp._retry_on_openflow_connection_error(
+                {}, max_retries, min_wait, multiplier
+            )
+        assert "should be > 0" in str(exc.exception)
 
         self.napp._flow_mods_sent = {}
         mock = MagicMock()
-        assert not self.napp._retry_on_openflow_connection_error(
-            mock, max_retries + 1, min_wait, multiplier
-        )
+        with self.assertRaises(ValueError) as exc:
+            self.napp._retry_on_openflow_connection_error(
+                mock, max_retries + 1, min_wait, multiplier
+            )
+        assert "not found on flow mods sent" in str(exc.exception)
 
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     def test_send_openflow_connection_error(self, mock_send):
