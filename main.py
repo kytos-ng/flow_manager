@@ -70,8 +70,9 @@ class Main(KytosNApp):
         self._check_consistency_exec_at = {}
         self._check_consistency_locks = defaultdict(Lock)
 
-        self._pending_barrier_reply = defaultdict(dict)
-        self._pending_barrier_locks = defaultdict(Lock)
+        self._pending_barrier_reply = defaultdict(OrderedDict)
+        self._pending_barrier_lock = Lock()
+        self._pending_barrier_max_size = FLOWS_DICT_MAX_SIZE
 
         self._flow_mods_sent_error = {}
         self._flow_mods_sent_error_lock = Lock()
@@ -185,7 +186,7 @@ class Main(KytosNApp):
         switch = event.source.switch
         message = event.message
         xid = int(message.header.xid)
-        with self._pending_barrier_locks[switch.id]:
+        with self._pending_barrier_lock:
             flow_xid = self._pending_barrier_reply[switch.id].pop(xid, None)
             if not flow_xid:
                 log.error(
@@ -722,6 +723,12 @@ class Main(KytosNApp):
             self._flow_mods_sent.popitem(last=False)
         self._flow_mods_sent[xid] = (flow, command)
 
+    def _add_barrier_request(self, dpid, barrier_xid, flow_xid):
+        """Add a barrier request."""
+        if len(self._pending_barrier_reply[dpid]) >= self._pending_barrier_max_size:
+            self._pending_barrier_reply[dpid].popitem(last=False)
+        self._pending_barrier_reply[dpid][barrier_xid] = flow_xid
+
     def _send_barrier_request(self, switch, flow_mod):
         event_name = "kytos/flow_manager.messages.out.ofpt_barrier_request"
         if not switch.is_connected():
@@ -731,8 +738,8 @@ class Main(KytosNApp):
 
         barrier_request = new_barrier_request(switch.connection.protocol.version)
         barrier_xid = barrier_request.header.xid
-        with self._pending_barrier_locks[switch.id]:
-            self._pending_barrier_reply[switch.id][barrier_xid] = flow_mod.header.xid
+        with self._pending_barrier_lock:
+            self._add_barrier_request(switch.id, barrier_xid, flow_mod.header.xid)
 
         content = {"destination": switch.connection, "message": barrier_request}
         event = KytosEvent(name=event_name, content=content)
