@@ -278,7 +278,7 @@ class Main(KytosNApp):
             send_barrier (bool): True to send barrier requests.
 
         Returns:
-            bool: True if retried, False if suceeded.
+            bool: True if retried, False if max retries have been reached.
         """
         if max_retries <= 0:
             raise ValueError(f"max_retries: {max_retries} should be > 0")
