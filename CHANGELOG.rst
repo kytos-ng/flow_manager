@@ -41,7 +41,6 @@ Changed
 =======
 - Changed ``_flow_mods_sent_error_locks``, ``_pending_barrier_locks``, and ``_check_consistency_locks`` to be safer
 
->>>>>>> feature/barrier_upper_bound
 [5.5.0] - 2021-11.24
 ********************
 
