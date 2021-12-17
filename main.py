@@ -312,8 +312,9 @@ class Main(KytosNApp):
             if wait_diff:
                 time.sleep(wait_diff)
             log.info(
-                f"Retry attempt: {count + 1} for xid: {xid}, accumulated wait: "
-                f"{wait_acc}, command: {command}, flow: {flow.as_dict()}"
+                f"Retry attempt: {count + 1} for xid: {xid} on switch: {switch.id}, "
+                f"accumulated wait: " f"{wait_acc}, command: {command}, "
+                f"flow: {flow.as_dict()}"
             )
             flow_mod = self.build_flow_mod_from_command(flow, command)
             flow_mod.header.xid = xid
