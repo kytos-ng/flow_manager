@@ -285,13 +285,12 @@ class Main(KytosNApp):
 
         try:
             xid = int(event.message.header.xid)
-            flow_mod, _ = self._flow_mods_sent[xid]
+            flow, command = self._flow_mods_sent[xid]
         except KeyError:
             raise ValueError(
                 f"Aborting retries, xid: {xid} not found on flow mods sent"
             )
         switch = event.content["destination"].switch
-        flow = event.message
 
         with self._flow_mods_retry_count_lock:
             if xid not in self._flow_mods_retry_count:
@@ -299,8 +298,8 @@ class Main(KytosNApp):
             (count, sent_at, wait_acc) = self._flow_mods_retry_count[xid]
             if count >= max_retries:
                 log.warning(
-                    f"Max retries: {max_retries} for xid: {xid} has been reached"
-                    " on switch {switch.id}, flow: {flow_mod.as_dict()}"
+                    f"Max retries: {max_retries} for xid: {xid} has been reached on "
+                    f"switch {switch.id}, command: {command}, flow: {flow.as_dict()}"
                 )
                 self._send_openflow_connection_error(event)
                 return False
@@ -314,8 +313,10 @@ class Main(KytosNApp):
                 time.sleep(wait_diff)
             log.info(
                 f"Retry attempt: {count + 1} for xid: {xid}, accumulated wait: "
-                f"{wait_acc}, flow {flow.as_dict()}"
+                f"{wait_acc}, command: {command}, flow: {flow.as_dict()}"
             )
+            flow_mod = self.build_flow_mod_from_command(flow, command)
+            flow_mod.header.xid = xid
             self._send_flow_mod(flow.switch, flow_mod)
             if send_barrier:
                 self._send_barrier_request(flow.switch, flow_mod)
@@ -743,6 +744,19 @@ class Main(KytosNApp):
         except SwitchNotConnectedError as error:
             raise FailedDependency(str(error))
 
+    @classmethod
+    def build_flow_mod_from_command(self, flow, command):
+        """Build a FlowMod serialized given a command."""
+        if command == "delete":
+            flow_mod = flow.as_of_delete_flow_mod()
+        elif command == "delete_strict":
+            flow_mod = flow.as_of_strict_delete_flow_mod()
+        elif command == "add":
+            flow_mod = flow.as_of_add_flow_mod()
+        else:
+            raise InvalidCommandError
+        return flow_mod
+
     def _install_flows(
         self,
         command,
@@ -767,15 +781,7 @@ class Main(KytosNApp):
             flows = flows_dict.get("flows", [])
             for flow_dict in flows:
                 flow = serializer.from_dict(flow_dict, switch)
-                if command == "delete":
-                    flow_mod = flow.as_of_delete_flow_mod()
-                elif command == "delete_strict":
-                    flow_mod = flow.as_of_strict_delete_flow_mod()
-                elif command == "add":
-                    flow_mod = flow.as_of_add_flow_mod()
-                else:
-                    raise InvalidCommandError
-
+                flow_mod = self.build_flow_mod_from_command(flow, command)
                 try:
                     self._send_flow_mod(flow.switch, flow_mod)
                     if send_barrier:
