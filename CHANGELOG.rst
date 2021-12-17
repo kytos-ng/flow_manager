@@ -21,6 +21,17 @@ Removed
 Security
 ========
 
+[5.6.0] - 2021-12.17
+********************
+
+Added
+=====
+- Added an upper bound rotating limit for the number of barrier replies
+
+Changed
+=======
+- Changed ``_flow_mods_sent_error_locks`` and ``_pending_barrier_locks`` to be safer
+
 [5.5.0] - 2021-11.24
 ********************
 
