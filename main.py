@@ -77,13 +77,16 @@ class Main(KytosNApp):
         self._storehouse_lock = Lock()
         self._flow_mods_sent_lock = Lock()
         self._check_consistency_exec_at = {}
-        self._check_consistency_locks = defaultdict(Lock)
-        self._pending_barrier_reply = defaultdict(dict)
-        self._pending_barrier_locks = defaultdict(Lock)
+        self._check_consistency_lock = Lock()
+
+        self._pending_barrier_reply = defaultdict(OrderedDict)
+        self._pending_barrier_lock = Lock()
+        self._pending_barrier_max_size = FLOWS_DICT_MAX_SIZE
+
         self._flow_mods_sent_error = {}
-        self._flow_mods_sent_error_locks = defaultdict(Lock)
+        self._flow_mods_sent_error_lock = Lock()
         self._flow_mods_retry_count = {}
-        self._flow_mods_retry_count_lock = defaultdict(Lock)
+        self._flow_mods_retry_count_lock = Lock()
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {cookie_val: [
@@ -194,7 +197,7 @@ class Main(KytosNApp):
         switch = event.source.switch
         message = event.message
         xid = int(message.header.xid)
-        with self._pending_barrier_locks[switch.id]:
+        with self._pending_barrier_lock:
             flow_xid = self._pending_barrier_reply[switch.id].pop(xid, None)
             if not flow_xid:
                 log.error(
@@ -215,7 +218,7 @@ class Main(KytosNApp):
         hasn't been sent out or processed yet this can happen if the network latency
         is super low.
         """
-        with self._flow_mods_sent_error_locks[switch.id]:
+        with self._flow_mods_sent_error_lock:
             error_kwargs = self._flow_mods_sent_error.get(flow_xid)
         if not error_kwargs:
             self._publish_installed_flow(switch, flow)
@@ -265,20 +268,32 @@ class Main(KytosNApp):
         multiplier=CONN_ERR_MULTIPLIER,
         send_barrier=ENABLE_BARRIER_REQUEST,
     ):
-        """Try to retry on openflow connection error event."""
+        """Try to retry asynchronously on openflow connection error events.
+
+        Args:
+            event (KytoEvent): kytos/core.openflow.connection.error event.
+            max_retries (int): Maximum number of asynchronous retries.
+            min_wait (int): Minimum wait between iterations in seconds.
+            multiplier (int): Multiplier for the accumulated wait on each iteration.
+            send_barrier (bool): True to send barrier requests.
+
+        Returns:
+            bool: True if retried, False if suceeded.
+        """
         if max_retries <= 0:
-            return False
+            raise ValueError(f"max_retries: {max_retries} should be > 0")
 
         try:
             xid = int(event.message.header.xid)
             flow_mod, _ = self._flow_mods_sent[xid]
         except KeyError:
-            log.error(f"Aborting retries, xid: {xid} not found on flow mods sent")
-            return False
+            raise ValueError(
+                f"Aborting retries, xid: {xid} not found on flow mods sent"
+            )
         switch = event.content["destination"].switch
         flow = event.message
 
-        with self._flow_mods_retry_count_lock[switch.id]:
+        with self._flow_mods_retry_count_lock:
             if xid not in self._flow_mods_retry_count:
                 self._flow_mods_retry_count[xid] = (0, now(), min_wait)
             (count, sent_at, wait_acc) = self._flow_mods_retry_count[xid]
@@ -288,7 +303,7 @@ class Main(KytosNApp):
                     " on switch {switch.id}, flow: {flow_mod.as_dict()}"
                 )
                 self._send_openflow_connection_error(event)
-                return True
+                return False
 
             datetime_t2 = now()
             wait_acc *= multiplier
@@ -313,7 +328,7 @@ class Main(KytosNApp):
         """Check consistency of stored and installed flows given a switch."""
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
             return
-        with self._check_consistency_locks[switch.id]:
+        with self._check_consistency_lock:
             exec_at = self._check_consistency_exec_at.get(
                 switch.id, "0001-01-01T00:00:00"
             )
@@ -783,6 +798,12 @@ class Main(KytosNApp):
             self._flow_mods_sent.popitem(last=False)
         self._flow_mods_sent[xid] = (flow, command)
 
+    def _add_barrier_request(self, dpid, barrier_xid, flow_xid):
+        """Add a barrier request."""
+        if len(self._pending_barrier_reply[dpid]) >= self._pending_barrier_max_size:
+            self._pending_barrier_reply[dpid].popitem(last=False)
+        self._pending_barrier_reply[dpid][barrier_xid] = flow_xid
+
     def _send_barrier_request(self, switch, flow_mod):
         event_name = "kytos/flow_manager.messages.out.ofpt_barrier_request"
         if not switch.is_connected():
@@ -792,8 +813,8 @@ class Main(KytosNApp):
 
         barrier_request = new_barrier_request(switch.connection.protocol.version)
         barrier_xid = barrier_request.header.xid
-        with self._pending_barrier_locks[switch.id]:
-            self._pending_barrier_reply[switch.id][barrier_xid] = flow_mod.header.xid
+        with self._pending_barrier_lock:
+            self._add_barrier_request(switch.id, barrier_xid, flow_mod.header.xid)
 
         content = {"destination": switch.connection, "message": barrier_request}
         event = KytosEvent(name=event_name, content=content)
@@ -818,7 +839,6 @@ class Main(KytosNApp):
             "add": "kytos/flow_manager.flow.added",
             "delete": "kytos/flow_manager.flow.removed",
             "delete_strict": "kytos/flow_manager.flow.removed",
-            "connection_error": "kytos/flow_manager.openflow.connection.error",
             "error": "kytos/flow_manager.flow.error",
         }
         try:
@@ -833,10 +853,13 @@ class Main(KytosNApp):
     @listen_to("kytos/core.openflow.connection.error")
     def on_openflow_connection_error(self, event):
         """Listen to openflow connection error and publish the flow error."""
-        self._retry_on_openflow_connection_error(event)
+        try:
+            self._retry_on_openflow_connection_error(event)
+        except ValueError as e:
+            log.error(str(e))
 
     def _send_openflow_connection_error(self, event):
-        """Publish kytos/flow_manager.openflow.connection.error"""
+        """Publish kytos/flow_manager.flow.error with an error_exception."""
         switch = event.content["destination"].switch
         flow = event.message
         try:
@@ -847,7 +870,7 @@ class Main(KytosNApp):
             "error_command": error_command,
             "error_exception": event.content.get("exception"),
         }
-        with self._flow_mods_sent_error_locks[switch.id]:
+        with self._flow_mods_sent_error_lock:
             self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
         self._send_napp_event(
             switch,
@@ -907,7 +930,7 @@ class Main(KytosNApp):
                 "error_type": error_type,
                 "error_code": error_code,
             }
-            with self._flow_mods_sent_error_locks[switch.id]:
+            with self._flow_mods_sent_error_lock:
                 self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
             log.warning(
                 f"Deleting flow: {flow.as_dict()}, xid: {xid}, cookie: {flow.cookie}, "

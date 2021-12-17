@@ -21,16 +21,27 @@ Removed
 Security
 ========
 
-[5.6.0] - 2021-12-15
+[5.7.0] - 2021-12-15
 ********************
 
 Added
 =====
 - Added support for retrying ``kytos/core.openflow.connection.error``
-- Added new high level error event ``kytos/flow_manager.openflow.connection.error`` 
 - Added retry configuration options
 
 
+[5.6.0] - 2021-12.17
+********************
+
+Added
+=====
+- Added an upper bound rotating limit for the number of barrier replies
+
+Changed
+=======
+- Changed ``_flow_mods_sent_error_locks``, ``_pending_barrier_locks``, and ``_check_consistency_locks`` to be safer
+
+>>>>>>> feature/barrier_upper_bound
 [5.5.0] - 2021-11.24
 ********************
 
