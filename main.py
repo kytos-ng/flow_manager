@@ -68,7 +68,7 @@ class Main(KytosNApp):
         self._storehouse_lock = Lock()
         self._flow_mods_sent_lock = Lock()
         self._check_consistency_exec_at = {}
-        self._check_consistency_locks = defaultdict(Lock)
+        self._check_consistency_lock = Lock()
 
         self._pending_barrier_reply = defaultdict(OrderedDict)
         self._pending_barrier_lock = Lock()
@@ -253,7 +253,7 @@ class Main(KytosNApp):
         """Check consistency of stored and installed flows given a switch."""
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
             return
-        with self._check_consistency_locks[switch.id]:
+        with self._check_consistency_lock:
             exec_at = self._check_consistency_exec_at.get(
                 switch.id, "0001-01-01T00:00:00"
             )
