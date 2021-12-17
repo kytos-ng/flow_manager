@@ -745,7 +745,7 @@ class Main(KytosNApp):
             raise FailedDependency(str(error))
 
     @classmethod
-    def build_flow_mod_from_command(self, flow, command):
+    def build_flow_mod_from_command(cls, flow, command):
         """Build a FlowMod serialized given a command."""
         if command == "delete":
             flow_mod = flow.as_of_delete_flow_mod()
@@ -861,8 +861,8 @@ class Main(KytosNApp):
         """Listen to openflow connection error and publish the flow error."""
         try:
             self._retry_on_openflow_connection_error(event)
-        except ValueError as e:
-            log.error(str(e))
+        except ValueError as exc:
+            log.error(str(exc))
 
     def _send_openflow_connection_error(self, event):
         """Publish kytos/flow_manager.flow.error with an error_exception."""
