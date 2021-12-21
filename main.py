@@ -748,8 +748,8 @@ class Main(KytosNApp):
         except SwitchNotConnectedError as error:
             raise FailedDependency(str(error))
 
-    @classmethod
-    def build_flow_mod_from_command(cls, flow, command):
+    @staticmethod
+    def build_flow_mod_from_command(flow, command):
         """Build a FlowMod serialized given a command."""
         if command == "delete":
             flow_mod = flow.as_of_delete_flow_mod()
