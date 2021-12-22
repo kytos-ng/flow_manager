@@ -68,13 +68,14 @@ class Main(KytosNApp):
         self._storehouse_lock = Lock()
         self._flow_mods_sent_lock = Lock()
         self._check_consistency_exec_at = {}
-        self._check_consistency_locks = defaultdict(Lock)
+        self._check_consistency_lock = Lock()
 
-        self._pending_barrier_reply = defaultdict(dict)
-        self._pending_barrier_locks = defaultdict(Lock)
+        self._pending_barrier_reply = defaultdict(OrderedDict)
+        self._pending_barrier_lock = Lock()
+        self._pending_barrier_max_size = FLOWS_DICT_MAX_SIZE
 
         self._flow_mods_sent_error = {}
-        self._flow_mods_sent_error_locks = defaultdict(Lock)
+        self._flow_mods_sent_error_lock = Lock()
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {cookie_val: [
@@ -185,7 +186,7 @@ class Main(KytosNApp):
         switch = event.source.switch
         message = event.message
         xid = int(message.header.xid)
-        with self._pending_barrier_locks[switch.id]:
+        with self._pending_barrier_lock:
             flow_xid = self._pending_barrier_reply[switch.id].pop(xid, None)
             if not flow_xid:
                 log.error(
@@ -206,7 +207,7 @@ class Main(KytosNApp):
         hasn't been sent out or processed yet this can happen if the network latency
         is super low.
         """
-        with self._flow_mods_sent_error_locks[switch.id]:
+        with self._flow_mods_sent_error_lock:
             error_kwargs = self._flow_mods_sent_error.get(flow_xid)
         if not error_kwargs:
             self._publish_installed_flow(switch, flow)
@@ -252,7 +253,7 @@ class Main(KytosNApp):
         """Check consistency of stored and installed flows given a switch."""
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
             return
-        with self._check_consistency_locks[switch.id]:
+        with self._check_consistency_lock:
             exec_at = self._check_consistency_exec_at.get(
                 switch.id, "0001-01-01T00:00:00"
             )
@@ -722,6 +723,12 @@ class Main(KytosNApp):
             self._flow_mods_sent.popitem(last=False)
         self._flow_mods_sent[xid] = (flow, command)
 
+    def _add_barrier_request(self, dpid, barrier_xid, flow_xid):
+        """Add a barrier request."""
+        if len(self._pending_barrier_reply[dpid]) >= self._pending_barrier_max_size:
+            self._pending_barrier_reply[dpid].popitem(last=False)
+        self._pending_barrier_reply[dpid][barrier_xid] = flow_xid
+
     def _send_barrier_request(self, switch, flow_mod):
         event_name = "kytos/flow_manager.messages.out.ofpt_barrier_request"
         if not switch.is_connected():
@@ -731,8 +738,8 @@ class Main(KytosNApp):
 
         barrier_request = new_barrier_request(switch.connection.protocol.version)
         barrier_xid = barrier_request.header.xid
-        with self._pending_barrier_locks[switch.id]:
-            self._pending_barrier_reply[switch.id][barrier_xid] = flow_mod.header.xid
+        with self._pending_barrier_lock:
+            self._add_barrier_request(switch.id, barrier_xid, flow_mod.header.xid)
 
         content = {"destination": switch.connection, "message": barrier_request}
         event = KytosEvent(name=event_name, content=content)
@@ -785,7 +792,7 @@ class Main(KytosNApp):
             "error_command": error_command,
             "error_exception": event.content.get("exception"),
         }
-        with self._flow_mods_sent_error_locks[switch.id]:
+        with self._flow_mods_sent_error_lock:
             self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
         self._send_napp_event(
             switch,
@@ -845,7 +852,7 @@ class Main(KytosNApp):
                 "error_type": error_type,
                 "error_code": error_code,
             }
-            with self._flow_mods_sent_error_locks[switch.id]:
+            with self._flow_mods_sent_error_lock:
                 self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
             log.warning(
                 f"Deleting flow: {flow.as_dict()}, xid: {xid}, cookie: {flow.cookie}, "

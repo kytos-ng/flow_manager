@@ -1328,6 +1328,38 @@ class TestMain(TestCase):
         assert len(self.napp.stored_flows[dpid][cookie]) == 1
         self.assertDictEqual(self.napp.stored_flows[dpid][cookie][0], stored_flow2)
 
+    def test_add_barrier_request(self):
+        """Test add barrier request."""
+        dpid = "00:00:00:00:00:00:00:01"
+        barrier_xid = 1
+        flow_xid = 2
+        assert flow_xid not in self.napp._pending_barrier_reply[dpid]
+        self.napp._add_barrier_request(dpid, barrier_xid, flow_xid)
+        assert self.napp._pending_barrier_reply[dpid][barrier_xid] == flow_xid
+
+    def test_add_barrier_request_max_size_fifo(self):
+        """Test add barrier request max size fifo popitem."""
+        dpid = "00:00:00:00:00:00:00:01"
+        max_size = 3
+        barrier_xid_offset = 0
+        flow_xid_offset = 1000
+        overflow = 1
+
+        self.napp._pending_barrier_max_size = max_size
+        assert len(self.napp._pending_barrier_reply[dpid]) == 0
+
+        for i in range(max_size + overflow):
+            self.napp._add_barrier_request(
+                dpid, barrier_xid_offset + i, flow_xid_offset + i
+            )
+        assert len(self.napp._pending_barrier_reply[dpid]) == max_size
+
+        for i in range(overflow, max_size + overflow):
+            assert i in self.napp._pending_barrier_reply[dpid]
+
+        for i in range(overflow):
+            assert i not in self.napp._pending_barrier_reply[dpid]
+
     @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
     def test_send_barrier_request(self, _):
         """Test send barrier request."""
