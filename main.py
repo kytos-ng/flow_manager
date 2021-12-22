@@ -2,6 +2,7 @@
 
 # pylint: disable=relative-beyond-top-level
 import itertools
+import time
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from enum import Enum
@@ -27,13 +28,21 @@ from kytos.core.helpers import get_time, listen_to, now
 from .barrier_request import new_barrier_request
 from .exceptions import InvalidCommandError, SwitchNotConnectedError
 from .settings import (
+    CONN_ERR_MAX_RETRIES,
+    CONN_ERR_MIN_WAIT,
+    CONN_ERR_MULTIPLIER,
     CONSISTENCY_COOKIE_IGNORED_RANGE,
     CONSISTENCY_TABLE_ID_IGNORED_RANGE,
     ENABLE_BARRIER_REQUEST,
     ENABLE_CONSISTENCY_CHECK,
     FLOWS_DICT_MAX_SIZE,
 )
-from .utils import _valid_consistency_ignored, cast_fields, new_flow_dict
+from .utils import (
+    _valid_consistency_ignored,
+    cast_fields,
+    get_min_wait_diff,
+    new_flow_dict,
+)
 
 
 class FlowEntryState(Enum):
@@ -76,6 +85,8 @@ class Main(KytosNApp):
 
         self._flow_mods_sent_error = {}
         self._flow_mods_sent_error_lock = Lock()
+        self._flow_mods_retry_count = {}
+        self._flow_mods_retry_count_lock = Lock()
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {cookie_val: [
@@ -248,6 +259,75 @@ class Main(KytosNApp):
             self._update_flow_state_store(
                 switch.id, flow_ids_to_update, FlowEntryState.INSTALLED.value
             )
+
+    def _retry_on_openflow_connection_error(
+        self,
+        event,
+        max_retries=CONN_ERR_MAX_RETRIES,
+        min_wait=CONN_ERR_MIN_WAIT,
+        multiplier=CONN_ERR_MULTIPLIER,
+        send_barrier=ENABLE_BARRIER_REQUEST,
+    ):
+        """Try to retry asynchronously on openflow connection error events.
+
+        Args:
+            event (KytoEvent): kytos/core.openflow.connection.error event.
+            max_retries (int): Maximum number of asynchronous retries.
+            min_wait (int): Minimum wait between iterations in seconds.
+            multiplier (int): Multiplier for the accumulated wait on each iteration.
+            send_barrier (bool): True to send barrier requests.
+
+        Returns:
+            bool: True if retried, False if max retries have been reached.
+        """
+        if max_retries <= 0:
+            raise ValueError(f"max_retries: {max_retries} should be > 0")
+
+        try:
+            xid = int(event.message.header.xid)
+            flow, command = self._flow_mods_sent[xid]
+        except KeyError:
+            raise ValueError(
+                f"Aborting retries, xid: {xid} not found on flow mods sent"
+            )
+        switch = event.content["destination"].switch
+
+        with self._flow_mods_retry_count_lock:
+            if xid not in self._flow_mods_retry_count:
+                self._flow_mods_retry_count[xid] = (0, now(), min_wait)
+            (count, sent_at, wait_acc) = self._flow_mods_retry_count[xid]
+            if count >= max_retries:
+                log.warning(
+                    f"Max retries: {max_retries} for xid: {xid} has been reached on "
+                    f"switch {switch.id}, command: {command}, flow: {flow.as_dict()}"
+                )
+                self._send_openflow_connection_error(event)
+                return False
+
+            datetime_t2 = now()
+            self._flow_mods_retry_count[xid] = (
+                count + 1,
+                datetime_t2,
+                wait_acc * multiplier,
+            )
+        try:
+            wait_diff = get_min_wait_diff(datetime_t2, sent_at, wait_acc)
+            if wait_diff:
+                time.sleep(wait_diff)
+            log.info(
+                f"Retry attempt: {count + 1} for xid: {xid} on switch: {switch.id}, "
+                f"accumulated wait: {wait_acc}, command: {command}, "
+                f"flow: {flow.as_dict()}"
+            )
+            flow_mod = self.build_flow_mod_from_command(flow, command)
+            flow_mod.header.xid = xid
+            self._send_flow_mod(flow.switch, flow_mod)
+            if send_barrier:
+                self._send_barrier_request(flow.switch, flow_mod)
+            return True
+        except SwitchNotConnectedError:
+            log.info(f"Switch {switch.id} isn't connected, it'll retry.")
+            return self._retry_on_openflow_connection_error(event, xid)
 
     def check_consistency(self, switch):
         """Check consistency of stored and installed flows given a switch."""
@@ -668,6 +748,19 @@ class Main(KytosNApp):
         except SwitchNotConnectedError as error:
             raise FailedDependency(str(error))
 
+    @staticmethod
+    def build_flow_mod_from_command(flow, command):
+        """Build a FlowMod serialized given a command."""
+        if command == "delete":
+            flow_mod = flow.as_of_delete_flow_mod()
+        elif command == "delete_strict":
+            flow_mod = flow.as_of_strict_delete_flow_mod()
+        elif command == "add":
+            flow_mod = flow.as_of_add_flow_mod()
+        else:
+            raise InvalidCommandError
+        return flow_mod
+
     def _install_flows(
         self,
         command,
@@ -692,15 +785,7 @@ class Main(KytosNApp):
             flows = flows_dict.get("flows", [])
             for flow_dict in flows:
                 flow = serializer.from_dict(flow_dict, switch)
-                if command == "delete":
-                    flow_mod = flow.as_of_delete_flow_mod()
-                elif command == "delete_strict":
-                    flow_mod = flow.as_of_strict_delete_flow_mod()
-                elif command == "add":
-                    flow_mod = flow.as_of_add_flow_mod()
-                else:
-                    raise InvalidCommandError
-
+                flow_mod = self.build_flow_mod_from_command(flow, command)
                 try:
                     self._send_flow_mod(flow.switch, flow_mod)
                     if send_barrier:
@@ -778,10 +863,13 @@ class Main(KytosNApp):
     @listen_to("kytos/core.openflow.connection.error")
     def on_openflow_connection_error(self, event):
         """Listen to openflow connection error and publish the flow error."""
-        self._on_openflow_connection_error(event)
+        try:
+            self._retry_on_openflow_connection_error(event)
+        except ValueError as exc:
+            log.error(str(exc))
 
-    def _on_openflow_connection_error(self, event):
-        """Publish core.openflow.connection.error."""
+    def _send_openflow_connection_error(self, event):
+        """Publish kytos/flow_manager.flow.error with an error_exception."""
         switch = event.content["destination"].switch
         flow = event.message
         try:

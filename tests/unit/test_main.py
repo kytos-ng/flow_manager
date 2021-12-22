@@ -4,7 +4,10 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from napps.kytos.flow_manager.exceptions import SwitchNotConnectedError
+from napps.kytos.flow_manager.exceptions import (
+    InvalidCommandError,
+    SwitchNotConnectedError,
+)
 from napps.kytos.flow_manager.main import FlowEntryState
 
 from kytos.core.helpers import now
@@ -1453,7 +1456,7 @@ class TestMain(TestCase):
 
         mock = MagicMock()
         mock.event.content = {"destination": switch}
-        self.napp._on_openflow_connection_error(mock)
+        self.napp._send_openflow_connection_error(mock)
         mock_send_napp_event.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._update_flow_state_store")
@@ -1495,3 +1498,109 @@ class TestMain(TestCase):
         self.napp.publish_installed_flows(switch)
         assert mock_send_napp_event.call_count == 2
         assert mock_update_flow.call_count == 1
+
+    @patch("napps.kytos.flow_manager.main.Main._send_barrier_request")
+    def test_retry_on_openflow_connection_error(self, mock_barrier):
+        """Test retry on openflow connection error."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+
+        flow = MagicMock()
+        flow.as_dict.return_value = {}
+        flow.xid = 1
+        self.napp._flow_mods_sent[flow.xid] = (flow, "add")
+
+        mock_ev = MagicMock()
+        mock_ev.event.content = {"destination": switch}
+        min_wait = 0.2
+        multiplier = 2
+        assert self.napp._retry_on_openflow_connection_error(
+            mock_ev,
+            max_retries=3,
+            min_wait=min_wait,
+            multiplier=multiplier,
+            send_barrier=True,
+        )
+        (count, _, wait_acc) = self.napp._flow_mods_retry_count[flow.xid]
+        assert count == 1
+        assert wait_acc == min_wait * multiplier
+        assert mock_barrier.call_count == 1
+
+    @patch("napps.kytos.flow_manager.main.Main._send_openflow_connection_error")
+    def test_retry_on_openflow_connection_error_send_event(self, mock_send):
+        """Test retry on openflow connection error send event."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+
+        flow = MagicMock()
+        flow.as_dict.return_value = {}
+        flow.xid = 1
+        self.napp._flow_mods_sent[flow.xid] = (flow, "add")
+
+        # make sure a previous retry has stored executed
+        self.napp._flow_mods_retry_count[flow.xid] = (3, now(), 10)
+
+        mock_ev = MagicMock()
+        mock_ev.event.content = {"destination": switch}
+        min_wait = 0.2
+        assert not self.napp._retry_on_openflow_connection_error(
+            mock_ev,
+            max_retries=3,
+            min_wait=min_wait,
+            multiplier=2,
+            send_barrier=True,
+        )
+        assert mock_send.call_count == 1
+
+    def test_retry_on_openflow_connection_error_early_return(self):
+        """Test retry on openflow connection error early returns."""
+        max_retries = 0
+        min_wait = 0.2
+        multiplier = 2
+        with self.assertRaises(ValueError) as exc:
+            self.napp._retry_on_openflow_connection_error(
+                {}, max_retries, min_wait, multiplier
+            )
+        assert "should be > 0" in str(exc.exception)
+
+        self.napp._flow_mods_sent = {}
+        mock = MagicMock()
+        with self.assertRaises(ValueError) as exc:
+            self.napp._retry_on_openflow_connection_error(
+                mock, max_retries + 1, min_wait, multiplier
+            )
+        assert "not found on flow mods sent" in str(exc.exception)
+
+    @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
+    def test_send_openflow_connection_error(self, mock_send):
+        """Test _send_openflow_connection_error."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        flow = MagicMock()
+        flow.as_dict.return_value = {}
+        flow.xid = 1
+        self.napp._flow_mods_sent[flow.xid] = (flow, "add")
+
+        mock_ev = MagicMock()
+        mock_ev.event.content = {"destination": switch}
+        self.napp._send_openflow_connection_error(mock_ev)
+        assert mock_send.call_count == 1
+
+    def test_build_flow_mod_from_command(self):
+        """Test build_flow_mod_from_command."""
+        mock = MagicMock()
+        values = [
+            ("add", mock.as_of_add_flow_mod),
+            ("delete", mock.as_of_delete_flow_mod),
+            ("delete_strict", mock.as_of_strict_delete_flow_mod),
+        ]
+        for command, mock_method in values:
+            with self.subTest(command=command, mock_method=mock_method):
+                self.napp.build_flow_mod_from_command(mock, command)
+                assert mock_method.call_count == 1
+
+        with self.assertRaises(InvalidCommandError):
+            self.napp.build_flow_mod_from_command(mock, "invalid_command")
