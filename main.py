@@ -144,10 +144,10 @@ class Main(KytosNApp):
                 self.resent_flows.add(dpid)
                 log.info(f"Flows resent to Switch {dpid}")
 
-    @listen_to('.*.connection.lost')
+    @listen_to(".*.connection.lost")
     def on_connection_lost(self, event):
         """On switch connection lost handler."""
-        switch = event.content['source'].switch
+        switch = event.content["source"].switch
         if not switch:
             return
         with self._check_consistency_lock:
