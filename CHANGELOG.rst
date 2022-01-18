@@ -21,6 +21,13 @@ Removed
 Security
 ========
 
+[5.7.1] - 2022-01-18
+********************
+
+Added
+=====
+- Subscribed to ``on_connection_lost`` event to reset consistency check executions
+
 [5.7.0] - 2021-12-15
 ********************
 
