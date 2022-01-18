@@ -144,6 +144,19 @@ class Main(KytosNApp):
                 self.resent_flows.add(dpid)
                 log.info(f"Flows resent to Switch {dpid}")
 
+    @listen_to('.*.connection.lost')
+    def on_connection_lost(self, event):
+        """On switch connection lost handler."""
+        switch = event.content['source'].switch
+        if not switch:
+            return
+        with self._check_consistency_lock:
+            self.reset_check_consistency_exec(switch.id)
+
+    def reset_check_consistency_exec(self, dpid):
+        """Reset _check_consistency_exec_at for a dpid."""
+        self._check_consistency_exec_at.pop(dpid, None)
+
     @staticmethod
     def is_ignored(field, ignored_range):
         """Check that the flow field is in the range of ignored flows.
