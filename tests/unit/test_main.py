@@ -1236,6 +1236,13 @@ class TestMain(TestCase):
                 self.napp.check_storehouse_consistency(switch)
                 self.assertEqual(mock_install_flows.call_count, called)
 
+    def test_reset_check_consistency_exec(self):
+        """Test on_ofpt_flow_removed."""
+        dpid = "00:00:00:00:00:00:00:01"
+        self.napp._check_consistency_exec_at[dpid] = 1
+        self.napp.reset_check_consistency_exec(dpid)
+        assert dpid not in self.napp._check_consistency_exec_at
+
     def test_check_consistency_concurrency_control(self):
         """Test check consistency concurrency control, only a single
         thread per switch is expected within a delta T."""

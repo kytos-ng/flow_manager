@@ -21,6 +21,21 @@ Removed
 Security
 ========
 
+[2022.1.0] - 2022-02-02
+***********************
+
+Changed
+=======
+- New versioning schema, following kytos core versioning
+
+
+[5.7.1] - 2022-01-18
+********************
+
+Added
+=====
+- Subscribed to ``on_connection_lost`` event to reset consistency check executions
+
 [5.7.0] - 2021-12-15
 ********************
 
