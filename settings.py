@@ -13,6 +13,9 @@ ENABLE_BARRIER_REQUEST = True
 CONSISTENCY_COOKIE_IGNORED_RANGE = []
 CONSISTENCY_TABLE_ID_IGNORED_RANGE = []
 
+# Maximum number of archived flows per switch
+ARCHIVED_FLOWS_MAX_SIZE = 5000
+
 # Retries options for `kytos/core.openflow.connection.error`
 CONN_ERR_MAX_RETRIES = 3
 CONN_ERR_MIN_WAIT = 1  # minimum wait between iterations in seconds
