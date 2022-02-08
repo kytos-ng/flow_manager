@@ -1,25 +1,30 @@
-########
-Overview
-########
+|Stable| |Tag| |License| |Build| |Coverage| |Quality|
 
-|License| |Build| |Coverage| |Quality|
+.. raw:: html
 
-.. attention::
+  <div align="center">
+    <h1><code>kytos-ng/flow_manager</code></h1>
 
-    THIS NAPP IS STILL EXPERIMENTAL AND ITS EVENTS, METHODS AND STRUCTURES MAY
-    CHANGE A LOT ON THE NEXT FEW DAYS/WEEKS. USE IT AT YOUR OWN DISCRETION
+    <strong>NApp that manages OpenFlow 1.3 entries</strong>
+
+    <h3><a href="https://kytos-ng.github.io/api/flow_manager.html">OpenAPI Docs</a></h3>
+  </div>
 
 
-The *kytos/flow_manager* NApp exports a REST API to add, remove and
-list flows from OpenFlow switches, for versions 1.0 and 1.3.
-It can be used by other applications to manage flows with the supported fields.
+Features
+========
 
-This application creates an abstraction layer to other applications:
-it is only necessary to know the endpoints. The application handles
-the requests and returns the information already formatted.
+- REST API to create/update/read/delete flows
+- Expose events to create/update/delete flows
+- Store flows in memory and in a permanent storage
+- Consistency check based on FlowStats to ensure that only expected flows are installed 
+- Consistency check ignored flows based on a cookie range and/or table id range
+- Send barrier request and replies
+- Handle southbound socket connection errors as applicable
+- Option to allow to install a flow later on when a switch is connected
 
 Supported Fields
-****************
+================
 
 This NApp supports a subset of the OpenFlow specification fields in the bodies of
 the requests when creating and removing flows:
@@ -62,40 +67,53 @@ the requests when creating and removing flows:
 
 Other fields are not supported and will generate error messages from the NApp.
 
-##########
 Installing
-##########
+==========
 
-All of the Kytos Network Applications are located in the NApps online repository.
-To install this NApp, run:
+To install this NApp, first, make sure to have the same venv activated as you have ``kytos`` installed on:
 
 .. code:: shell
 
-   $ kytos napps install kytos/flow_manager
+   $ git clone https://github.com/kytos-ng/flow_manager.git
+   $ cd flow_manager
+   $ python setup.py develop
 
-############
 Requirements
-############
+============
 
-- kytos/of_core
-- kytos/storehouse
+- `kytos/of_core <https://github.com/kytos-ng/of_core>`_
+- `kytos/storehouse <https://github.com/kytos-ng/storehouse>`_
 
-######
 Events
-######
+======
 
 Generated
-*********
+---------
 
-kytos/flow_manager.flow.added
-=============================
+kytos/flow_manager.flow.pending
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 *buffer*: ``app``
 
-Event reporting that a FlowMod was sent to a Datapath with the ADD command.
+Event reporting that a FlowMod was sent to a Datapath.
 
-Content
--------
+Content:
+
+.. code-block:: python3
+
+   {
+     'datapath': <Switch object>,
+     'flow': <Object representing the flow>
+   }
+
+kytos/flow_manager.flow.added
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*buffer*: ``app``
+
+Event reporting that an installed Flow was confirmed via Barrier Reply.
+
+Content:
 
 .. code-block:: python3
 
@@ -105,14 +123,13 @@ Content
    }
 
 kytos/flow_manager.flow.removed
-===============================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 *buffer*: ``app``
 
-Event reporting that a FlowMod was sent to a Datapath with the DELETE command.
+Event reporting that a removed Flow was confirmed via ``OFPT_FLOW_REMOVED``
 
-Content
--------
+Content:
 
 .. code-block:: python3
 
@@ -121,9 +138,29 @@ Content
      'flow': <Object representing the removed flow>
    }
 
-##########################
+
+kytos/flow_manager.flow.error
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*buffer*: ``app``
+
+Event reporting that either an OFPT_ERROR error happened or an asynchronous core OpenFlow socket error happened. Clients that send FlowMods via ``flow_manager`` should handle these accordingly. If ``error_exception`` isn't set, then it's a OFPT_ERROR, otherwise, it's a socket exception.
+
+Content:
+
+.. code-block:: python3
+
+   {
+     'datapath': <Switch object>,
+     'flow': <Object representing the removed flow>,
+     'error_command': <error_command>,
+     'error_type': <error_type>,
+     'error_code': <error_code>,
+     'error_exception': <some_exception_content>
+   }
+
 Flow consistency mechanism
-##########################
+==========================
 
 This NApp is also responsible for the consistency of the installed flows
 through kytos/flow_manager. To do this, all the flows sent to the switches are
@@ -135,16 +172,10 @@ This resource can be disabled in the ``settings.py`` file, changing the time of
 the check to 0.
 
 
-########
-Rest API
-########
-
-You can find a list of the available endpoints and example input/output in the
-'REST API' tab in this NApp's webpage in the `Kytos NApps Server
-<https://napps.kytos.io/kytos/flow_manager>`_.
-
 .. TAGs
 
+.. |Stable| image:: https://img.shields.io/badge/stability-stable-green.svg
+   :target: https://github.com/kytos-ng/flow_manager
 .. |License| image:: https://img.shields.io/github/license/kytos-ng/kytos.svg
    :target: https://github.com/kytos-ng/flow_manager/blob/master/LICENSE
 .. |Build| image:: https://scrutinizer-ci.com/g/kytos-ng/flow_manager/badges/build.png?b=master
@@ -156,3 +187,5 @@ You can find a list of the available endpoints and example input/output in the
 .. |Quality| image:: https://scrutinizer-ci.com/g/kytos-ng/flow_manager/badges/quality-score.png?b=master
   :alt: Code-quality score
   :target: https://scrutinizer-ci.com/g/kytos-ng/flow_manager/?branch=master
+.. |Tag| image:: https://img.shields.io/github/tag/kytos-ng/flow_manager.svg
+   :target: https://github.com/kytos-ng/flow_manager/tags
