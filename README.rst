@@ -3,7 +3,7 @@
 .. raw:: html
 
   <div align="center">
-    <h1><code>kytos-ng/flow_manager</code></h1>
+    <h1><code>kytos/flow_manager</code></h1>
 
     <strong>NApp that manages OpenFlow 1.3 entries</strong>
 
