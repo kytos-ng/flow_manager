@@ -21,6 +21,13 @@ Removed
 Security
 ========
 
+[2022.1.1] - 2022-02-04
+***********************
+
+Changed
+=======
+- Adding Lock to avoid race conditions at flow_manager's storehouse
+
 [2022.1.0] - 2022-02-02
 ***********************
 
