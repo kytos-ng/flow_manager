@@ -88,6 +88,7 @@ class StoreHouse:
         else:
             self.create_box()
 
+    # pylint: disable=consider-using-with
     def get_stored_box(self, box_id):
         """Get persistence box from storehouse."""
         content = {
@@ -99,7 +100,7 @@ class StoreHouse:
         name = "kytos.storehouse.retrieve"
         event = KytosEvent(name=name, content=content)
         self._lock.acquire()  # Lock to avoid race condition
-        log.debug(f'Lock {self._lock} acquired.')
+        log.debug(f"Lock {self._lock} acquired.")
         self.controller.buffers.app.put(event)
 
     def _get_box_callback(self, _event, data, error):
@@ -109,8 +110,9 @@ class StoreHouse:
 
         self.box = data
         self._lock.release()
-        log.debug(f'Lock {self._lock} released.')
+        log.debug(f"Lock {self._lock} released.")
 
+    # pylint: disable=consider-using-with
     def save_flow(self, flows):
         """Save flows in storehouse."""
         self._lock.acquire()  # Lock to avoid race condition
