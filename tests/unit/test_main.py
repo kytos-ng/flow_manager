@@ -1,4 +1,5 @@
 """Test Main methods."""
+from datetime import timedelta
 import threading
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
@@ -794,6 +795,7 @@ class TestMain(TestCase):
         self.napp.check_switch_consistency(switch)
         mock_install_flows.assert_not_called()
 
+    @patch("napps.kytos.flow_manager.main.Main._add_archived_flows")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_check_storehouse_consistency(self, *args):
@@ -801,7 +803,7 @@ class TestMain(TestCase):
 
         This test checks the case when a flow is missing in storehouse.
         """
-        (mock_flow_factory, mock_install_flows) = args
+        (mock_flow_factory, mock_install_flows, mock_add_archived) = args
         cookie_exception_interval = [(0x2B00000000000011, 0x2B000000000000FF)]
         self.napp.cookie_exception_range = cookie_exception_interval
         dpid = "00:00:00:00:00:00:00:01"
@@ -819,6 +821,7 @@ class TestMain(TestCase):
         self.napp.stored_flows = {dpid: {0: stored_flows}}
         self.napp.check_storehouse_consistency(switch)
         mock_install_flows.assert_called()
+        mock_add_archived.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
@@ -1181,11 +1184,12 @@ class TestMain(TestCase):
         mock_save_flow.assert_called()
         self.assertEqual(len(self.napp.stored_flows[dpid]), 0)
 
+    @patch("napps.kytos.flow_manager.main.Main._add_archived_flows")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_consistency_cookie_ignored_range(self, *args):
         """Test the consistency `cookie` ignored range."""
-        (_, mock_install_flows) = args
+        (_, mock_install_flows, _) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         cookie_ignored_interval = [
@@ -1210,11 +1214,12 @@ class TestMain(TestCase):
                 self.napp.check_storehouse_consistency(switch)
                 self.assertEqual(mock_install_flows.call_count, called)
 
+    @patch("napps.kytos.flow_manager.main.Main._add_archived_flows")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_consistency_table_id_ignored_range(self, *args):
         """Test the consistency `table_id` ignored range."""
-        (_, mock_install_flows) = args
+        (_, mock_install_flows, _) = args
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         table_id_ignored_interval = [(1, 2), 3]
@@ -1611,3 +1616,81 @@ class TestMain(TestCase):
 
         with self.assertRaises(InvalidCommandError):
             self.napp.build_flow_mod_from_command(mock, "invalid_command")
+
+    def test_is_recent_flow(self):
+        """Test is_recent."""
+        stored_flow = {
+            "created_at": now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "flow": {"flow_1": "data"},
+        }
+        assert self.napp.is_recent_flow(stored_flow)
+
+        past_dt = now() - timedelta(minutes=2)
+        stored_flow["created_at"] = past_dt.strftime("%Y-%m-%dT%H:%M:%S")
+        assert not self.napp.is_recent_flow(stored_flow)
+
+        stored_flow = {
+            "deleted_at": now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "flow": {"flow_1": "data"},
+        }
+        assert self.napp.is_recent_flow(stored_flow, "deleted_at")
+
+    def test_del_matched_flows_store(self):
+        """Test is_recent."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        flow_id = "1"
+        stored_flow = {"flow": {"flow_1": "data"}, "_id": flow_id}
+        self.napp.storehouse = MagicMock()
+        self.napp.stored_flows = {dpid: {0: [stored_flow]}}
+        assert not self.napp.archived_flows
+
+        self.napp._del_matched_flows_store(stored_flow, None, switch)
+
+        assert self.napp.archived_flows[dpid][flow_id]["reason"] == "delete"
+        self.assertDictEqual(
+            self.napp.archived_flows[dpid][flow_id]["flow"], stored_flow["flow"]
+        )
+
+    @patch("napps.kytos.flow_manager.main.Main._install_flows")
+    @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
+    def test_consistency_recent_deleted_flow(self, _, mock_install):
+        """Test consistency check recent delete flow."""
+        flow = MagicMock()
+        flow.id = "1"
+        flow.cookie = 10
+        flow2 = MagicMock()
+        flow2.id = "2"
+        flow2.cookie = 20
+
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        switch.flows = [flow]
+        self.napp.stored_flows = {dpid: {flow2.cookie: [flow2]}}
+        assert not self.napp.archived_flows
+        self.napp.check_storehouse_consistency(switch)
+        assert len(self.napp.archived_flows[dpid]) == 1
+        assert self.napp.archived_flows[dpid][flow.id]["_id"] == flow.id
+        assert self.napp.archived_flows[dpid][flow.id]["reason"] == "alien"
+        assert mock_install.call_count == 1
+
+        # another second consistency run shouldn't delete again
+        self.napp.check_storehouse_consistency(switch)
+        assert mock_install.call_count == 1
+        assert len(self.napp.archived_flows[dpid]) == 1
+
+    def test_max_archived_flows(self):
+        """Test max archived flows."""
+        max_len = 15
+        n_archived = 20
+        archived_flows = [{"_id": i} for i in range(n_archived)]
+
+        dpid = "00:00:00:00:00:00:00:01"
+        assert not self.napp.archived_flows
+        self.napp._add_archived_flows(dpid, archived_flows, max_len)
+        assert len(self.napp.archived_flows[dpid]) == max_len
+        keys = list(self.napp.archived_flows[dpid].keys())
+        assert self.napp.archived_flows[dpid][keys[-1]]["_id"] == n_archived - 1
+        assert self.napp.archived_flows[dpid][keys[0]]["_id"] == n_archived - max_len

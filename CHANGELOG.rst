@@ -21,6 +21,23 @@ Removed
 Security
 ========
 
+[2022.1.2] - 2022-02-07
+***********************
+
+Changed
+=======
+- Adapted consistency check to skip recent deleted flows
+- Extracted ``is_recent_flow`` static method
+- Changed ``_del_matched_flows_store`` to also archive flows
+- Changed consistency check to also archive alien flows
+
+Added
+=====
+
+- Added archived_flows and its lock to store in memory
+- Added ``_add_Archived_flows`` method
+
+
 [2022.1.1] - 2022-02-04
 ***********************
 

@@ -6,6 +6,16 @@ from kytos.core import log
 from kytos.core.helpers import now
 
 
+def new_archive_flow_dict(flow_dict, reason, _id=None):
+    """Build an archive flow given an stored dict flow."""
+    archive_flow = {}
+    archive_flow["_id"] = _id
+    archive_flow["flow"] = flow_dict
+    archive_flow["deleted_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
+    archive_flow["reason"] = reason
+    return archive_flow
+
+
 def new_flow_dict(flow_dict, _id=None, state="pending"):
     """Create a new flow dict to be stored."""
     flow = {}

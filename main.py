@@ -28,6 +28,7 @@ from kytos.core.helpers import get_time, listen_to, now
 from .barrier_request import new_barrier_request
 from .exceptions import InvalidCommandError, SwitchNotConnectedError
 from .settings import (
+    ARCHIVED_FLOWS_MAX_SIZE,
     CONN_ERR_MAX_RETRIES,
     CONN_ERR_MIN_WAIT,
     CONN_ERR_MULTIPLIER,
@@ -41,6 +42,7 @@ from .utils import (
     _valid_consistency_ignored,
     cast_fields,
     get_min_wait_diff,
+    new_archive_flow_dict,
     new_flow_dict,
 )
 
@@ -87,11 +89,13 @@ class Main(KytosNApp):
         self._flow_mods_sent_error_lock = Lock()
         self._flow_mods_retry_count = {}
         self._flow_mods_retry_count_lock = Lock()
+        self._archived_flows_lock = Lock()
 
         # Format of stored flow data:
         # {'flow_persistence': {'dpid_str': {cookie_val: [
         #                                     {'flow': {flow_dict}}]}}}
         self.stored_flows = {}
+        self.archived_flows = {}
         self.resent_flows = set()
 
     def execute(self):
@@ -381,6 +385,14 @@ class Main(KytosNApp):
         """Build switch.flows indexed by id."""
         return {flow.id: flow for flow in switch.flows}
 
+    @staticmethod
+    def is_recent_flow(stored_flow, created_attr="created_at", interval=STATS_INTERVAL):
+        """Check if it's a recent flow based on its created attribute."""
+        stored_time = get_time(stored_flow.get(created_attr, "0001-01-01T00:00:00"))
+        if (now() - stored_time).seconds <= interval:
+            return True
+        return False
+
     def check_switch_consistency(self, switch):
         """Check consistency of stored flows for a specific switch."""
         dpid = switch.dpid
@@ -389,10 +401,7 @@ class Main(KytosNApp):
 
         for cookie, stored_flows in self.stored_flows[dpid].items():
             for stored_flow in stored_flows:
-                stored_time = get_time(
-                    stored_flow.get("created_at", "0001-01-01T00:00:00")
-                )
-                if (now() - stored_time).seconds <= STATS_INTERVAL:
+                if self.is_recent_flow(stored_flow, "created_at"):
                     continue
                 stored_flow_obj = serializer.from_dict(stored_flow["flow"], switch)
                 if stored_flow_obj in installed_flows[cookie]:
@@ -432,6 +441,15 @@ class Main(KytosNApp):
             for installed_flow in flows:
                 if self.is_ignored(installed_flow.table_id, self.tab_id_ignored_range):
                     continue
+                if (
+                    switch.id in self.archived_flows
+                    and installed_flow.id in self.archived_flows[switch.id]
+                    and self.is_recent_flow(
+                        self.archived_flows[switch.id][installed_flow.id],
+                        "deleted_at",
+                    )
+                ):
+                    continue
 
                 if dpid not in self.stored_flows:
                     log.info(
@@ -445,6 +463,16 @@ class Main(KytosNApp):
                         log.info(
                             f"Flow forwarded to switch {dpid} to be deleted. "
                             f"Flow: {flow}"
+                        )
+                        self._add_archived_flows(
+                            switch.id,
+                            [
+                                new_archive_flow_dict(
+                                    installed_flow.as_dict(include_id=False),
+                                    "alien",
+                                    installed_flow.id,
+                                )
+                            ],
                         )
                         continue
                     except SwitchNotConnectedError:
@@ -463,7 +491,16 @@ class Main(KytosNApp):
                             f"Flow forwarded to switch {dpid} to be deleted. "
                             f"Flow: {flow}"
                         )
-                        continue
+                        self._add_archived_flows(
+                            switch.id,
+                            [
+                                new_archive_flow_dict(
+                                    installed_flow.as_dict(include_id=False),
+                                    "alien",
+                                    installed_flow.id,
+                                )
+                            ],
+                        )
                     except SwitchNotConnectedError:
                         log.error(
                             f"Failed to forward flow to switch {dpid} to be deleted. "
@@ -496,7 +533,7 @@ class Main(KytosNApp):
             else [int(flow_dict.get("cookie", 0))]
         )
 
-        has_deleted_any_flow = False
+        archived_flows = []
         for cookie in cookies:
             stored_flows = stored_flows_box[switch.id].get(cookie, [])
             if not stored_flows:
@@ -508,6 +545,11 @@ class Main(KytosNApp):
                 # No strict match
                 if match_flow(flow_dict, version, stored_flow["flow"]):
                     deleted_flows_idxs.add(i)
+                    archived_flows.append(
+                        new_archive_flow_dict(
+                            stored_flow["flow"], "delete", stored_flow.get("_id")
+                        )
+                    )
 
             if not deleted_flows_idxs:
                 continue
@@ -517,14 +559,14 @@ class Main(KytosNApp):
                 for i, flow in enumerate(stored_flows)
                 if i not in deleted_flows_idxs
             ]
-            has_deleted_any_flow = True
 
             if stored_flows:
                 stored_flows_box[switch.id][cookie] = stored_flows
             else:
                 stored_flows_box[switch.id].pop(cookie, None)
 
-        if has_deleted_any_flow:
+        if archived_flows:
+            self._add_archived_flows(switch.id, archived_flows)
             stored_flows_box["id"] = "flow_persistence"
             self.storehouse.save_flow(stored_flows_box)
             del stored_flows_box["id"]
@@ -563,6 +605,24 @@ class Main(KytosNApp):
         self.storehouse.save_flow(stored_flows_box)
         del stored_flows_box["id"]
         self.stored_flows = deepcopy(stored_flows_box)
+
+    def _add_archived_flows(
+        self,
+        dpid,
+        archived_flows,
+        max_len=ARCHIVED_FLOWS_MAX_SIZE,
+    ):
+        """Add archived flows in memory (will be stored in the DB in the future)."""
+        if not archived_flows:
+            return
+        with self._archived_flows_lock:
+            if dpid not in self.archived_flows:
+                self.archived_flows[dpid] = OrderedDict()
+            for archived_flow in archived_flows:
+                self.archived_flows[dpid][archived_flow["_id"]] = archived_flow
+
+            while len(self.archived_flows[dpid]) > max_len:
+                self.archived_flows[dpid].popitem(last=False)
 
     def _update_flow_state_store(self, dpid, flow_ids, state):
         """Try to bulk update the state of some flow ids given a dpid."""
@@ -959,5 +1019,6 @@ class Main(KytosNApp):
                 f"Deleting flow: {flow.as_dict()}, xid: {xid}, cookie: {flow.cookie}, "
                 f"error: {error_kwargs}"
             )
-            self._del_stored_flow_by_id(switch.id, flow.cookie, flow.id)
+            with self._storehouse_lock:
+                self._del_stored_flow_by_id(switch.id, flow.cookie, flow.id)
             self._send_napp_event(flow.switch, flow, "error", **error_kwargs)
