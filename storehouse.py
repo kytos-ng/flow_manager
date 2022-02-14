@@ -1,4 +1,5 @@
 """Module to handle the storehouse."""
+import threading
 import time
 
 from napps.kytos.flow_manager import settings
@@ -33,6 +34,8 @@ class StoreHouse:
 
         if "box" not in self.__dict__:
             self.box = None
+        if "_lock" not in self.__dict__:
+            self._lock = threading.Lock()
         self.list_stored_boxes()
 
     def get_data(self):
@@ -85,6 +88,7 @@ class StoreHouse:
         else:
             self.create_box()
 
+    # pylint: disable=consider-using-with
     def get_stored_box(self, box_id):
         """Get persistence box from storehouse."""
         content = {
@@ -95,6 +99,8 @@ class StoreHouse:
         }
         name = "kytos.storehouse.retrieve"
         event = KytosEvent(name=name, content=content)
+        self._lock.acquire()  # Lock to avoid race condition
+        log.debug(f"Lock {self._lock} acquired.")
         self.controller.buffers.app.put(event)
 
     def _get_box_callback(self, _event, data, error):
@@ -103,9 +109,14 @@ class StoreHouse:
             log.error("Persistence box not found.")
 
         self.box = data
+        self._lock.release()
+        log.debug(f"Lock {self._lock} released.")
 
+    # pylint: disable=consider-using-with
     def save_flow(self, flows):
         """Save flows in storehouse."""
+        self._lock.acquire()  # Lock to avoid race condition
+        log.debug(f"Lock {self._lock} acquired.")
         self.box.data[flows["id"]] = flows
         content = {
             "namespace": self.namespace,
@@ -119,6 +130,8 @@ class StoreHouse:
 
     def _save_flow_callback(self, _event, data, error):
         """Display stored flow."""
+        self._lock.release()
+        log.debug(f"Lock {self._lock} released.")
         if error:
             log.error(f"Can't update persistence box {data.box_id}.")
 
