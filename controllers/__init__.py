@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Iterator, List, Optional
 
 import pymongo
 from bson.decimal128 import Decimal128
@@ -86,11 +86,37 @@ class FlowController:
             return_document=ReturnDocument.AFTER,
         )
 
-    def get_flows_by_cookie(self, dpid: str, cookie: int) -> List[dict]:
+    def update_flows_state(self, flow_ids: List[str], state: str) -> int:
+        """Bulk update flows state."""
+        return self.db.flows.update_many(
+            {"flow_id": {"$in": flow_ids}}, {"$set": {"state": state}}
+        ).modified_count
+
+    def delete_flows_by_ids(self, flow_ids: List[str]) -> int:
+        """Delete flows by ids."""
+        return self.db.flows.delete_many({"flow_id": {"$in": flow_ids}}).deleted_count
+
+    def delete_flow_by_id(self, flow_id: str) -> int:
+        """Delete flow by id."""
+        return self.db.flows.delete_one({"flow_id": flow_id}).deleted_count
+
+    def get_flows(self, dpid: str) -> Iterator[dict]:
+        """get flows."""
+        for flow in self.db.flows.find({"switch": dpid}):
+            flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
+            yield flow
+
+    def get_flows_by_cookie(self, dpid: str, cookie: int) -> Iterator[dict]:
         """Get flows by cookie."""
         for flow in self.db.flows.find(
             {"switch": dpid, "flow.cookie": Decimal128(Decimal(cookie))}
         ):
+            flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
+            yield flow
+
+    def get_flows_by_state(self, dpid: str, state: str) -> Iterator[dict]:
+        """Get flows by state."""
+        for flow in self.db.flows.find({"switch": dpid, "state": state}):
             flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
             yield flow
 
