@@ -1,16 +1,14 @@
 """kytos/flow_manager NApp installs, lists and deletes switch flows."""
 
 # pylint: disable=relative-beyond-top-level
-import itertools
 import time
 from collections import OrderedDict, defaultdict
-from copy import deepcopy
 from enum import Enum
 from threading import Lock
+from datetime import datetime
 
 from flask import jsonify, request
-from napps.kytos.flow_manager.match import match_flow, match_strict_flow
-from napps.kytos.flow_manager.storehouse import StoreHouse
+from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.settings import STATS_INTERVAL
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
@@ -23,9 +21,10 @@ from werkzeug.exceptions import (
 )
 
 from kytos.core import KytosEvent, KytosNApp, log, rest
-from kytos.core.helpers import get_time, listen_to, now
+from kytos.core.helpers import listen_to, now
 
 from .barrier_request import new_barrier_request
+from .controllers import FlowController
 from .exceptions import InvalidCommandError, SwitchNotConnectedError
 from .settings import (
     CONN_ERR_MAX_RETRIES,
@@ -41,7 +40,7 @@ from .utils import (
     _valid_consistency_ignored,
     cast_fields,
     get_min_wait_diff,
-    new_flow_dict,
+    is_ignored
 )
 
 
@@ -71,13 +70,11 @@ class Main(KytosNApp):
         if _valid_consistency_ignored(CONSISTENCY_TABLE_ID_IGNORED_RANGE):
             self.tab_id_ignored_range = CONSISTENCY_TABLE_ID_IGNORED_RANGE
 
-        # Storehouse client to save and restore flow data:
-        self.storehouse = StoreHouse(self.controller)
+        self.flow_controller = self.get_flow_controller()
+        self.flow_controller.bootstrap_indexes()
 
         self._storehouse_lock = Lock()
         self._flow_mods_sent_lock = Lock()
-        self._check_consistency_exec_at = {}
-        self._check_consistency_lock = Lock()
 
         self._pending_barrier_reply = defaultdict(OrderedDict)
         self._pending_barrier_lock = Lock()
@@ -87,12 +84,12 @@ class Main(KytosNApp):
         self._flow_mods_sent_error_lock = Lock()
         self._flow_mods_retry_count = {}
         self._flow_mods_retry_count_lock = Lock()
-
-        # Format of stored flow data:
-        # {'flow_persistence': {'dpid_str': {cookie_val: [
-        #                                     {'flow': {flow_dict}}]}}}
-        self.stored_flows = {}
         self.resent_flows = set()
+
+    @staticmethod
+    def get_flow_controller() -> FlowController:
+        """Get FlowController."""
+        return FlowController()
 
     def execute(self):
         """Run once on NApp 'start' or in a loop.
@@ -100,25 +97,11 @@ class Main(KytosNApp):
         The execute method is called by the run method of KytosNApp class.
         Users shouldn't call this method directly.
         """
-        self._load_flows()
+        pass
 
     def shutdown(self):
         """Shutdown routine of the NApp."""
         log.debug("flow-manager stopping")
-
-    def stored_flows_list(self, dpid):
-        """Ordered list of all stored flows given a dpid."""
-        return itertools.chain(*list(self.stored_flows[dpid].values()))
-
-    def stored_flows_by_state(self, dpid, state):
-        """Get stored flows dict filter by a state."""
-        filtered_flows = {}
-        if dpid not in self.stored_flows:
-            return filtered_flows
-        for entry in self.stored_flows_list(dpid):
-            if entry.get("state") == state:
-                filtered_flows[entry["_id"]] = entry
-        return filtered_flows
 
     @listen_to("kytos/of_core.handshake.completed")
     def resend_stored_flows(self, event):
@@ -132,17 +115,16 @@ class Main(KytosNApp):
         if dpid in self.resent_flows:
             log.debug(f"Flow already resent to the switch {dpid}")
             return
-        if dpid in self.stored_flows:
-            has_connection_failed = False
-            for flow in self.stored_flows_list(dpid):
-                flows_dict = {"flows": [flow["flow"]]}
-                try:
-                    self._install_flows("add", flows_dict, [switch])
-                except SwitchNotConnectedError:
-                    has_connection_failed = True
-            if not has_connection_failed:
+        for flow in self.flow_controller.get_flows(dpid):
+            flows_dict = {"flows": [flow["flow"]]}
+            try:
+                self._install_flows("add", flows_dict, [switch], save=False)
                 self.resent_flows.add(dpid)
-                log.info(f"Flows resent to Switch {dpid}")
+            except SwitchNotConnectedError:
+                log.error(f"Failed to resend flows to Switch {dpid}")
+                # reraise to land on core dead letter
+                raise
+        log.info(f"Flows resent to Switch {dpid}")
 
     @listen_to(".*.connection.lost")
     def on_connection_lost(self, event):
@@ -150,29 +132,11 @@ class Main(KytosNApp):
         switch = event.content["source"].switch
         if not switch:
             return
-        with self._check_consistency_lock:
-            self.reset_check_consistency_exec(switch.id)
+        self.reset_flow_check(switch.id)
 
-    def reset_check_consistency_exec(self, dpid):
-        """Reset _check_consistency_exec_at for a dpid."""
-        self._check_consistency_exec_at.pop(dpid, None)
-
-    @staticmethod
-    def is_ignored(field, ignored_range):
-        """Check that the flow field is in the range of ignored flows.
-
-        Returns True, if the field is in the range of ignored flows,
-        otherwise it returns False.
-        """
-        for i in ignored_range:
-            if isinstance(i, tuple):
-                start_range, end_range = i
-                if start_range <= field <= end_range:
-                    return True
-            if isinstance(i, int):
-                if field == i:
-                    return True
-        return False
+    def reset_flow_check(self, dpid):
+        """Reset flow check."""
+        self.flow_controller.upsert_flow_check(dpid, state="inactive")
 
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_check_consistency(self, event):
@@ -239,10 +203,8 @@ class Main(KytosNApp):
     def _publish_installed_flow(self, switch, flow):
         """Publish installed flow when it's confirmed."""
         self._send_napp_event(switch, flow, "add")
-        with self._storehouse_lock:
-            self._update_flow_state_store(
-                switch.id, set([flow.id]), FlowEntryState.INSTALLED.value
-            )
+        self.flow_controller.update_flow_state(flow.id,
+                                               FlowEntryState.INSTALLED.value)
 
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_publish_installed_flows(self, event):
@@ -251,27 +213,26 @@ class Main(KytosNApp):
 
     def publish_installed_flows(self, switch):
         """Publish installed flows when they're confirmed."""
-        pending_flows = self.stored_flows_by_state(
-            switch.id, FlowEntryState.PENDING.value
-        )
+        pending_flows = list(self.flow_controller.get_flows_by_state(
+                             switch.id, FlowEntryState.PENDING.value))
         if not pending_flows:
             return
 
-        installed_flows = self.switch_flows_by_id(switch)
+        installed_flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
 
-        flow_ids_to_update = set()
-        for _id in pending_flows:
+        flow_ids_to_update = []
+        for flow in pending_flows:
+            _id = flow["_id"]
             if _id not in installed_flows:
                 continue
 
             installed_flow = installed_flows[_id]
-            flow_ids_to_update.add(_id)
+            flow_ids_to_update.append(_id)
             self._send_napp_event(switch, installed_flow, "add")
 
-        with self._storehouse_lock:
-            self._update_flow_state_store(
-                switch.id, flow_ids_to_update, FlowEntryState.INSTALLED.value
-            )
+        self.flow_controller.update_flows_state(
+            flow_ids_to_update, FlowEntryState.INSTALLED.value
+        )
 
     def _retry_on_openflow_connection_error(
         self,
@@ -346,60 +307,53 @@ class Main(KytosNApp):
         """Check consistency of stored and installed flows given a switch."""
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
             return
-        with self._check_consistency_lock:
-            exec_at = self._check_consistency_exec_at.get(
-                switch.id, "0001-01-01T00:00:00"
+        flow_check = self.flow_controller.get_flow_check(switch.id)
+        if (
+            flow_check
+            and (
+                (datetime.utcnow() - flow_check["updated_at"]).seconds
+                <= STATS_INTERVAL / 2
             )
-            exec_time_diff = (now() - get_time(exec_at)).seconds
-            if exec_time_diff <= STATS_INTERVAL / 2:
-                log.info(
-                    f"Skipping recent consistency check exec on switch {switch.id}, "
-                    f"last checked at {exec_at}, diff in secs: {exec_time_diff}"
-                )
-                return
+        ):
+            log.info(
+                f"Skipping recent consistency check exec on switch {switch.id}, "
+                f"last checked at {flow_check['updated_at']}"
+            )
+            return
 
-            self._check_consistency_exec_at[switch.id] = now().strftime(
-                "%Y-%m-%dT%H:%M:%S"
-            )
+        self.flow_controller.upsert_flow_check(switch.id)
         log.debug(f"check_consistency on switch {switch.id} has started")
         self.check_storehouse_consistency(switch)
-        if switch.dpid in self.stored_flows:
-            self.check_switch_consistency(switch)
+        self.check_switch_consistency(switch)
         log.debug(f"check_consistency on switch {switch.id} is done")
 
-    @staticmethod
-    def switch_flows_by_cookie(switch):
-        """Build switch.flows indexed by cookie."""
-        installed_flows = defaultdict(list)
-        for cookie, flows in itertools.groupby(switch.flows, lambda x: x.cookie):
-            for flow in flows:
-                installed_flows[cookie].append(flow)
-        return installed_flows
+    def is_not_ignored_flow(self, flow) -> bool:
+        """Is not ignored flow."""
+        if (
+            not is_ignored(flow.cookie, self.cookie_ignored_range) and
+            not is_ignored(flow.table_id, self.tab_id_ignored_range)
+        ):
+            return True
+        return False
 
     @staticmethod
-    def switch_flows_by_id(switch):
+    def switch_flows_by_id(switch, filter_flow=lambda flow: True):
         """Build switch.flows indexed by id."""
-        return {flow.id: flow for flow in switch.flows}
+        return {flow.id: flow for flow in switch.flows if filter_flow(flow)}
 
     def check_switch_consistency(self, switch):
         """Check consistency of stored flows for a specific switch."""
         dpid = switch.dpid
-        serializer = FlowFactory.get_class(switch)
-        installed_flows = self.switch_flows_by_cookie(switch)
-
-        for cookie, stored_flows in self.stored_flows[dpid].items():
-            for stored_flow in stored_flows:
-                stored_time = get_time(
-                    stored_flow.get("created_at", "0001-01-01T00:00:00")
-                )
-                if (now() - stored_time).seconds <= STATS_INTERVAL:
+        flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
+        for flow in self.flow_controller.get_flows(switch.id):
+            if flow["flow_id"] not in flows:
+                if (
+                    (datetime.utcnow() - flow["updated_at"]).seconds
+                    <= STATS_INTERVAL
+                ):
                     continue
-                stored_flow_obj = serializer.from_dict(stored_flow["flow"], switch)
-                if stored_flow_obj in installed_flows[cookie]:
-                    continue
-
                 log.info(f"Consistency check: missing flow on switch {dpid}.")
-                flow = {"flows": [stored_flow["flow"]]}
+                flow = {"flows": [flow["flow"]]}
                 try:
                     self._install_flows("add", flow, [switch], save=False)
                     log.info(
@@ -414,210 +368,57 @@ class Main(KytosNApp):
     def check_storehouse_consistency(self, switch):
         """Check consistency of installed flows for a specific switch."""
         dpid = switch.dpid
-
-        for cookie, flows in self.switch_flows_by_cookie(switch).items():
-            if self.is_ignored(cookie, self.cookie_ignored_range):
-                continue
-
-            serializer = FlowFactory.get_class(switch)
-            stored_flows_list = [
-                serializer.from_dict(stored_flow["flow"], switch)
-                for stored_flow in self.stored_flows.get(dpid, {}).get(cookie, [])
-            ]
-            log.debug(
-                f"stored_flows_list on switch {switch.id} by cookie: {hex(cookie)}: "
-                f"{self.stored_flows.get(dpid, {}).get(cookie, [])}"
-            )
-
-            for installed_flow in flows:
-                if self.is_ignored(installed_flow.table_id, self.tab_id_ignored_range):
-                    continue
-
-                if dpid not in self.stored_flows:
+        stored_flows = {
+            flow["flow_id"]: flow for flow in
+            self.flow_controller.get_flows(switch.id)
+        }
+        flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
+        for flow_id, flow in flows.items():
+            if flow_id not in stored_flows:
+                log.info(f"Consistency check: alien flow on switch {dpid}")
+                flow = {"flows": [flow.as_dict()]}
+                command = "delete_strict"
+                try:
+                    self._install_flows(command, flow, [switch], save=False)
                     log.info(
-                        f"Consistency check: alien flow on switch {dpid}, dpid"
-                        " not indexed"
+                        f"Flow forwarded to switch {dpid} to be deleted. "
+                        f"Flow: {flow}"
                     )
-                    flow = {"flows": [installed_flow.as_dict()]}
-                    command = "delete_strict"
-                    try:
-                        self._install_flows(command, flow, [switch], save=False)
-                        log.info(
-                            f"Flow forwarded to switch {dpid} to be deleted. "
-                            f"Flow: {flow}"
-                        )
-                        continue
-                    except SwitchNotConnectedError:
-                        log.error(
-                            f"Failed to forward flow to switch {dpid} to be deleted. "
-                            f"Flow: {flow}"
-                        )
-
-                if installed_flow not in stored_flows_list:
-                    log.info(f"Consistency check: alien flow on switch {dpid}")
-                    flow = {"flows": [installed_flow.as_dict()]}
-                    command = "delete_strict"
-                    try:
-                        self._install_flows(command, flow, [switch], save=False)
-                        log.info(
-                            f"Flow forwarded to switch {dpid} to be deleted. "
-                            f"Flow: {flow}"
-                        )
-                        continue
-                    except SwitchNotConnectedError:
-                        log.error(
-                            f"Failed to forward flow to switch {dpid} to be deleted. "
-                            f"Flow: {flow}"
-                        )
+                    continue
+                except SwitchNotConnectedError:
+                    log.error(
+                        f"Failed to forward flow to switch {dpid} to be deleted. "
+                        f"Flow: {flow}"
+                    )
 
     # pylint: disable=attribute-defined-outside-init
-    def _load_flows(self):
-        """Load stored flows."""
-        try:
-            data = self.storehouse.get_data()["flow_persistence"]
-            if "id" in data:
-                del data["id"]
-            self.stored_flows = data
-        except (KeyError, FileNotFoundError) as error:
-            log.debug(f"There are no flows to load: {error}")
-        else:
-            log.info("Flows loaded.")
-
-    def _del_matched_flows_store(self, flow_dict, _flow_id, switch):
+    def _del_matched_flows_store(self, flow_dict, _flow_id, _match_id, switch):
         """Try to delete matching stored flows given a flow dict."""
-        stored_flows_box = deepcopy(self.stored_flows)
+        cookie = flow_dict.get("cookie", 0)
+        stored_flows = self.flow_controller.get_flows_by_cookie(switch.id,
+                                                                cookie)
+        version = switch.connection.protocol.version
+        flow_ids = []
+        for flow in stored_flows:
+            if match_flow(flow_dict, version, flow["flow"]):
+                flow_ids.append(flow["flow_id"])
+        if flow_ids:
+            self.flow_controller.delete_flows_by_ids(flow_ids)
 
-        if switch.id not in stored_flows_box:
-            return
-
-        cookies = (
-            self.stored_flows[switch.id].keys()
-            if flow_dict.get("cookie") is None
-            else [int(flow_dict.get("cookie", 0))]
-        )
-
-        has_deleted_any_flow = False
-        for cookie in cookies:
-            stored_flows = stored_flows_box[switch.id].get(cookie, [])
-            if not stored_flows:
-                continue
-
-            deleted_flows_idxs = set()
-            for i, stored_flow in enumerate(stored_flows):
-                version = switch.connection.protocol.version
-                # No strict match
-                if match_flow(flow_dict, version, stored_flow["flow"]):
-                    deleted_flows_idxs.add(i)
-
-            if not deleted_flows_idxs:
-                continue
-
-            stored_flows = [
-                flow
-                for i, flow in enumerate(stored_flows)
-                if i not in deleted_flows_idxs
-            ]
-            has_deleted_any_flow = True
-
-            if stored_flows:
-                stored_flows_box[switch.id][cookie] = stored_flows
-            else:
-                stored_flows_box[switch.id].pop(cookie, None)
-
-        if has_deleted_any_flow:
-            stored_flows_box["id"] = "flow_persistence"
-            self.storehouse.save_flow(stored_flows_box)
-            del stored_flows_box["id"]
-            self.stored_flows = deepcopy(stored_flows_box)
-
-    def _add_flow_store(self, flow_dict, flow_id, switch):
+    def _add_flow_store(self, flow_dict, flow_id, match_id, switch):
         """Try to add a flow dict in the store idempotently."""
-        installed_flow = new_flow_dict(
-            flow_dict, flow_id, state=FlowEntryState.PENDING.value
-        )
+        flow_dict = {**{"flow": flow_dict}, **{"switch": switch.id,
+                                               "flow_id": flow_id}}
+        self.flow_controller.upsert_flow(match_id, flow_dict)
 
-        stored_flows_box = deepcopy(self.stored_flows)
-        cookie = int(flow_dict.get("cookie", 0))
-        if switch.id not in stored_flows_box:
-            stored_flows_box[switch.id] = OrderedDict()
-
-        if not stored_flows_box[switch.id].get(cookie):
-            stored_flows_box[switch.id][cookie] = [installed_flow]
-        else:
-            version = switch.connection.protocol.version
-            stored_flows = stored_flows_box[switch.id].get(cookie, [])
-            for i, stored_flow in enumerate(stored_flows):
-                if all(
-                    (
-                        stored_flow["flow"].get("priority", 0)
-                        == flow_dict.get("priority", 0),
-                        match_strict_flow(flow_dict, version, stored_flow["flow"]),
-                    )
-                ):
-                    stored_flows_box[switch.id][cookie][i] = installed_flow
-                    break
-            else:
-                stored_flows_box[switch.id][cookie].append(installed_flow)
-
-        stored_flows_box["id"] = "flow_persistence"
-        self.storehouse.save_flow(stored_flows_box)
-        del stored_flows_box["id"]
-        self.stored_flows = deepcopy(stored_flows_box)
-
-    def _update_flow_state_store(self, dpid, flow_ids, state):
-        """Try to bulk update the state of some flow ids given a dpid."""
-        if not flow_ids:
-            return
-
-        stored_flows_box = deepcopy(self.stored_flows)
-        if dpid not in stored_flows_box:
-            return
-
-        for cookie in stored_flows_box[dpid]:
-            stored_flows = stored_flows_box[dpid][cookie]
-            for i, stored_flow in enumerate(stored_flows):
-                if stored_flow["_id"] in flow_ids:
-                    stored_flows_box[dpid][cookie][i]["state"] = state
-
-        stored_flows_box["id"] = "flow_persistence"
-        self.storehouse.save_flow(stored_flows_box)
-        del stored_flows_box["id"]
-        self.stored_flows = deepcopy(stored_flows_box)
-
-    def _del_stored_flow_by_id(self, dpid, cookie, flow_id):
-        """Try to delete a stored flow by its id."""
-        stored_flows_box = deepcopy(self.stored_flows)
-        if dpid not in stored_flows_box:
-            return
-
-        stored_flows = stored_flows_box[dpid].get(cookie, [])
-        index_deleted = None
-        for i, stored_flow in enumerate(stored_flows):
-            if stored_flow["_id"] == flow_id:
-                index_deleted = i
-                break
-        if index_deleted is None:
-            return
-
-        new_flow_list = []
-        for i, stored_flow in enumerate(stored_flows):
-            if i == index_deleted:
-                continue
-            new_flow_list.append(stored_flow)
-        stored_flows_box[dpid][cookie] = new_flow_list
-
-        stored_flows_box["id"] = "flow_persistence"
-        self.storehouse.save_flow(stored_flows_box)
-        del stored_flows_box["id"]
-        self.stored_flows = deepcopy(stored_flows_box)
-
-    def _store_changed_flows(self, command, flow_dict, flow_id, switch):
+    def _store_changed_flows(self, command, flow_dict, flow_id, match_id, switch):
         """Store changed flows.
 
         Args:
             command: Flow command to be installed
             flow: flow dict to be stored
             flow_id: corresponding FlowMod id (used for indexing)
+            match_id: corresponding FlowMod match_id (used for indexing)
             switch: Switch target
         """
         cmd_handlers = {
@@ -628,7 +429,7 @@ class Main(KytosNApp):
             raise ValueError(
                 f"Invalid command: {command}, supported: {list(cmd_handlers.keys())}"
             )
-        return cmd_handlers[command](flow_dict, flow_id, switch)
+        return cmd_handlers[command](flow_dict, flow_id, match_id, switch)
 
     @rest("v2/flows")
     @rest("v2/flows/<dpid>")
@@ -812,8 +613,8 @@ class Main(KytosNApp):
 
                 if not save:
                     continue
-                with self._storehouse_lock:
-                    self._store_changed_flows(command, flow_dict, flow.id, switch)
+                self._store_changed_flows(command, flow_dict, flow.id,
+                                          flow.match_id, switch)
 
     def _add_flow_mod_sent(self, xid, flow, command):
         """Add the flow mod to the list of flow mods sent."""
@@ -959,5 +760,5 @@ class Main(KytosNApp):
                 f"Deleting flow: {flow.as_dict()}, xid: {xid}, cookie: {flow.cookie}, "
                 f"error: {error_kwargs}"
             )
-            self._del_stored_flow_by_id(switch.id, flow.cookie, flow.id)
+            self.flow_controller.delete_flow_by_id(flow.id)
             self._send_napp_event(flow.switch, flow, "error", **error_kwargs)
