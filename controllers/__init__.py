@@ -1,5 +1,5 @@
 """FlowController."""
-
+import os
 from datetime import datetime
 from decimal import Decimal
 from typing import Iterator, List, Optional
@@ -7,13 +7,28 @@ from typing import Iterator, List, Optional
 import pymongo
 from bson.decimal128 import Decimal128
 from pymongo.collection import ReturnDocument
+from pymongo.errors import AutoReconnect
+from tenacity import retry_if_exception_type, stop_after_attempt, wait_random
 
 from kytos.core import log
 from kytos.core.db import Mongo
+from kytos.core.retry import before_sleep, for_all_methods, retries
 
 from ..db.models import FlowCheckDoc, FlowDoc
 
 
+@for_all_methods(
+    retries,
+    stop=stop_after_attempt(
+        int(os.environ.get("MONGO_AUTO_RETRY_STOP_AFTER_ATTEMPT", 3))
+    ),
+    wait=wait_random(
+        min=int(os.environ.get("MONGO_AUTO_RETRY_WAIT_RANDOM_MIN", 0.1)),
+        max=int(os.environ.get("MONGO_AUTO_RETRY_WAIT_RANDOM_MAX", 1)),
+    ),
+    before_sleep=before_sleep,
+    retry=retry_if_exception_type((AutoReconnect,)),
+)
 class FlowController:
     """FlowController."""
 
@@ -27,12 +42,21 @@ class FlowController:
         """Bootstrap indexes."""
         index_tuples = [
             ("flows", [("flow_id", pymongo.ASCENDING)], {"unique": True}),
-            ("flows", [("state", pymongo.ASCENDING)], {}),
             (
                 "flows",
                 [
                     ("switch", pymongo.ASCENDING),
                     ("flow.cookie", pymongo.ASCENDING),
+                    ("state", pymongo.ASCENDING),
+                    ("inserted_at", pymongo.ASCENDING),
+                ],
+                {},
+            ),
+            (
+                "flow_checks",
+                [
+                    ("state", pymongo.ASCENDING),
+                    ("updated_at", pymongo.ASCENDING),
                 ],
                 {},
             ),
@@ -100,8 +124,14 @@ class FlowController:
         """Delete flow by id."""
         return self.db.flows.delete_one({"flow_id": flow_id}).deleted_count
 
+    def get_flows_lte_inserted_at(self, dpid: str, dt: datetime) -> Iterator[dict]:
+        """Get flows less than or equal inserted_at."""
+        for flow in self.db.flows.find({"switch": dpid, "inserted_at": {"$lte": dt}}):
+            flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
+            yield flow
+
     def get_flows(self, dpid: str) -> Iterator[dict]:
-        """get flows."""
+        """Get flows."""
         for flow in self.db.flows.find({"switch": dpid}):
             flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
             yield flow
@@ -135,6 +165,13 @@ class FlowController:
         )
         return updated
 
-    def get_flow_check(self, dpid, state="active") -> Optional[dict]:
-        """Get flow check."""
-        return self.db.flow_checks.find_one({"_id": dpid, "state": state})
+    def get_flow_check_gte_updated_at(
+        self,
+        dpid: str,
+        dt: datetime,
+        state="active",
+    ) -> Optional[dict]:
+        """Get flow check greater than or equal updated_at."""
+        return self.db.flow_checks.find_one(
+            {"_id": dpid, "state": state, "updated_at": {"$gte": dt}}
+        )
