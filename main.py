@@ -6,6 +6,7 @@ from collections import OrderedDict, defaultdict
 from enum import Enum
 from threading import Lock
 from datetime import datetime
+from datetime import timedelta
 
 from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow
@@ -40,7 +41,7 @@ from .utils import (
     _valid_consistency_ignored,
     cast_fields,
     get_min_wait_diff,
-    is_ignored
+    is_ignored,
 )
 
 
@@ -73,7 +74,6 @@ class Main(KytosNApp):
         self.flow_controller = self.get_flow_controller()
         self.flow_controller.bootstrap_indexes()
 
-        self._storehouse_lock = Lock()
         self._flow_mods_sent_lock = Lock()
 
         self._pending_barrier_reply = defaultdict(OrderedDict)
@@ -203,8 +203,7 @@ class Main(KytosNApp):
     def _publish_installed_flow(self, switch, flow):
         """Publish installed flow when it's confirmed."""
         self._send_napp_event(switch, flow, "add")
-        self.flow_controller.update_flow_state(flow.id,
-                                               FlowEntryState.INSTALLED.value)
+        self.flow_controller.update_flow_state(flow.id, FlowEntryState.INSTALLED.value)
 
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_publish_installed_flows(self, event):
@@ -213,8 +212,11 @@ class Main(KytosNApp):
 
     def publish_installed_flows(self, switch):
         """Publish installed flows when they're confirmed."""
-        pending_flows = list(self.flow_controller.get_flows_by_state(
-                             switch.id, FlowEntryState.PENDING.value))
+        pending_flows = list(
+            self.flow_controller.get_flows_by_state(
+                switch.id, FlowEntryState.PENDING.value
+            )
+        )
         if not pending_flows:
             return
 
@@ -230,9 +232,10 @@ class Main(KytosNApp):
             flow_ids_to_update.append(_id)
             self._send_napp_event(switch, installed_flow, "add")
 
-        self.flow_controller.update_flows_state(
-            flow_ids_to_update, FlowEntryState.INSTALLED.value
-        )
+        if flow_ids_to_update:
+            self.flow_controller.update_flows_state(
+                flow_ids_to_update, FlowEntryState.INSTALLED.value
+            )
 
     def _retry_on_openflow_connection_error(
         self,
@@ -307,14 +310,10 @@ class Main(KytosNApp):
         """Check consistency of stored and installed flows given a switch."""
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
             return
-        flow_check = self.flow_controller.get_flow_check(switch.id)
-        if (
-            flow_check
-            and (
-                (datetime.utcnow() - flow_check["updated_at"]).seconds
-                <= STATS_INTERVAL / 2
-            )
-        ):
+        flow_check = self.flow_controller.get_flow_check_gte_updated_at(
+            switch.id, datetime.utcnow() - timedelta(seconds=STATS_INTERVAL / 2)
+        )
+        if flow_check:
             log.info(
                 f"Skipping recent consistency check exec on switch {switch.id}, "
                 f"last checked at {flow_check['updated_at']}"
@@ -323,15 +322,14 @@ class Main(KytosNApp):
 
         self.flow_controller.upsert_flow_check(switch.id)
         log.debug(f"check_consistency on switch {switch.id} has started")
-        self.check_storehouse_consistency(switch)
-        self.check_switch_consistency(switch)
+        self.check_alien_flows(switch)
+        self.check_missing_flows(switch)
         log.debug(f"check_consistency on switch {switch.id} is done")
 
     def is_not_ignored_flow(self, flow) -> bool:
         """Is not ignored flow."""
-        if (
-            not is_ignored(flow.cookie, self.cookie_ignored_range) and
-            not is_ignored(flow.table_id, self.tab_id_ignored_range)
+        if not is_ignored(flow.cookie, self.cookie_ignored_range) and not is_ignored(
+            flow.table_id, self.tab_id_ignored_range
         ):
             return True
         return False
@@ -341,17 +339,14 @@ class Main(KytosNApp):
         """Build switch.flows indexed by id."""
         return {flow.id: flow for flow in switch.flows if filter_flow(flow)}
 
-    def check_switch_consistency(self, switch):
-        """Check consistency of stored flows for a specific switch."""
+    def check_missing_flows(self, switch):
+        """Check missing flows on a switch and install them."""
         dpid = switch.dpid
         flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
-        for flow in self.flow_controller.get_flows(switch.id):
+        for flow in self.flow_controller.get_flows_lte_inserted_at(
+            switch.id, datetime.utcnow() - timedelta(seconds=STATS_INTERVAL)
+        ):
             if flow["flow_id"] not in flows:
-                if (
-                    (datetime.utcnow() - flow["updated_at"]).seconds
-                    <= STATS_INTERVAL
-                ):
-                    continue
                 log.info(f"Consistency check: missing flow on switch {dpid}.")
                 flow = {"flows": [flow["flow"]]}
                 try:
@@ -365,12 +360,11 @@ class Main(KytosNApp):
                         f"Flow: {flow}"
                     )
 
-    def check_storehouse_consistency(self, switch):
-        """Check consistency of installed flows for a specific switch."""
+    def check_alien_flows(self, switch):
+        """Check alien flows on a switch and delete them."""
         dpid = switch.dpid
         stored_flows = {
-            flow["flow_id"]: flow for flow in
-            self.flow_controller.get_flows(switch.id)
+            flow["flow_id"]: flow for flow in self.flow_controller.get_flows(switch.id)
         }
         flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
         for flow_id, flow in flows.items():
@@ -392,11 +386,10 @@ class Main(KytosNApp):
                     )
 
     # pylint: disable=attribute-defined-outside-init
-    def _del_matched_flows_store(self, flow_dict, _flow_id, _match_id, switch):
+    def _delete_matched_flows(self, flow_dict, _flow_id, _match_id, switch):
         """Try to delete matching stored flows given a flow dict."""
         cookie = flow_dict.get("cookie", 0)
-        stored_flows = self.flow_controller.get_flows_by_cookie(switch.id,
-                                                                cookie)
+        stored_flows = self.flow_controller.get_flows_by_cookie(switch.id, cookie)
         version = switch.connection.protocol.version
         flow_ids = []
         for flow in stored_flows:
@@ -405,10 +398,9 @@ class Main(KytosNApp):
         if flow_ids:
             self.flow_controller.delete_flows_by_ids(flow_ids)
 
-    def _add_flow_store(self, flow_dict, flow_id, match_id, switch):
+    def _upsert_flow(self, flow_dict, flow_id, match_id, switch):
         """Try to add a flow dict in the store idempotently."""
-        flow_dict = {**{"flow": flow_dict}, **{"switch": switch.id,
-                                               "flow_id": flow_id}}
+        flow_dict = {**{"flow": flow_dict}, **{"switch": switch.id, "flow_id": flow_id}}
         self.flow_controller.upsert_flow(match_id, flow_dict)
 
     def _store_changed_flows(self, command, flow_dict, flow_id, match_id, switch):
@@ -422,8 +414,8 @@ class Main(KytosNApp):
             switch: Switch target
         """
         cmd_handlers = {
-            "add": self._add_flow_store,
-            "delete": self._del_matched_flows_store,
+            "add": self._upsert_flow,
+            "delete": self._delete_matched_flows,
         }
         if command not in cmd_handlers:
             raise ValueError(
@@ -609,8 +601,9 @@ class Main(KytosNApp):
 
                 if not save:
                     continue
-                self._store_changed_flows(command, flow_dict, flow.id,
-                                          flow.match_id, switch)
+                self._store_changed_flows(
+                    command, flow_dict, flow.id, flow.match_id, switch
+                )
 
     def _add_flow_mod_sent(self, xid, flow, command):
         """Add the flow mod to the list of flow mods sent."""
