@@ -1,6 +1,4 @@
 """Test Main methods."""
-import threading
-from datetime import datetime
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -9,7 +7,6 @@ from napps.kytos.flow_manager.exceptions import (
     InvalidCommandError,
     SwitchNotConnectedError,
 )
-from napps.kytos.flow_manager.main import FlowEntryState
 
 from kytos.core.helpers import now
 from kytos.lib.helpers import (
@@ -452,7 +449,7 @@ class TestMain(TestCase):
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     def test_check_switch_flow_not_missing(self, *args):
-        """Test check_switch_consistency method.
+        """Test check_missing_flows method.
 
         This test checks the case when flow is not missing.
         """
@@ -497,12 +494,12 @@ class TestMain(TestCase):
                 ]
             }
         }
-        self.napp.check_switch_consistency(switch)
+        self.napp.check_missing_flows(switch)
         mock_install_flows.assert_not_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     def test_check_switch_flow_missing(self, mock_install_flows):
-        """Test check_switch_consistency method.
+        """Test check_missing_flows method.
 
         This test checks the case when flow is missing.
         """
@@ -514,12 +511,12 @@ class TestMain(TestCase):
         self.napp.flow_controller.get_flows_lte_inserted_at.return_value = [
             {"flow_id": "2", "flow": {}}
         ]
-        self.napp.check_switch_consistency(switch)
+        self.napp.check_missing_flows(switch)
         mock_install_flows.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_check_flows_consistency(self, mock_install_flows):
-        """Test check_flows_consistency method.
+    def test_check_alien_flows(self, mock_install_flows):
+        """Test check_alien_flows method.
 
         This test checks the case when a flow is missing in the switch.
         """
@@ -531,7 +528,7 @@ class TestMain(TestCase):
         self.napp.flow_controller.get_flows.return_value = [
             {"flow_id": "2", "flow": {}}
         ]
-        self.napp.check_flows_consistency(switch)
+        self.napp.check_alien_flows(switch)
         mock_install_flows.assert_called()
 
     def test_consistency_cookie_ignored_range(self):
@@ -574,12 +571,12 @@ class TestMain(TestCase):
         switch.id = dpid
         switch.flows = []
         self.napp.flow_controller.get_flow_check_gte_updated_at.return_value = None
-        self.napp.check_switch_consistency = MagicMock()
-        self.napp.check_flows_consistency = MagicMock()
+        self.napp.check_missing_flows = MagicMock()
+        self.napp.check_alien_flows = MagicMock()
         self.napp.check_consistency(switch)
         self.napp.flow_controller.upsert_flow_check.assert_called_with(switch.id)
-        self.napp.check_switch_consistency.assert_called_with(switch)
-        self.napp.check_flows_consistency.assert_called_with(switch)
+        self.napp.check_missing_flows.assert_called_with(switch)
+        self.napp.check_alien_flows.assert_called_with(switch)
 
     def test_reset_flow_check(self):
         """Test reset_flow_Check."""
@@ -694,42 +691,6 @@ class TestMain(TestCase):
 
         self.napp._on_ofpt_barrier_reply(event)
         mock_publish.assert_called()
-
-    # @patch("napps.kytos.flow_manager.main.StoreHouse.save_flow")
-    # def test_update_flow_state_store(self, mock_save_flow):
-    #     """Test update flow state store."""
-    #     dpid = "00:00:00:00:00:00:00:01"
-    #     switch = get_switch_mock(dpid, 0x04)
-    #     switch.id = dpid
-    #     stored_flow = {
-    #         "_id": "1",
-    #         "state": "pending",
-    #         "flow": {
-    #             "match": {
-    #                 "ipv4_src": "192.168.2.1",
-    #             },
-    #         },
-    #     }
-    #     stored_flow2 = {
-    #         "_id": "2",
-    #         "state": "pending",
-    #         "flow": {
-    #             "match": {
-    #                 "ipv4_src": "192.168.2.2",
-    #             },
-    #         },
-    #     }
-    #     cookie = 0
-    #     mock_save_flow.return_value = lambda x: x
-    #     self.napp.stored_flows = {dpid: {cookie: [stored_flow, stored_flow2]}}
-    #
-    #     assert len(self.napp.stored_flows[dpid][cookie]) == 2
-    #     self.napp._update_flow_state_store(dpid, ["1"], "installed")
-    #     assert len(self.napp.stored_flows[dpid][cookie]) == 2
-    #
-    #     expected = dict(stored_flow)
-    #     expected["state"] = "installed"
-    #     self.assertDictEqual(self.napp.stored_flows[dpid][cookie][0], expected)
 
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     def test_on_openflow_connection_error(self, mock_send_napp_event):
