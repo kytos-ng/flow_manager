@@ -3,10 +3,9 @@
 # pylint: disable=relative-beyond-top-level
 import time
 from collections import OrderedDict, defaultdict
+from datetime import datetime, timedelta
 from enum import Enum
 from threading import Lock
-from datetime import datetime
-from datetime import timedelta
 
 from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow

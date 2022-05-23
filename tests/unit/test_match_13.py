@@ -1,4 +1,5 @@
 """Module to test the utils module."""
+# pylint: disable=import-error
 import pytest
 from napps.kytos.flow_manager.match import match10_no_strict, match_flow
 from napps.kytos.flow_manager.v0x04.match import _match_cookie, match13_no_strict

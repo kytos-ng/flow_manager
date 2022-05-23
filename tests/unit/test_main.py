@@ -17,7 +17,7 @@ from kytos.lib.helpers import (
     get_test_client,
 )
 
-# pylint: disable=too-many-lines,fixme
+# pylint: disable=too-many-lines,fixme,no-member
 # TODO split this test suite in smaller ones
 
 
@@ -680,6 +680,7 @@ class TestMain(TestCase):
         switch.id = dpid
         flow = MagicMock(id="1")
         self.napp._publish_installed_flow(switch, flow)
+        mock_send_napp_event.assert_called()
         self.napp.flow_controller.update_flow_state.assert_called_with(
             flow.id, "installed"
         )

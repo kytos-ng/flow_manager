@@ -1,4 +1,6 @@
 """DB models."""
+# pylint: disable=no-self-use,unused-argument,invalid-name,unused-argument
+# pylint: disable=no-self-argument
 
 
 from datetime import datetime
@@ -96,12 +98,14 @@ class FlowSubDoc(BaseModel):
     actions: Optional[List[dict]]
 
     class Config:
+        """Config."""
+
         arbitrary_types_allowed = True
 
     @validator("cookie", pre=True)
     def preset_cookie(cls, v, values, **kwargs) -> Decimal128:
         """Preset cookie."""
-        if isinstance(v, int) or isinstance(v, str):
+        if isinstance(v, (int, str)):
             return Decimal128(Decimal(v))
         return v
 

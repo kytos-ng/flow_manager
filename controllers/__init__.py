@@ -1,4 +1,5 @@
 """FlowController."""
+# pylint: disable=unnecessary-lambda,invalid-name,relative-beyond-top-level
 import os
 from datetime import datetime
 from decimal import Decimal

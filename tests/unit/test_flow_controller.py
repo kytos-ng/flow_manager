@@ -1,11 +1,12 @@
 """Module to test FlowController."""
+# pylint: disable=invalid-name,relative-beyond-top-level
 
 from datetime import datetime
+from decimal import Decimal
 from unittest import TestCase
 from unittest.mock import MagicMock
-from bson.decimal128 import Decimal128
-from decimal import Decimal
 
+from bson.decimal128 import Decimal128
 from napps.kytos.flow_manager.controllers import FlowController
 
 
@@ -120,10 +121,7 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         state = "installed"
         assert not list(self.flow_controller.get_flows_by_state(self.dpid, state))
         args = self.flow_controller.db.flows.find.call_args[0]
-        assert args[0] == {
-            "switch": self.dpid,
-            "state": "installed"
-        }
+        assert args[0] == {"switch": self.dpid, "state": "installed"}
 
     def test_upsert_flow_check(self) -> None:
         """Test upsert_flow_check."""
