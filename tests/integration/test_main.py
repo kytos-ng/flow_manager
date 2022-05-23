@@ -1,6 +1,6 @@
 """Module to test the main napp file."""
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock
 
 from kytos.core import Controller
 from kytos.core.config import KytosConfig
@@ -12,6 +12,7 @@ class TestMain(TestCase):
 
     def setUp(self):
         """Execute steps before each tests."""
+        Main.get_flow_controller = MagicMock()
         self.napp = Main(self.get_controller_mock())
 
     @staticmethod
@@ -26,24 +27,26 @@ class TestMain(TestCase):
         self.napp._flow_mods_sent_max_size = 3
         flow = Mock()
         xid = "12345"
+        command = "add"
         initial_len = len(self.napp._flow_mods_sent)
-        self.napp._add_flow_mod_sent(xid, flow)
+        self.napp._add_flow_mod_sent(xid, flow, command)
 
         assert len(self.napp._flow_mods_sent) == initial_len + 1
-        assert self.napp._flow_mods_sent.get(xid, None) == flow
+        assert self.napp._flow_mods_sent.get(xid, None) == (flow, command)
 
     def test_add_flow_mod_sent_overlimit(self):
         self.napp._flow_mods_sent_max_size = 5
         xid = "23456"
+        command = "add"
         while len(self.napp._flow_mods_sent) < 5:
             xid += "1"
             flow = Mock()
-            self.napp._add_flow_mod_sent(xid, flow)
+            self.napp._add_flow_mod_sent(xid, flow, command)
 
         xid = "90876"
         flow = Mock()
         initial_len = len(self.napp._flow_mods_sent)
-        self.napp._add_flow_mod_sent(xid, flow)
+        self.napp._add_flow_mod_sent(xid, flow, command)
 
         assert len(self.napp._flow_mods_sent) == initial_len
-        assert self.napp._flow_mods_sent.get(xid, None) == flow
+        assert self.napp._flow_mods_sent.get(xid, None) == (flow, command)
