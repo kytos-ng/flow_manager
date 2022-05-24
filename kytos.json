@@ -3,9 +3,9 @@
   "username": "kytos",
   "name": "flow_manager",
   "description": "Manage switches' flows through a REST API.",
-  "version": "2022.1.1",
+  "version": "2022.1.2",
   "napp_dependencies": ["kytos/of_core", "kytos/storehouse"],
   "license": "MIT",
   "url": "https://github.com/kytos/flow_manager.git",
-  "tags": ["openflow", "manager", "flow", "rest", "work-in-progress"]
+  "tags": ["openflow", "manager", "flow", "rest"]
 }

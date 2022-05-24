@@ -24,7 +24,7 @@ if "bdist_wheel" in sys.argv:
 BASE_ENV = Path(os.environ.get("VIRTUAL_ENV", "/"))
 
 NAPP_NAME = "flow_manager"
-NAPP_VERSION = "2022.1.1"
+NAPP_VERSION = "2022.1.2"
 
 # Kytos var folder
 VAR_PATH = BASE_ENV / "var" / "lib" / "kytos"
@@ -286,7 +286,7 @@ setup(
     license="MIT",
     install_requires=read_requirements(),
     setup_requires=["pytest-runner"],
-    tests_require=["pytest"],
+    tests_require=["pytest==7.0.0"],
     extras_require={
         "dev": [
             "coverage",

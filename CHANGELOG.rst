@@ -27,9 +27,27 @@ Removed
 =======
 - Storehouse backend and its locks
 - ``match13_strict`` to simplify application logic since match strict was primarily for matching an exact flow, which without wildcards is simpler to do and maintain by using ``flow_id`` (flow.id) instead
+- Removed in memory archived_flows
 
 Security
 ========
+
+[2022.1.2] - 2022-02-07
+***********************
+
+Changed
+=======
+- Adapted consistency check to skip recent deleted flows
+- Extracted ``is_recent_flow`` static method
+- Changed ``_del_matched_flows_store`` to also archive flows
+- Changed consistency check to also archive alien flows
+
+Added
+=====
+
+- Added archived_flows and its lock to store in memory
+- Added ``_add_Archived_flows`` method
+
 
 [2022.1.1] - 2022-02-04
 ***********************
