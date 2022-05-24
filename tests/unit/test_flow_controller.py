@@ -63,6 +63,17 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         assert arg1 == {"_id": self.match_id}
         assert arg2["$set"]["flow"]
 
+    def test_upsert_flows(self) -> None:
+        """Test upsert_flows."""
+        match_ids, flow_dicts = ["1", "2"], [
+            {"flow_id": "1", "switch": self.dpid, "flow": {"match": {"in_port": 1}}},
+            {"flow_id": "2", "switch": self.dpid, "flow": {"match": {"in_port": 2}}},
+        ]
+        assert self.flow_controller.upsert_flows(match_ids, flow_dicts)
+        assert self.flow_controller.db.flows.bulk_write.call_count == 1
+        args = self.flow_controller.db.flows.bulk_write.call_args[0]
+        assert len(args[0]) == len(flow_dicts)
+
     def test_update_flow_state(self) -> None:
         """Test update_flow_state."""
         assert self.flow_controller.update_flow_state(self.flow_id, "installed")

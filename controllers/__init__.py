@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Iterator, List, Optional
 
 import pymongo
+from pymongo.operations import UpdateOne
 from bson.decimal128 import Decimal128
 from pymongo.collection import ReturnDocument
 from pymongo.errors import AutoReconnect
@@ -89,6 +90,30 @@ class FlowController:
             upsert=True,
         )
         return updated
+
+    def upsert_flows(self, match_ids: List[str], flow_dicts: List[dict]) -> dict:
+        """Update or insert flows."""
+        utc_now = datetime.utcnow()
+        ops = []
+        for match_id, flow_dict in zip(match_ids, flow_dicts):
+            model = FlowDoc(
+                **{
+                    **flow_dict,
+                    **{"_id": match_id, "updated_at": utc_now},
+                }
+            )
+            payload = model.dict(exclude={"inserted_at"}, exclude_none=True)
+            ops.append(
+                UpdateOne(
+                    {"_id": match_id},
+                    {
+                        "$set": payload,
+                        "$setOnInsert": {"inserted_at": utc_now},
+                    },
+                    upsert=True,
+                )
+            )
+        return self.db.flows.bulk_write(ops).upserted_ids
 
     @staticmethod
     def _set_updated_at(update_expr: dict) -> None:
