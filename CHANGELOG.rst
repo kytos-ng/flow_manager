@@ -18,6 +18,7 @@ Changed
 =======
 - Removed ``log.info`` send FlowMod from the request hot path for now
 - Refactored consistency check to leverage ``flow_id`` and ``match_id``
+- Refactored `flows` upsert and delete operations to use `bulk_write` instead for higher performance based on the expected workload
 
 Deprecated
 ==========
