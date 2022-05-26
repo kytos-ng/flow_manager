@@ -68,30 +68,6 @@ class FlowController:
             if self.mongo.bootstrap_index(collection, keys, **kwargs):
                 log.info(f"Created DB index {keys}, collection: {collection})")
 
-    def upsert_flow(self, match_id: str, flow_dict: dict) -> Optional[dict]:
-        """Update or insert flow.
-
-        Insertions and updates are indexed by match_id to minimize lookups.
-        """
-        utc_now = datetime.utcnow()
-        model = FlowDoc(
-            **{
-                **flow_dict,
-                **{"_id": match_id, "updated_at": utc_now},
-            }
-        )
-        payload = model.dict(exclude={"inserted_at"}, exclude_none=True)
-        updated = self.db.flows.find_one_and_update(
-            {"_id": match_id},
-            {
-                "$set": payload,
-                "$setOnInsert": {"inserted_at": utc_now},
-            },
-            return_document=ReturnDocument.AFTER,
-            upsert=True,
-        )
-        return updated
-
     def upsert_flows(self, match_ids: List[str], flow_dicts: List[dict]) -> dict:
         """Update or insert flows."""
         utc_now = datetime.utcnow()

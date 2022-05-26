@@ -413,23 +413,6 @@ class Main(KytosNApp):
             self.flow_controller.delete_flows_by_ids(list(flow_ids_to_delete))
 
     # pylint: disable=attribute-defined-outside-init
-    def _delete_matched_flows(self, flow_dict, _flow_id, _match_id, switch):
-        """Try to delete matching stored flows given a flow dict."""
-        cookie = flow_dict.get("cookie", 0)
-        stored_flows = self.flow_controller.get_flows_by_cookie(switch.id, cookie)
-        version = switch.connection.protocol.version
-        flow_ids = []
-        for flow in stored_flows:
-            if match_flow(flow_dict, version, flow["flow"]):
-                flow_ids.append(flow["flow_id"])
-        if flow_ids:
-            self.flow_controller.delete_flows_by_ids(flow_ids)
-
-    def _upsert_flow(self, flow_dict, flow_id, match_id, switch):
-        """Try to add a flow dict in the store idempotently."""
-        flow_dict = {**{"flow": flow_dict}, **{"switch": switch.id, "flow_id": flow_id}}
-        self.flow_controller.upsert_flow(match_id, flow_dict)
-
     @rest("v2/flows")
     @rest("v2/flows/<dpid>")
     def list(self, dpid=None):
