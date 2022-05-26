@@ -542,8 +542,10 @@ class TestMain(TestCase):
         flow1.__getitem__.side_effect = flow1_dict.__getitem__
         flows = [flow1]
         switch.flows = flows
-        self.napp.flow_controller.get_flows_by_cookie.return_value = flows
-        self.napp._delete_matched_flows(flow1_dict, flow1.id, flow1.match_id, switch)
+        self.napp.flow_controller.get_flows_by_cookies.return_value = {
+            switch.id: [flow1_dict]
+        }
+        self.napp.delete_matched_flows([flow1_dict], {switch.id: switch})
         self.napp.flow_controller.delete_flows_by_ids.assert_called_with([flow1.id])
 
     def test_add_barrier_request(self):
