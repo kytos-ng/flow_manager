@@ -1,15 +1,16 @@
 """FlowController."""
 # pylint: disable=unnecessary-lambda,invalid-name,relative-beyond-top-level
 import os
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
 from typing import Iterator, List, Optional
 
 import pymongo
-from pymongo.operations import UpdateOne
 from bson.decimal128 import Decimal128
 from pymongo.collection import ReturnDocument
 from pymongo.errors import AutoReconnect
+from pymongo.operations import UpdateOne
 from tenacity import retry_if_exception_type, stop_after_attempt, wait_random
 
 from kytos.core import log
@@ -169,6 +170,27 @@ class FlowController:
         ):
             flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
             yield flow
+
+    def get_flows_by_cookies(self, dpids: List[str], cookies: List[int]) -> dict:
+        """Get flows by cookies grouped by dpid."""
+        flows = defaultdict(list)
+        for document in self.db.flows.aggregate(
+            [
+                {
+                    "$match": {
+                        "switch": {"$in": dpids},
+                        "flow.cookie": {
+                            "$in": [Decimal128(Decimal(cookie)) for cookie in cookies]
+                        },
+                    }
+                },
+                {"$group": {"_id": "$switch", "flows": {"$push": "$$ROOT"}}},
+            ]
+        ):
+            for flow in document["flows"]:
+                flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
+                flows[flow["switch"]].append(flow)
+        return flows
 
     def get_flows_by_state(self, dpid: str, state: str) -> Iterator[dict]:
         """Get flows by state."""
