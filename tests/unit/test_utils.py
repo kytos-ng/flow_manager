@@ -1,12 +1,53 @@
 """Module to test the utils module."""
 from datetime import timedelta
 from unittest import TestCase
+from unittest.mock import MagicMock
 
+import pytest
+from napps.kytos.flow_manager.exceptions import InvalidCommandError
 from napps.kytos.flow_manager.utils import (
     _valid_consistency_ignored,
     _validate_range,
+    build_command_from_flow_mod,
+    build_flow_mod_from_command,
     get_min_wait_diff,
 )
+from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (FlowModCommand.OFPFC_ADD.value, "add"),
+        (FlowModCommand.OFPFC_DELETE.value, "delete"),
+        (FlowModCommand.OFPFC_DELETE_STRICT.value, "delete_strict"),
+        (FlowModCommand.OFPFC_MODIFY.value, str(FlowModCommand.OFPFC_MODIFY.value)),
+    ],
+)
+def tet_build_command_from_flow_mod(value, expected):
+    """Test build_command_from_flow_mod."""
+    assert build_command_from_flow_mod(value) == expected
+
+
+def test_build_flow_mod_from_command_exc():
+    """test build_flow_mod_from_command."""
+    with pytest.raises(InvalidCommandError):
+        build_flow_mod_from_command(MagicMock(), "invalid_command")
+
+
+@pytest.mark.parametrize(
+    "command,mock_method",
+    [
+        ("add", "as_of_add_flow_mod"),
+        ("delete", "as_of_delete_flow_mod"),
+        ("delete_strict", "as_of_strict_delete_flow_mod"),
+    ],
+)
+def test_build_flow_mod_from_command(command, mock_method):
+    """Test build_flow_mod_from_command."""
+    mock = MagicMock()
+    build_flow_mod_from_command(mock, command)
+    assert getattr(mock, mock_method).call_count == 1
 
 
 class TestUtils(TestCase):

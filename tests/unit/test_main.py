@@ -2,11 +2,9 @@
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
+from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 
-from napps.kytos.flow_manager.exceptions import (
-    InvalidCommandError,
-    SwitchNotConnectedError,
-)
+from napps.kytos.flow_manager.exceptions import SwitchNotConnectedError
 
 from kytos.core.helpers import now
 from kytos.lib.helpers import (
@@ -183,7 +181,6 @@ class TestMain(TestCase):
 
         self.assertEqual(response.status_code, 424)
 
-    @patch("napps.kytos.flow_manager.main.Main._store_changed_flows")
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
     @patch("napps.kytos.flow_manager.main.Main._send_barrier_request")
@@ -197,7 +194,6 @@ class TestMain(TestCase):
             _,
             _,
             _,
-            mock_store_changed_flows,
         ) = args
 
         api = get_test_client(self.napp.controller, self.napp)
@@ -220,12 +216,16 @@ class TestMain(TestCase):
         response = api.post(url, json=dict(flow_dict, **{"force": True}))
 
         self.assertEqual(response.status_code, 202)
-        mock_store_changed_flows.assert_called_with(
-            "add",
-            flow_dict["flows"][0],
-            mock_flow_factory().from_dict().id,
-            match_id,
-            self.switch_01,
+
+        flow_dicts = [
+            {
+                **{"flow": flow_dict["flows"][0]},
+                **{"flow_id": flow.id, "switch": self.switch_01.id},
+            }
+        ]
+        self.napp.flow_controller.upsert_flows.assert_called_with(
+            [match_id],
+            flow_dicts,
         )
 
     def test_get_all_switches_enabled(self):
@@ -234,7 +234,6 @@ class TestMain(TestCase):
 
         self.assertEqual(switches, [self.switch_01])
 
-    @patch("napps.kytos.flow_manager.main.Main._store_changed_flows")
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
     @patch("napps.kytos.flow_manager.main.Main._send_barrier_request")
@@ -248,11 +247,11 @@ class TestMain(TestCase):
             mock_send_barrier_request,
             mock_add_flow_mod_sent,
             mock_send_napp_event,
-            _,
         ) = args
         serializer = MagicMock()
         flow = MagicMock()
         flow_mod = MagicMock()
+        flow_mod.command.value = FlowModCommand.OFPFC_ADD.value
 
         flow.as_of_add_flow_mod.return_value = flow_mod
         serializer.from_dict.return_value = flow
@@ -262,12 +261,12 @@ class TestMain(TestCase):
         switches = [self.switch_01]
         self.napp._install_flows("add", flows_dict, switches)
 
-        mock_send_flow_mod.assert_called_with(flow.switch, flow_mod)
+        mock_send_flow_mod.assert_called_with(self.switch_01, flow_mod)
+        mock_send_barrier_request.assert_called()
         mock_add_flow_mod_sent.assert_called_with(flow_mod.header.xid, flow, "add")
         mock_send_napp_event.assert_called_with(self.switch_01, flow, "pending")
-        mock_send_barrier_request.assert_called()
+        self.napp.flow_controller.upsert_flows.assert_called()
 
-    @patch("napps.kytos.flow_manager.main.Main._store_changed_flows")
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
     @patch("napps.kytos.flow_manager.main.Main._send_barrier_request")
@@ -281,11 +280,11 @@ class TestMain(TestCase):
             mock_send_barrier_request,
             mock_add_flow_mod_sent,
             mock_send_napp_event,
-            _,
         ) = args
         serializer = MagicMock()
         flow = MagicMock()
         flow_mod = MagicMock()
+        flow_mod.command.value = FlowModCommand.OFPFC_DELETE_STRICT.value
 
         flow.as_of_strict_delete_flow_mod.return_value = flow_mod
         serializer.from_dict.return_value = flow
@@ -295,12 +294,13 @@ class TestMain(TestCase):
         switches = [self.switch_01]
         self.napp._install_flows("delete_strict", flows_dict, switches)
 
-        mock_send_flow_mod.assert_called_with(flow.switch, flow_mod)
+        mock_send_flow_mod.assert_called_with(self.switch_01, flow_mod)
         mock_add_flow_mod_sent.assert_called_with(
             flow_mod.header.xid, flow, "delete_strict"
         )
         mock_send_napp_event.assert_called_with(self.switch_01, flow, "pending")
         mock_send_barrier_request.assert_called()
+        self.napp.flow_controller.delete_flows_by_ids.assert_not_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     def test_event_add_flow(self, mock_install_flows):
@@ -428,23 +428,6 @@ class TestMain(TestCase):
         self.napp.controller.switches = {dpid: switch}
         self.napp.resend_stored_flows(mock_event)
         mock_install_flows.assert_called()
-
-    def test_store_changed_flows(self):
-        """Test store changed flows."""
-        dpid = "00:00:00:00:00:00:00:01"
-        switch = get_switch_mock(dpid, 0x04)
-        switch.id = dpid
-        flow = {
-            "flow": {
-                "cookie": 84114964,
-                "priority": 17,
-                "match": {"dl_dst": "00:15:af:d5:38:98"},
-            }
-        }
-        flows = {"flow": flow}
-        flow_id, match_id = str(uuid4()), str(uuid4())
-        self.napp._store_changed_flows("add", flows, flow_id, match_id, switch)
-        assert self.napp.flow_controller.upsert_flow.call_count == 1
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     def test_check_switch_flow_missing(self, mock_install_flows):
@@ -774,19 +757,3 @@ class TestMain(TestCase):
         mock_ev.event.content = {"destination": switch}
         self.napp._send_openflow_connection_error(mock_ev)
         assert mock_send.call_count == 1
-
-    def test_build_flow_mod_from_command(self):
-        """Test build_flow_mod_from_command."""
-        mock = MagicMock()
-        values = [
-            ("add", mock.as_of_add_flow_mod),
-            ("delete", mock.as_of_delete_flow_mod),
-            ("delete_strict", mock.as_of_strict_delete_flow_mod),
-        ]
-        for command, mock_method in values:
-            with self.subTest(command=command, mock_method=mock_method):
-                self.napp.build_flow_mod_from_command(mock, command)
-                assert mock_method.call_count == 1
-
-        with self.assertRaises(InvalidCommandError):
-            self.napp.build_flow_mod_from_command(mock, "invalid_command")
