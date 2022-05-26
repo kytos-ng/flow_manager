@@ -312,7 +312,7 @@ class TestMain(TestCase):
             name="kytos.flow_manager.flows.install",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
-        self.napp.event_flows_install_delete(event)
+        self.napp.handle_flows_install_delete(event)
         mock_install_flows.assert_called_with(
             "add", mock_flow_dict, [switch], reraise_conn=True
         )
@@ -328,7 +328,7 @@ class TestMain(TestCase):
             name="kytos.flow_manager.flows.delete",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
-        self.napp.event_flows_install_delete(event)
+        self.napp.handle_flows_install_delete(event)
         mock_install_flows.assert_called_with(
             "delete", mock_flow_dict, [switch], reraise_conn=True
         )
