@@ -38,6 +38,8 @@ from .settings import (
 )
 from .utils import (
     _valid_consistency_ignored,
+    build_command_from_flow_mod,
+    build_flow_mod_from_command,
     cast_fields,
     get_min_wait_diff,
     is_ignored,
@@ -295,7 +297,7 @@ class Main(KytosNApp):
                 f"accumulated wait: {wait_acc}, command: {command}, "
                 f"flow: {flow.as_dict()}"
             )
-            flow_mod = self.build_flow_mod_from_command(flow, command)
+            flow_mod = build_flow_mod_from_command(flow, command)
             flow_mod.header.xid = xid
             self._send_flow_mod(flow.switch, flow_mod)
             if send_barrier:
@@ -384,6 +386,32 @@ class Main(KytosNApp):
                         f"Flow: {flow}"
                     )
 
+    def delete_matched_flows(self, flow_dicts, switches: dict) -> None:
+        """Try to delete many matched stored flows given flow_dicts for switches.
+
+        This deletion tries to minimize DB round trips, it aggregates all
+        included cookies grouped by dpids, and then at the runtime it performs
+        a non strict match iterating over the flows if they haven't been deleted yet.
+        If flows are matched, they will be bulk deleted.
+        """
+        flow_ids_to_delete = set()
+        cookies = list({int(value.get("cookie", 0)) for value in flow_dicts})
+        for dpid, stored_flows in self.flow_controller.get_flows_by_cookies(
+            list(switches.keys()), cookies
+        ).items():
+            for flow_dict in flow_dicts:
+                for stored_flow in stored_flows:
+                    if stored_flow["flow_id"] in flow_ids_to_delete:
+                        continue
+                    if match_flow(
+                        flow_dict,
+                        switches[dpid].connection.protocol.version,
+                        stored_flow["flow"],
+                    ):
+                        flow_ids_to_delete.add(stored_flow["flow_id"])
+        if flow_ids_to_delete:
+            self.flow_controller.delete_flows_by_ids(list(flow_ids_to_delete))
+
     # pylint: disable=attribute-defined-outside-init
     def _delete_matched_flows(self, flow_dict, _flow_id, _match_id, switch):
         """Try to delete matching stored flows given a flow dict."""
@@ -401,26 +429,6 @@ class Main(KytosNApp):
         """Try to add a flow dict in the store idempotently."""
         flow_dict = {**{"flow": flow_dict}, **{"switch": switch.id, "flow_id": flow_id}}
         self.flow_controller.upsert_flow(match_id, flow_dict)
-
-    def _store_changed_flows(self, command, flow_dict, flow_id, match_id, switch):
-        """Store changed flows.
-
-        Args:
-            command: Flow command to be installed
-            flow: flow dict to be stored
-            flow_id: corresponding FlowMod id (used for indexing)
-            match_id: corresponding FlowMod match_id (used for indexing)
-            switch: Switch target
-        """
-        cmd_handlers = {
-            "add": self._upsert_flow,
-            "delete": self._delete_matched_flows,
-        }
-        if command not in cmd_handlers:
-            raise ValueError(
-                f"Invalid command: {command}, supported: {list(cmd_handlers.keys())}"
-            )
-        return cmd_handlers[command](flow_dict, flow_id, match_id, switch)
 
     @rest("v2/flows")
     @rest("v2/flows/<dpid>")
@@ -549,29 +557,16 @@ class Main(KytosNApp):
         except SwitchNotConnectedError as error:
             raise FailedDependency(str(error))
 
-    @staticmethod
-    def build_flow_mod_from_command(flow, command):
-        """Build a FlowMod serialized given a command."""
-        if command == "delete":
-            flow_mod = flow.as_of_delete_flow_mod()
-        elif command == "delete_strict":
-            flow_mod = flow.as_of_strict_delete_flow_mod()
-        elif command == "add":
-            flow_mod = flow.as_of_add_flow_mod()
-        else:
-            raise InvalidCommandError
-        return flow_mod
-
     def _install_flows(
         self,
-        command,
-        flows_dict,
+        command: str,
+        flows_dict: dict,
         switches=[],
         save=True,
         reraise_conn=True,
         send_barrier=ENABLE_BARRIER_REQUEST,
     ):
-        """Execute all procedures to install flows in the switches.
+        """Execute all procedures to bulk install flows in the switches.
 
         Args:
             command: Flow command to be installed
@@ -581,28 +576,54 @@ class Main(KytosNApp):
             reraise_conn: True to reraise switch connection errors
             send_barrier: True to send barrier_request
         """
+        flow_mods, flows, flow_dicts = [], [], []
         for switch in switches:
             serializer = FlowFactory.get_class(switch)
-            flows = flows_dict.get("flows", [])
-            for flow_dict in flows:
+            flows_list = flows_dict.get("flows", [])
+            for flow_dict in flows_list:
                 flow = serializer.from_dict(flow_dict, switch)
-                flow_mod = self.build_flow_mod_from_command(flow, command)
+                flow_mod = build_flow_mod_from_command(flow, command)
+                flow_mods.append(flow_mod)
+                flows.append(flow)
+                flow_dicts.append(
+                    {**{"flow": flow_dict}, **{"flow_id": flow.id, "switch": switch.id}}
+                )
+        if save and command == "add":
+            self.flow_controller.upsert_flows(
+                [flow.match_id for flow in flows], flow_dicts
+            )
+        if save and command == "delete":
+            self.delete_matched_flows(
+                flow_dicts, {switch.id: switch for switch in switches}
+            )
+        self._send_flow_mods(switches, flow_mods, flows, reraise_conn, send_barrier)
+
+    def _send_flow_mods(
+        self,
+        switches,
+        flow_mods,
+        flows,
+        reraise_conn=True,
+        send_barrier=ENABLE_BARRIER_REQUEST,
+    ):
+        """Send FlowMod (and BarrierRequest) given a list of flow_dicts to switches."""
+        for switch in switches:
+            for flow_mod, flow in zip(flow_mods, flows):
                 try:
-                    self._send_flow_mod(flow.switch, flow_mod)
+                    self._send_flow_mod(switch, flow_mod)
                     if send_barrier:
-                        self._send_barrier_request(flow.switch, flow_mod)
+                        self._send_barrier_request(switch, flow_mod)
                 except SwitchNotConnectedError:
                     if reraise_conn:
                         raise
                 with self._flow_mods_sent_lock:
-                    self._add_flow_mod_sent(flow_mod.header.xid, flow, command)
+                    self._add_flow_mod_sent(
+                        flow_mod.header.xid,
+                        flow,
+                        build_command_from_flow_mod(flow_mod),
+                    )
                 self._send_napp_event(switch, flow, "pending")
-
-                if not save:
-                    continue
-                self._store_changed_flows(
-                    command, flow_dict, flow.id, flow.match_id, switch
-                )
+        return flow_mods
 
     def _add_flow_mod_sent(self, xid, flow, command):
         """Add the flow mod to the list of flow mods sent."""
