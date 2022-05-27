@@ -30,7 +30,7 @@ click==8.0.3
     #   pip-tools
 coverage==6.1.1
     # via kytos-flow-manager
-dataclasses==0.8
+dataclasses==0.8; python_version < "3.7"
     # via black
 decorator==4.4.2
     # via
@@ -198,7 +198,7 @@ typed-ast==1.4.3
     # via
     #   astroid
     #   black
-typing-extensions==3.10.0.2
+typing-extensions==4.0.1
     # via
     #   astroid
     #   black

@@ -312,7 +312,7 @@ class TestMain(TestCase):
             name="kytos.flow_manager.flows.install",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
-        self.napp.event_flows_install_delete(event)
+        self.napp.handle_flows_install_delete(event)
         mock_install_flows.assert_called_with(
             "add", mock_flow_dict, [switch], reraise_conn=True
         )
@@ -328,10 +328,52 @@ class TestMain(TestCase):
             name="kytos.flow_manager.flows.delete",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
-        self.napp.event_flows_install_delete(event)
+        self.napp.handle_flows_install_delete(event)
         mock_install_flows.assert_called_with(
             "delete", mock_flow_dict, [switch], reraise_conn=True
         )
+
+    @patch("napps.kytos.flow_manager.main.log")
+    @patch("napps.kytos.flow_manager.main.Main._install_flows")
+    @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
+    def test_handle_flows_install_delete_fail(self, *args):
+        """Test handle_flows_install_delete with failure scenarios."""
+        (mock_send_napp_event, mock_install_flows, mock_log) = args
+        dpid = "00:00:00:00:00:00:00:01"
+        self.napp.controller.switches = {}
+        mock_flow_dict = MagicMock()
+
+        # 723, 746-751, 873
+        # missing event args
+        event = get_kytos_event_mock(
+            name="kytos.flow_manager.flows.delete",
+            content={},
+        )
+        self.napp.handle_flows_install_delete(event)
+        mock_log.error.assert_called()
+
+        # invalid command
+        event = get_kytos_event_mock(
+            name="kytos.flow_manager.flows.xpto",
+            content={"dpid": dpid, "flow_dict": mock_flow_dict},
+        )
+        with self.assertRaises(ValueError):
+            self.napp.handle_flows_install_delete(event)
+
+        # install_flow exceptions
+        event = get_kytos_event_mock(
+            name="kytos.flow_manager.flows.install",
+            content={"dpid": dpid, "flow_dict": mock_flow_dict},
+        )
+        mock_install_flows.side_effect = InvalidCommandError("error")
+        mock_log.error.call_count = 0
+        self.napp.handle_flows_install_delete(event)
+        mock_log.error.assert_called()
+        mock_install_flows.side_effect = SwitchNotConnectedError(
+            "error", flow=MagicMock()
+        )
+        self.napp.handle_flows_install_delete(event)
+        mock_send_napp_event.assert_called()
 
     def test_add_flow_mod_sent(self):
         """Test _add_flow_mod_sent method."""

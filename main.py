@@ -209,6 +209,7 @@ class Main(KytosNApp):
             return
         self._on_ofpt_barrier_reply(event)
 
+    # pylint: disable=pointless-string-statement
     def _on_ofpt_barrier_reply(self, event):
         """Process on_ofpt_barrier_reply event."""
         switch = event.source.switch
@@ -714,11 +715,15 @@ class Main(KytosNApp):
         return jsonify(switch_flows)
 
     @listen_to("kytos.flow_manager.flows.(install|delete)")
-    def event_flows_install_delete(self, event):
+    def on_flows_install_delete(self, event):
         """Install or delete flows in the switches through events.
 
         Install or delete Flow of switches identified by dpid.
         """
+        self.handle_flows_install_delete(event)
+
+    def handle_flows_install_delete(self, event):
+        """Handle install/delete flows event."""
         try:
             dpid = event.content["dpid"]
             flow_dict = event.content["flow_dict"]
