@@ -2,9 +2,12 @@
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
-from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 
-from napps.kytos.flow_manager.exceptions import SwitchNotConnectedError
+from napps.kytos.flow_manager.exceptions import (
+    InvalidCommandError,
+    SwitchNotConnectedError,
+)
+from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 
 from kytos.core.helpers import now
 from kytos.lib.helpers import (

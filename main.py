@@ -396,7 +396,12 @@ class Main(KytosNApp):
         If flows are matched, they will be bulk deleted.
         """
         flow_ids_to_delete = set()
-        cookies = list({int(value.get("cookie", 0)) for value in flow_dicts})
+        cookies = list(
+            {
+                int(value.get("cookie", 0)) & int(value.get("cookie_mask", 0))
+                for value in [flow.get("flow", {}) for flow in flow_dicts]
+            }
+        )
         for dpid, stored_flows in self.flow_controller.get_flows_by_cookies(
             list(switches.keys()), cookies
         ).items():
