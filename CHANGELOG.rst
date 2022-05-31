@@ -16,7 +16,6 @@ Added
 
 Changed
 =======
-- Removed ``log.info`` send FlowMod from the request hot path for now
 - Refactored consistency check to leverage ``flow_id`` and ``match_id``
 - Refactored `flows` upsert and delete operations to use `bulk_write` instead for higher performance based on the expected workload
 - Endpoint /flow_manager/v2/flows/ writes first to the database now to optimize consistency for bulk operations.
