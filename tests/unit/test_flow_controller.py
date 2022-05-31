@@ -99,6 +99,10 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
             "inserted_at": {"$lte": dt},
             "switch": self.dpid,
         }
+        args = self.flow_controller.db.flows.find(
+            {"inserted_at": {"lte": dt}, "switch": self.dpid}
+        ).sort.call_args[0]
+        assert args == ("inserted_at", 1)
 
     def test_get_flows(self) -> None:
         """Test get_flows."""
