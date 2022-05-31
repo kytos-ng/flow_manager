@@ -13,6 +13,7 @@ Added
 - Consistency checks executions are stored on MongoDB flow_checks collection
 - FlowController and DB models
 - ``scripts/storehouse_to_mongo.py`` script to migrate data from storehouse to MongoDB
+- Added log.info entry for kytos.flow_manager.flows.(install|delete) handler for troubleshooting
 
 Changed
 =======
