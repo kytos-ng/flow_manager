@@ -469,6 +469,10 @@ class Main(KytosNApp):
 
         force = bool(event.content.get("force", False))
         switch = self.controller.get_switch_by_dpid(dpid)
+        log.info(
+            f"Send FlowMod from KytosEvent dpid: {dpid}, command: {command}, "
+            f"force: {force}, flows_dict: {flow_dict}"
+        )
         try:
             self._install_flows(command, flow_dict, [switch], reraise_conn=not force)
         except InvalidCommandError as error:
