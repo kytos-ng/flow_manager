@@ -16,7 +16,6 @@ Added
 
 Changed
 =======
-- Removed ``log.info`` send FlowMod from the request hot path for now
 - Refactored consistency check to leverage ``flow_id`` and ``match_id``
 
 Deprecated
