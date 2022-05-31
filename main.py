@@ -531,6 +531,10 @@ class Main(KytosNApp):
                 raise BadRequest(result)
 
         force = bool(flows_dict.get("force", False))
+        log.info(
+            f"Send FlowMod from request dpid: {dpid}, command: {command}, "
+            f"force: {force}, flows_dict: {flows_dict}"
+        )
         try:
             if not dpid:
                 self._install_flows(
