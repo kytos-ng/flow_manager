@@ -22,7 +22,6 @@ export MONGO_HOST_SEEDS="mongo1:27017,mongo2:27018,mongo3:27019"
 #### How to use
 
 - Export these two environment variables, based on where storehouse and kytos are installed, if you're running `amlight/kytos:latest` docker image they should be:
- 
 ```
 export STOREHOUSE_NAMESPACES_DIR=/var/tmp/kytos/storehouse/
 export PYTHONPATH=/var/lib/kytos
