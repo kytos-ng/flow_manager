@@ -410,7 +410,7 @@ class Main(KytosNApp):
                     if stored_flow["flow_id"] in flow_ids_to_delete:
                         continue
                     if match_flow(
-                        flow_dict,
+                        flow_dict["flow"],
                         switches[dpid].connection.protocol.version,
                         stored_flow["flow"],
                     ):
