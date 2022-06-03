@@ -30,6 +30,15 @@ from napps.kytos.flow_manager.v0x04.match import _match_cookie, match13_no_stric
             },
             False,
         ),
+        (
+            {"match": {"in_port": 5, "dl_vlan": 3201}},
+            {
+                "cookie": 0,
+                "match": {"dl_src": "ee:ee:ee:ee:ee:02"},
+                "priority": 50000,
+            },
+            False,
+        ),
     ],
 )
 def test_no_strict_delete_in_port(to_install, stored, should_match) -> None:
