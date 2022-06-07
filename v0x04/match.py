@@ -42,30 +42,3 @@ def match13_no_strict(flow_to_install, stored_flow_dict):
     ):
         return False
     return stored_flow_dict
-
-
-def match13_strict(flow_to_install, stored_flow_dict):
-    """Match a flow strictly (OF1.3).
-
-    Return the flow if all fields match, otherwise, return False.
-    """
-    if not _match_cookie(flow_to_install, stored_flow_dict):
-        return False
-    if flow_to_install.get("priority", 0) != stored_flow_dict.get("priority", 0):
-        return False
-
-    if "match" not in flow_to_install and "match" not in stored_flow_dict:
-        return stored_flow_dict
-    if "match" not in flow_to_install and "match" in stored_flow_dict:
-        return False
-    if "match" in flow_to_install and "match" not in stored_flow_dict:
-        return False
-
-    if len(flow_to_install["match"]) != len(stored_flow_dict["match"]):
-        return False
-
-    if not _match_keys(
-        flow_to_install, stored_flow_dict, flow_to_install["match"].keys()
-    ):
-        return False
-    return stored_flow_dict

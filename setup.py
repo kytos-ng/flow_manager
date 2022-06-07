@@ -149,7 +149,7 @@ class Linter(SimpleCommand):
     def run(self):
         """Run yala."""
         print("Yala is running. It may take several seconds...")
-        check_call("yala setup.py *.py serializers tests", shell=True)
+        check_call("yala *.py serializers controllers db tests", shell=True)
 
 
 class CITest(TestCommand):

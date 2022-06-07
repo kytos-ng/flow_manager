@@ -8,15 +8,25 @@ file.
 ********************************
 Added
 =====
+- MongoDB integration with pymongo
+- Flows are stored now on MongoDB flows collections
+- Consistency checks executions are stored on MongoDB flow_checks collection
+- FlowController and DB models
+- ``scripts/storehouse_to_mongo.py`` script to migrate data from storehouse to MongoDB
 
 Changed
 =======
+- Refactored consistency check to leverage ``flow_id`` and ``match_id``
 
 Deprecated
 ==========
+- Storehouse file system backend
 
 Removed
 =======
+- Storehouse backend and its locks
+- ``match13_strict`` to simplify application logic since match strict was primarily for matching an exact flow, which without wildcards is simpler to do and maintain by using ``flow_id`` (flow.id) instead
+- Removed in memory archived_flows
 
 Security
 ========

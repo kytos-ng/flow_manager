@@ -3,27 +3,23 @@
 from pyof.foundation.base import UBIntBase
 
 from kytos.core import log
-from kytos.core.helpers import now
 
 
-def new_archive_flow_dict(flow_dict, reason, _id=None):
-    """Build an archive flow given an stored dict flow."""
-    archive_flow = {}
-    archive_flow["_id"] = _id
-    archive_flow["flow"] = flow_dict
-    archive_flow["deleted_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
-    archive_flow["reason"] = reason
-    return archive_flow
+def is_ignored(field, ignored_range):
+    """Check that the flow field is in the range of ignored flows.
 
-
-def new_flow_dict(flow_dict, _id=None, state="pending"):
-    """Create a new flow dict to be stored."""
-    flow = {}
-    flow["_id"] = _id
-    flow["flow"] = flow_dict
-    flow["created_at"] = now().strftime("%Y-%m-%dT%H:%M:%S")
-    flow["state"] = state
-    return flow
+    Returns True, if the field is in the range of ignored flows,
+    otherwise it returns False.
+    """
+    for i in ignored_range:
+        if isinstance(i, tuple):
+            start_range, end_range = i
+            if start_range <= field <= end_range:
+                return True
+        if isinstance(i, int):
+            if field == i:
+                return True
+    return False
 
 
 def cast_fields(flow_dict):
