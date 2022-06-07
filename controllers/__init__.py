@@ -1,6 +1,7 @@
 """FlowController."""
 # pylint: disable=unnecessary-lambda,invalid-name,relative-beyond-top-level
 import os
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
 from typing import Iterator, List, Optional
@@ -9,6 +10,7 @@ import pymongo
 from bson.decimal128 import Decimal128
 from pymongo.collection import ReturnDocument
 from pymongo.errors import AutoReconnect
+from pymongo.operations import UpdateOne
 from tenacity import retry_if_exception_type, stop_after_attempt, wait_random
 
 from kytos.core import log
@@ -66,29 +68,29 @@ class FlowController:
             if self.mongo.bootstrap_index(collection, keys, **kwargs):
                 log.info(f"Created DB index {keys}, collection: {collection})")
 
-    def upsert_flow(self, match_id: str, flow_dict: dict) -> Optional[dict]:
-        """Update or insert flow.
-
-        Insertions and updates are indexed by match_id to minimize lookups.
-        """
+    def upsert_flows(self, match_ids: List[str], flow_dicts: List[dict]) -> dict:
+        """Update or insert flows."""
         utc_now = datetime.utcnow()
-        model = FlowDoc(
-            **{
-                **flow_dict,
-                **{"_id": match_id, "updated_at": utc_now},
-            }
-        )
-        payload = model.dict(exclude={"inserted_at"}, exclude_none=True)
-        updated = self.db.flows.find_one_and_update(
-            {"_id": match_id},
-            {
-                "$set": payload,
-                "$setOnInsert": {"inserted_at": utc_now},
-            },
-            return_document=ReturnDocument.AFTER,
-            upsert=True,
-        )
-        return updated
+        ops = []
+        for match_id, flow_dict in zip(match_ids, flow_dicts):
+            model = FlowDoc(
+                **{
+                    **flow_dict,
+                    **{"_id": match_id, "updated_at": utc_now},
+                }
+            )
+            payload = model.dict(exclude={"inserted_at"}, exclude_none=True)
+            ops.append(
+                UpdateOne(
+                    {"_id": match_id},
+                    {
+                        "$set": payload,
+                        "$setOnInsert": {"inserted_at": utc_now},
+                    },
+                    upsert=True,
+                )
+            )
+        return self.db.flows.bulk_write(ops).upserted_ids
 
     @staticmethod
     def _set_updated_at(update_expr: dict) -> None:
@@ -146,6 +148,27 @@ class FlowController:
         ):
             flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
             yield flow
+
+    def get_flows_by_cookies(self, dpids: List[str], cookies: List[int]) -> dict:
+        """Get flows by cookies grouped by dpid."""
+        flows = defaultdict(list)
+        for document in self.db.flows.aggregate(
+            [
+                {
+                    "$match": {
+                        "switch": {"$in": dpids},
+                        "flow.cookie": {
+                            "$in": [Decimal128(Decimal(cookie)) for cookie in cookies]
+                        },
+                    }
+                },
+                {"$group": {"_id": "$switch", "flows": {"$push": "$$ROOT"}}},
+            ]
+        ):
+            for flow in document["flows"]:
+                flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
+                flows[flow["switch"]].append(flow)
+        return flows
 
     def get_flows_by_state(self, dpid: str, state: str) -> Iterator[dict]:
         """Get flows by state."""

@@ -1,8 +1,37 @@
 """kytos/flow_manager utils."""
 
 from pyof.foundation.base import UBIntBase
+from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 
 from kytos.core import log
+
+from .exceptions import InvalidCommandError
+
+
+def build_flow_mod_from_command(flow, command):
+    """Build a FlowMod serialized given a command."""
+    if command == "delete":
+        flow_mod = flow.as_of_delete_flow_mod()
+    elif command == "delete_strict":
+        flow_mod = flow.as_of_strict_delete_flow_mod()
+    elif command == "add":
+        flow_mod = flow.as_of_add_flow_mod()
+    else:
+        raise InvalidCommandError
+    return flow_mod
+
+
+def build_command_from_flow_mod(flow_mod) -> str:
+    """Build a command str given a FlowMod."""
+    commands = {
+        FlowModCommand.OFPFC_ADD.value: "add",
+        FlowModCommand.OFPFC_DELETE.value: "delete",
+        FlowModCommand.OFPFC_DELETE_STRICT.value: "delete_strict",
+    }
+    try:
+        return commands[flow_mod.command.value]
+    except KeyError:
+        return str(flow_mod.command.value)
 
 
 def is_ignored(field, ignored_range):

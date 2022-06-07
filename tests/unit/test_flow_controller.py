@@ -56,12 +56,16 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         indexes = [(v[0][0], v[0][1]) for v in mock.call_args_list]
         assert expected_indexes == indexes
 
-    def test_upsert_flow(self) -> None:
-        """Test upsert_flow."""
-        assert self.flow_controller.upsert_flow(self.match_id, self.flow_dict)
-        arg1, arg2 = self.flow_controller.db.flows.find_one_and_update.call_args[0]
-        assert arg1 == {"_id": self.match_id}
-        assert arg2["$set"]["flow"]
+    def test_upsert_flows(self) -> None:
+        """Test upsert_flows."""
+        match_ids, flow_dicts = ["1", "2"], [
+            {"flow_id": "1", "switch": self.dpid, "flow": {"match": {"in_port": 1}}},
+            {"flow_id": "2", "switch": self.dpid, "flow": {"match": {"in_port": 2}}},
+        ]
+        assert self.flow_controller.upsert_flows(match_ids, flow_dicts)
+        assert self.flow_controller.db.flows.bulk_write.call_count == 1
+        args = self.flow_controller.db.flows.bulk_write.call_args[0]
+        assert len(args[0]) == len(flow_dicts)
 
     def test_update_flow_state(self) -> None:
         """Test update_flow_state."""
