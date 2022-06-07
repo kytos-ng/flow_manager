@@ -305,8 +305,9 @@ class TestMain(TestCase):
         mock_send_barrier_request.assert_called()
         self.napp.flow_controller.delete_flows_by_ids.assert_not_called()
 
+    @patch("napps.kytos.flow_manager.main.log")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_event_add_flow(self, mock_install_flows):
+    def test_event_add_flow(self, mock_install_flows, mock_log):
         """Test method for installing flows on the switches through events."""
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid)
@@ -320,9 +321,11 @@ class TestMain(TestCase):
         mock_install_flows.assert_called_with(
             "add", mock_flow_dict, [switch], reraise_conn=True
         )
+        mock_log.info.assert_called()
 
+    @patch("napps.kytos.flow_manager.main.log")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_event_flows_install_delete(self, mock_install_flows):
+    def test_event_flows_install_delete(self, mock_install_flows, mock_log):
         """Test method for removing flows on the switches through events."""
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid)
@@ -336,6 +339,7 @@ class TestMain(TestCase):
         mock_install_flows.assert_called_with(
             "delete", mock_flow_dict, [switch], reraise_conn=True
         )
+        mock_log.info.assert_called()
 
     @patch("napps.kytos.flow_manager.main.log")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
