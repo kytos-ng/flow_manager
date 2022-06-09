@@ -10,11 +10,11 @@ from threading import Lock
 from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.of_core.flow import FlowFactory
-from napps.kytos.of_core.settings import STATS_INTERVAL
 from napps.kytos.of_core.msg_prios import of_msg_prio
-from pyof.v0x04.common.header import Type
+from napps.kytos.of_core.settings import STATS_INTERVAL
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
+from pyof.v0x04.common.header import Type
 from werkzeug.exceptions import (
     BadRequest,
     FailedDependency,
