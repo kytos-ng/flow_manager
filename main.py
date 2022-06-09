@@ -653,8 +653,11 @@ class Main(KytosNApp):
             self._add_barrier_request(switch.id, barrier_xid, flow_mod.header.xid)
 
         content = {"destination": switch.connection, "message": barrier_request}
-        event = KytosEvent(name=event_name, content=content,
-                           priority=of_msg_prio(Type.OFPT_BARRIER_REQUEST.value))
+        event = KytosEvent(
+            name=event_name,
+            content=content,
+            priority=of_msg_prio(Type.OFPT_BARRIER_REQUEST.value),
+        )
         self.controller.buffers.msg_out.put(event)
 
     def _send_flow_mod(self, switch, flow_mod):
@@ -666,8 +669,11 @@ class Main(KytosNApp):
         event_name = "kytos/flow_manager.messages.out.ofpt_flow_mod"
         content = {"destination": switch.connection, "message": flow_mod}
 
-        event = KytosEvent(name=event_name, content=content,
-                           priority=of_msg_prio(Type.OFPT_FLOW_MOD.value))
+        event = KytosEvent(
+            name=event_name,
+            content=content,
+            priority=of_msg_prio(Type.OFPT_FLOW_MOD.value),
+        )
         self.controller.buffers.msg_out.put(event)
 
     def _send_napp_event(self, switch, flow, command, **kwargs):
