@@ -575,7 +575,7 @@ class Main(KytosNApp):
             command: Flow command to be installed
             flows_dict: Dictionary with flows to be installed in the switches.
             switches: A list of switches
-            save: A boolean to save flows in the storehouse (True) or not
+            save: A boolean to save flows in the database
             reraise_conn: True to reraise switch connection errors
             send_barrier: True to send barrier_request
         """
