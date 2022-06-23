@@ -82,7 +82,7 @@ Requirements
 ============
 
 - `kytos/of_core <https://github.com/kytos-ng/of_core>`_
-- `kytos/storehouse <https://github.com/kytos-ng/storehouse>`_
+- `MongoDB <https://github.com/kytos-ng/kytos#how-to-use-with-mongodb>`_
 
 Events
 ======
