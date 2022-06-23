@@ -260,12 +260,13 @@ class TestMain(TestCase):
         serializer.from_dict.return_value = flow
         mock_flow_factory.return_value = serializer
 
-        flows_dict = {"flows": [MagicMock()]}
+        flows_dict = {"flows": [MagicMock(), MagicMock()]}
         switches = [self.switch_01]
         self.napp._install_flows("add", flows_dict, switches)
 
         mock_send_flow_mod.assert_called_with(self.switch_01, flow_mod)
-        mock_send_barrier_request.assert_called()
+        assert mock_send_flow_mod.call_count == len(flows_dict["flows"])
+        assert mock_send_barrier_request.call_count == 1
         mock_add_flow_mod_sent.assert_called_with(flow_mod.header.xid, flow, "add")
         mock_send_napp_event.assert_called_with(self.switch_01, flow, "pending")
         self.napp.flow_controller.upsert_flows.assert_called()
