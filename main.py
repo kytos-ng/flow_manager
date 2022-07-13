@@ -611,10 +611,10 @@ class Main(KytosNApp):
     ):
         """Send FlowMod (and BarrierRequest) given a list of flow_dicts to switches."""
         for switch in switches:
-            for flow_mod, flow in zip(flow_mods, flows):
+            for i, (flow_mod, flow) in enumerate(zip(flow_mods, flows)):
                 try:
                     self._send_flow_mod(switch, flow_mod)
-                    if send_barrier:
+                    if send_barrier and i == len(flow_mods) - 1:
                         self._send_barrier_request(switch, flow_mod)
                 except SwitchNotConnectedError:
                     if reraise_conn:
