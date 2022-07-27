@@ -7,6 +7,7 @@ from napps.kytos.flow_manager.exceptions import (
     InvalidCommandError,
     SwitchNotConnectedError,
 )
+from napps.kytos.of_core.v0x04.flow import Flow as Flow04
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 
 from kytos.core.helpers import now
@@ -230,6 +231,7 @@ class TestMain(TestCase):
             [match_id],
             flow_dicts,
         )
+        mock_flow_factory.assert_called_with(self.switch_01, Flow04)
 
     def test_get_all_switches_enabled(self):
         """Test _get_all_switches_enabled method."""

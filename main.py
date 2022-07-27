@@ -12,6 +12,7 @@ from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.msg_prios import of_msg_prio
 from napps.kytos.of_core.settings import STATS_INTERVAL
+from napps.kytos.of_core.v0x04.flow import Flow as Flow04
 from pyof.v0x01.asynchronous.error_msg import BadActionCode
 from pyof.v0x01.common.phy_port import PortConfig
 from pyof.v0x04.common.header import Type
@@ -581,7 +582,7 @@ class Main(KytosNApp):
         """
         flow_mods, flows, flow_dicts = [], [], []
         for switch in switches:
-            serializer = FlowFactory.get_class(switch)
+            serializer = FlowFactory.get_class(switch, Flow04)
             flows_list = flows_dict.get("flows", [])
             for flow_dict in flows_list:
                 flow = serializer.from_dict(flow_dict, switch)
