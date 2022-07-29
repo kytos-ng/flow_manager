@@ -1,6 +1,6 @@
 """kytos/flow_manager NApp installs, lists and deletes switch flows."""
 
-# pylint: disable=relative-beyond-top-level,too-many-function-args
+# pylint: disable=relative-beyond-top-level,too-many-function-args,some-change,another
 import time
 from collections import OrderedDict, defaultdict
 from datetime import datetime, timedelta
