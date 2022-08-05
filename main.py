@@ -348,7 +348,7 @@ class Main(KytosNApp):
         """Check missing flows on a switch and install them."""
         dpid = switch.dpid
         flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
-        for flow in self.flow_controller.get_flows_lte_inserted_at(
+        for flow in self.flow_controller.get_flows_lte_updated_at(
             switch.id, datetime.utcnow() - timedelta(seconds=STATS_INTERVAL)
         ):
             if flow["flow_id"] not in flows:
@@ -368,12 +368,24 @@ class Main(KytosNApp):
     def check_alien_flows(self, switch):
         """Check alien flows on a switch and delete them."""
         dpid = switch.dpid
-        stored_flows = {
-            flow["flow_id"]: flow for flow in self.flow_controller.get_flows(switch.id)
-        }
+        stored_by_flow_id = {}
+        stored_by_match = {}
+        for flow in self.flow_controller.get_flows(switch.id):
+            stored_by_flow_id[flow["flow_id"]] = flow
+            stored_by_match[flow["id"]] = flow
+
         flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
         for flow_id, flow in flows.items():
-            if flow_id not in stored_flows:
+            if flow_id not in stored_by_flow_id:
+
+                # Skip if it's been updated within the last consistency check
+                delta = datetime.utcnow() - timedelta(seconds=STATS_INTERVAL)
+                if (
+                    flow.match_id in stored_by_match
+                    and stored_by_match[flow.match_id]["updated_at"] >= delta
+                ):
+                    continue
+
                 log.info(f"Consistency check: alien flow on switch {dpid}")
                 flow = {"flows": [flow.as_dict()]}
                 command = "delete_strict"
