@@ -495,7 +495,7 @@ class TestMain(TestCase):
         self.napp.flow_controller.get_flows_lte_updated_at.return_value = [
             {"flow_id": "2", "flow": {}}
         ]
-        self.napp.check_missing_flows(switch)
+        self.napp.check_missing_flows(switch, stats_interval=60)
         mock_install_flows.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
@@ -516,7 +516,7 @@ class TestMain(TestCase):
                 "updated_at": datetime.utcnow() - timedelta(seconds=60),
             }
         ]
-        self.napp.check_alien_flows(switch)
+        self.napp.check_alien_flows(switch, stats_interval=60)
         mock_install_flows.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
@@ -539,7 +539,7 @@ class TestMain(TestCase):
                 "updated_at": datetime.utcnow() - timedelta(seconds=5),
             }
         ]
-        self.napp.check_alien_flows(switch)
+        self.napp.check_alien_flows(switch, stats_interval=60)
         mock_install_flows.assert_not_called()
 
     def test_consistency_cookie_ignored_range(self):

@@ -344,12 +344,12 @@ class Main(KytosNApp):
         """Build switch.flows indexed by id."""
         return {flow.id: flow for flow in switch.flows if filter_flow(flow)}
 
-    def check_missing_flows(self, switch):
+    def check_missing_flows(self, switch, stats_interval=STATS_INTERVAL):
         """Check missing flows on a switch and install them."""
         dpid = switch.dpid
         flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
         for flow in self.flow_controller.get_flows_lte_updated_at(
-            switch.id, datetime.utcnow() - timedelta(seconds=STATS_INTERVAL)
+            switch.id, datetime.utcnow() - timedelta(seconds=stats_interval)
         ):
             if flow["flow_id"] not in flows:
                 log.info(f"Consistency check: missing flow on switch {dpid}.")
@@ -365,7 +365,7 @@ class Main(KytosNApp):
                         f"Flow: {flow}"
                     )
 
-    def check_alien_flows(self, switch):
+    def check_alien_flows(self, switch, stats_interval=STATS_INTERVAL):
         """Check alien flows on a switch and delete them."""
         dpid = switch.dpid
         stored_by_flow_id = {}
@@ -379,7 +379,7 @@ class Main(KytosNApp):
             if flow_id not in stored_by_flow_id:
 
                 # Skip if it's been updated within the last consistency check
-                delta = datetime.utcnow() - timedelta(seconds=STATS_INTERVAL)
+                delta = datetime.utcnow() - timedelta(seconds=stats_interval)
                 if (
                     flow.match_id in stored_by_match
                     and stored_by_match[flow.match_id]["updated_at"] >= delta
