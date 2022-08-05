@@ -127,10 +127,10 @@ class FlowController:
         """Delete flow by id."""
         return self.db.flows.delete_one({"flow_id": flow_id}).deleted_count
 
-    def get_flows_lte_inserted_at(self, dpid: str, dt: datetime) -> Iterator[dict]:
-        """Get flows less than or equal inserted_at."""
+    def get_flows_lte_updated_at(self, dpid: str, dt: datetime) -> Iterator[dict]:
+        """Get flows less than or equal updated_at."""
         for flow in self.db.flows.find(
-            {"switch": dpid, "inserted_at": {"$lte": dt}}
+            {"switch": dpid, "updated_at": {"$lte": dt}}
         ).sort("inserted_at", pymongo.ASCENDING):
             flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
             yield flow
