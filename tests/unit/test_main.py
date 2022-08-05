@@ -1,4 +1,5 @@
 """Test Main methods."""
+from datetime import datetime, timedelta
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -489,10 +490,9 @@ class TestMain(TestCase):
         """
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
-        flow_1 = MagicMock()
-        flow_1.id = "1"
+        flow_1 = MagicMock(id="1", match_id="2")
         switch.flows = [flow_1]
-        self.napp.flow_controller.get_flows_lte_inserted_at.return_value = [
+        self.napp.flow_controller.get_flows_lte_updated_at.return_value = [
             {"flow_id": "2", "flow": {}}
         ]
         self.napp.check_missing_flows(switch)
@@ -506,14 +506,41 @@ class TestMain(TestCase):
         """
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
-        flow_1 = MagicMock()
-        flow_1.id = "1"
+        flow_1 = MagicMock(id="1", match_id="3")
         switch.flows = [flow_1]
         self.napp.flow_controller.get_flows.return_value = [
-            {"flow_id": "2", "flow": {}}
+            {
+                "flow_id": "2",
+                "id": "3",
+                "flow": {},
+                "updated_at": datetime.utcnow() - timedelta(seconds=60),
+            }
         ]
         self.napp.check_alien_flows(switch)
         mock_install_flows.assert_called()
+
+    @patch("napps.kytos.flow_manager.main.Main._install_flows")
+    def test_check_alien_flows_skipped(self, mock_install_flows):
+        """Test check_alien_flows skipped method.
+
+        This test checks the case when an alien recent flow should be skipped
+        """
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        flow_1 = MagicMock(id="1", match_id="3")
+        switch.flows = [flow_1]
+
+        # different flow_id, but same match_id and recent updated
+        self.napp.flow_controller.get_flows.return_value = [
+            {
+                "flow_id": "2",
+                "id": "3",
+                "flow": {},
+                "updated_at": datetime.utcnow() - timedelta(seconds=5),
+            }
+        ]
+        self.napp.check_alien_flows(switch)
+        mock_install_flows.assert_not_called()
 
     def test_consistency_cookie_ignored_range(self):
         """Test the consistency `cookie` ignored range."""

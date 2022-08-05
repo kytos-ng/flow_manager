@@ -93,14 +93,14 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         args = self.flow_controller.db.flows.delete_one.call_args[0]
         assert args[0] == {"flow_id": self.flow_id}
 
-    def test_get_flows_lte_inserted_at(self) -> None:
-        """Test get_flows_lte_inserted_at."""
+    def test_get_flows_lte_updated_at(self) -> None:
+        """Test get_flows_lte_updated_at."""
         dt = datetime.utcnow()
-        flows = list(self.flow_controller.get_flows_lte_inserted_at(self.dpid, dt))
+        flows = list(self.flow_controller.get_flows_lte_updated_at(self.dpid, dt))
         assert not flows
         args = self.flow_controller.db.flows.find.call_args[0]
         assert args[0] == {
-            "inserted_at": {"$lte": dt},
+            "updated_at": {"$lte": dt},
             "switch": self.dpid,
         }
         args = self.flow_controller.db.flows.find(
