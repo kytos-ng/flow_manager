@@ -1,6 +1,4 @@
 """Settings from flow_manager NApp."""
-# Pooling frequency
-STATS_INTERVAL = 30
 FLOWS_DICT_MAX_SIZE = 10000
 ENABLE_CONSISTENCY_CHECK = True
 ENABLE_BARRIER_REQUEST = True
