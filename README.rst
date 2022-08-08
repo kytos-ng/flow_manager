@@ -16,7 +16,7 @@ Features
 
 - REST API to create/update/read/delete flows
 - Expose events to create/update/delete flows
-- Store flows in memory and in a permanent storage
+- Store flows in MongoDB
 - Consistency check based on FlowStats to ensure that only expected flows are installed 
 - Consistency check ignored flows based on a cookie range and/or table id range
 - Send barrier request and replies
