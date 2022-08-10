@@ -68,13 +68,6 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         args = self.flow_controller.db.flows.bulk_write.call_args[0]
         assert len(args[0]) == len(flow_dicts)
 
-    def test_update_flow_state(self) -> None:
-        """Test update_flow_state."""
-        assert self.flow_controller.update_flow_state(self.flow_id, "installed")
-        arg1, arg2 = self.flow_controller.db.flows.find_one_and_update.call_args[0]
-        assert arg1 == {"flow_id": self.flow_id}
-        assert arg2["$set"]["state"] == "installed"
-
     def test_update_flows_state(self) -> None:
         """Test update_flows_state."""
         assert self.flow_controller.update_flows_state([self.flow_id], "installed")

@@ -4,7 +4,6 @@
 import time
 from collections import OrderedDict, defaultdict
 from datetime import datetime, timedelta
-from enum import Enum
 from threading import Lock
 
 from flask import jsonify, request
@@ -205,10 +204,9 @@ class Main(KytosNApp):
         """Publish installed flow when it's confirmed."""
         for flow in flows:
             self._send_napp_event(switch, flow, "add")
-            # TODO bulk update
-            self.flow_controller.update_flow_state(
-                flow.id, FlowEntryState.INSTALLED.value
-            )
+        self.flow_controller.update_flows_state(
+            [flow.id for flow in flows], FlowEntryState.INSTALLED.value
+        )
 
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_publish_installed_flows(self, event):
@@ -390,16 +388,12 @@ class Main(KytosNApp):
                     flow.match_id in stored_by_match
                     and stored_by_match[flow.match_id]["updated_at"] >= verdict_dt
                 ):
-                    # TODO Remove log
-                    log.info("Skipping recent installed Flow {flow.as_dict()}")
                     continue
 
                 if (
                     flow.id in deleted_by_flow_id
                     and deleted_by_flow_id[flow.id]["updated_at"] >= verdict_dt
                 ):
-                    # TODO Remove log
-                    log.info("Skipping recent deleted Flow {flow.as_dict()}")
                     continue
 
                 log.info(f"Consistency check: alien flow on switch {dpid}")
