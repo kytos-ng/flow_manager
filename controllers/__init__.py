@@ -101,10 +101,6 @@ class FlowController:
         else:
             update_expr.update({"$set": {"updated_at": datetime.utcnow()}})
 
-    def update_flow_state(self, flow_id: str, state: str) -> Optional[dict]:
-        """Update flow state."""
-        return self._update_flow(flow_id, {"$set": {"state": state}})
-
     def _update_flow(self, flow_id: str, update_expr: dict) -> Optional[dict]:
         """Try to find one flow and update it given an update expression."""
         self._set_updated_at(update_expr)
