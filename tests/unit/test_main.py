@@ -776,7 +776,7 @@ class TestMain(TestCase):
         )
         flows = [flow1, flow2]
         switch.flows = flows
-        self.napp.flow_controller.get_flows_by_state.return_value = flows
+        self.napp.flow_controller.get_flows_by_ne_state.return_value = flows
         self.napp.publish_installed_flows(switch)
         assert mock_send_napp_event.call_count == len(flows)
         assert self.napp.flow_controller.update_flows_state.call_count == 1
