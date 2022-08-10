@@ -52,6 +52,7 @@ class FlowController:
                     ("flow.cookie", pymongo.ASCENDING),
                     ("state", pymongo.ASCENDING),
                     ("inserted_at", pymongo.ASCENDING),
+                    ("updated_at", pymongo.ASCENDING),
                 ],
                 {},
             ),
@@ -119,10 +120,6 @@ class FlowController:
             {"flow_id": {"$in": flow_ids}}, {"$set": {"state": state}}
         ).modified_count
 
-    def delete_flows_by_ids(self, flow_ids: List[str]) -> int:
-        """Delete flows by ids."""
-        return self.db.flows.delete_many({"flow_id": {"$in": flow_ids}}).deleted_count
-
     def delete_flow_by_id(self, flow_id: str) -> int:
         """Delete flow by id."""
         return self.db.flows.delete_one({"flow_id": flow_id}).deleted_count
@@ -130,22 +127,14 @@ class FlowController:
     def get_flows_lte_updated_at(self, dpid: str, dt: datetime) -> Iterator[dict]:
         """Get flows less than or equal updated_at."""
         for flow in self.db.flows.find(
-            {"switch": dpid, "updated_at": {"$lte": dt}}
+            {"switch": dpid, "updated_at": {"$lte": dt}, "state": {"$ne": "deleted"}}
         ).sort("inserted_at", pymongo.ASCENDING):
             flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
             yield flow
 
     def get_flows(self, dpid: str) -> Iterator[dict]:
         """Get flows."""
-        for flow in self.db.flows.find({"switch": dpid}):
-            flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
-            yield flow
-
-    def get_flows_by_cookie(self, dpid: str, cookie: int) -> Iterator[dict]:
-        """Get flows by cookie."""
-        for flow in self.db.flows.find(
-            {"switch": dpid, "flow.cookie": Decimal128(Decimal(cookie))}
-        ):
+        for flow in self.db.flows.find({"switch": dpid, "state": {"$ne": "deleted"}}):
             flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
             yield flow
 
@@ -157,6 +146,7 @@ class FlowController:
                 {
                     "$match": {
                         "switch": {"$in": dpids},
+                        "state": {"$ne": "deleted"},
                         "flow.cookie": {
                             "$in": [Decimal128(Decimal(cookie)) for cookie in cookies]
                         },
@@ -191,13 +181,6 @@ class FlowController:
         )
         return updated
 
-    def get_flow_check_gte_updated_at(
-        self,
-        dpid: str,
-        dt: datetime,
-        state="active",
-    ) -> Optional[dict]:
-        """Get flow check greater than or equal updated_at."""
-        return self.db.flow_checks.find_one(
-            {"_id": dpid, "state": state, "updated_at": {"$gte": dt}}
-        )
+    def get_flow_check(self, dpid: str, state="active") -> Optional[dict]:
+        """Get flow check."""
+        return self.db.flow_checks.find_one({"_id": dpid, "state": state})
