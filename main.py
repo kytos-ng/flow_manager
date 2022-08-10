@@ -126,10 +126,10 @@ class Main(KytosNApp):
                 raise
         log.info(f"Flows resent to Switch {dpid}")
 
-    @listen_to(".*.connection.lost")
-    def on_connection_lost(self, event):
-        """On switch connection lost handler."""
-        switch = event.content["source"].switch
+    @listen_to("kytos/of_core.handshake.completed")
+    def on_handshake_completed(self, event):
+        """On switch connection handshake completed."""
+        switch = event.content["switch"]
         if not switch:
             return
         self.reset_flow_check(switch.id)
