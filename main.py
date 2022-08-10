@@ -218,18 +218,18 @@ class Main(KytosNApp):
 
     def publish_installed_flows(self, switch):
         """Publish installed flows when they're confirmed."""
-        stored_flows = list(
-            self.flow_controller.get_flows_by_ne_state(
-                switch.id, FlowEntryState.INSTALLED.value
+        pending_flows = list(
+            self.flow_controller.get_flows_by_state(
+                switch.id, FlowEntryState.PENDING.value
             )
         )
-        if not stored_flows:
+        if not pending_flows:
             return
 
         installed_flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
 
         flow_ids_to_update = []
-        for flow in stored_flows:
+        for flow in pending_flows:
             _id = flow["_id"]
             if _id not in installed_flows:
                 continue
