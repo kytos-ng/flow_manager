@@ -164,6 +164,12 @@ class FlowController:
             flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
             yield flow
 
+    def get_flows_by_ne_state(self, dpid: str, state: str) -> Iterator[dict]:
+        """Get flows by not equal state."""
+        for flow in self.db.flows.find({"switch": dpid, "state": {"$ne": state}}):
+            flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
+            yield flow
+
     def upsert_flow_check(self, dpid: str, state="active") -> Optional[dict]:
         """Update or insert flow check."""
         utc_now = datetime.utcnow()

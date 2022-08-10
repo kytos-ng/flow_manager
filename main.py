@@ -185,12 +185,15 @@ class Main(KytosNApp):
 
         flows = []
         with self._flow_mods_sent_lock:
-            flows = [
-                self._flow_mods_sent[flow_xid][0]
-                for flow_xid in flow_xids
-                if flow_xid not in self._flow_mods_sent_error
-                and flow_xid in self._flow_mods_sent
-            ]
+            for flow_xid in flow_xids:
+                flow, cmd = self._flow_mods_sent[flow_xid]
+                if (
+                    cmd != "add"
+                    or flow_xid not in self._flow_mods_sent
+                    or flow_xid in self._flow_mods_sent_error
+                ):
+                    continue
+                flows.append(flow)
         """
         It should only publish installed flow if it the original FlowMod xid hasn't
         errored out. OFPT_ERROR messages could be received first if the barrier request
@@ -215,18 +218,18 @@ class Main(KytosNApp):
 
     def publish_installed_flows(self, switch):
         """Publish installed flows when they're confirmed."""
-        pending_flows = list(
-            self.flow_controller.get_flows_by_state(
-                switch.id, FlowEntryState.PENDING.value
+        stored_flows = list(
+            self.flow_controller.get_flows_by_ne_state(
+                switch.id, FlowEntryState.INSTALLED.value
             )
         )
-        if not pending_flows:
+        if not stored_flows:
             return
 
         installed_flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
 
         flow_ids_to_update = []
-        for flow in pending_flows:
+        for flow in stored_flows:
             _id = flow["_id"]
             if _id not in installed_flows:
                 continue
