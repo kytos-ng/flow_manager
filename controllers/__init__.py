@@ -112,8 +112,10 @@ class FlowController:
 
     def update_flows_state(self, flow_ids: List[str], state: str) -> int:
         """Bulk update flows state."""
+        update_expr = {"$set": {"state": state}}
+        self._set_updated_at(update_expr)
         return self.db.flows.update_many(
-            {"flow_id": {"$in": flow_ids}}, {"$set": {"state": state}}
+            {"flow_id": {"$in": flow_ids}}, update_expr
         ).modified_count
 
     def delete_flow_by_id(self, flow_id: str) -> int:
