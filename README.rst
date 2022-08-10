@@ -95,7 +95,7 @@ Events
 Subscribed
 ----------
 
-- ``.*.connection.lost``
+- ``kytos/of_core.handshake.completed``
 - ``kytos.flow_manager.flows.(install|delete)``
 - ``kytos/of_core.flow_stats.received``
 - ``kytos/of_core.v0x0[14].messages.in.ofpt_flow_removed``
