@@ -27,6 +27,7 @@ from kytos.core.helpers import listen_to, now
 
 from .barrier_request import new_barrier_request
 from .controllers import FlowController
+from .db.models import FlowEntryState
 from .exceptions import InvalidCommandError, SwitchNotConnectedError
 from .settings import (
     CONN_ERR_MAX_RETRIES,
@@ -47,7 +48,6 @@ from .utils import (
     get_min_wait_diff,
     is_ignored,
 )
-from .db.models import FlowEntryState
 
 
 class Main(KytosNApp):

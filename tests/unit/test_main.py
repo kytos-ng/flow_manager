@@ -660,13 +660,13 @@ class TestMain(TestCase):
         }
         self.napp.delete_matched_flows([flow1_dict], {switch.id: switch})
 
-        self.napp.flow_controller.upsert_flows.call_count == 1
+        assert self.napp.flow_controller.upsert_flows.call_count == 1
         call_args = self.napp.flow_controller.upsert_flows.call_args
         assert list(call_args[0][0]) == [flow1.match_id]
 
         # second arg should be the same dict values, except with state deleted
         expected = dict(flow1_dict)
-        expected["state"] == "deleted"
+        assert expected["state"] == "deleted"
         assert list(call_args[0][1])[0] == expected
 
     def test_add_barrier_request(self):
@@ -743,8 +743,7 @@ class TestMain(TestCase):
         event.message.header.xid = barrier_xid
         assert barrier_xid
         assert (
-            self.napp._pending_barrier_reply[switch.id][barrier_xid]
-            == flow_mods_xids
+            self.napp._pending_barrier_reply[switch.id][barrier_xid] == flow_mods_xids
         )
         event.source.switch = switch
 
