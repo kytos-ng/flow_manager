@@ -53,6 +53,7 @@ class TestMain(TestCase):
         }
 
         self.napp = Main(controller)
+        self.napp._consistency_verdict = 30
 
     def test_rest_list_without_dpid(self):
         """Test list rest method withoud dpid."""
@@ -495,7 +496,7 @@ class TestMain(TestCase):
         self.napp.flow_controller.get_flows_lte_updated_at.return_value = [
             {"flow_id": "2", "flow": {}}
         ]
-        self.napp.check_missing_flows(switch, stats_interval=60)
+        self.napp.check_missing_flows(switch)
         mock_install_flows.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
@@ -513,17 +514,18 @@ class TestMain(TestCase):
                 "flow_id": "2",
                 "id": "3",
                 "flow": {},
-                "updated_at": datetime.utcnow() - timedelta(seconds=60),
+                "updated_at": datetime.utcnow()
+                - timedelta(seconds=self.napp._consistency_verdict),
             }
         ]
-        self.napp.check_alien_flows(switch, stats_interval=60)
+        self.napp.check_alien_flows(switch)
         mock_install_flows.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_check_alien_flows_skipped(self, mock_install_flows):
+    def test_check_alien_flows_skip_recent_overwrite(self, mock_install_flows):
         """Test check_alien_flows skipped method.
 
-        This test checks the case when an alien recent flow should be skipped
+        This test checks the case when an alien recent overwrite should be skipped
         """
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
@@ -536,10 +538,41 @@ class TestMain(TestCase):
                 "flow_id": "2",
                 "id": "3",
                 "flow": {},
-                "updated_at": datetime.utcnow() - timedelta(seconds=5),
+                "updated_at": datetime.utcnow()
+                - timedelta(seconds=self.napp._consistency_verdict - 5),
             }
         ]
-        self.napp.check_alien_flows(switch, stats_interval=60)
+        self.napp.check_alien_flows(switch)
+        mock_install_flows.assert_not_called()
+
+    @patch("napps.kytos.flow_manager.main.Main._install_flows")
+    def test_check_alien_flows_skip_recent_delete(self, mock_install_flows):
+        """Test check_alien_flows skipped method.
+
+        This test checks the case when an alien recent delete should be skipped
+        """
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        flow_1 = MagicMock(id="1", match_id="3")
+        switch.flows = [flow_1]
+
+        response = [
+            {
+                "flow_id": "2",
+                "id": "3",
+                "state": "installed",
+                "flow": {},
+                "updated_at": datetime.utcnow()
+                - timedelta(seconds=self.napp._consistency_verdict),
+            }
+        ]
+        self.napp.flow_controller.get_flows.return_value = response
+
+        response[0]["state"] = "deleted"
+        response[0]["flow_id"] = "1"
+        self.napp.flow_controller.get_flows_by_state.return_value = response
+
+        self.napp.check_alien_flows(switch)
         mock_install_flows.assert_not_called()
 
     def test_consistency_cookie_ignored_range(self):
@@ -581,7 +614,7 @@ class TestMain(TestCase):
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
         switch.flows = []
-        self.napp.flow_controller.get_flow_check_gte_updated_at.return_value = None
+        self.napp.flow_controller.get_flow_check.return_value = None
         self.napp.check_missing_flows = MagicMock()
         self.napp.check_alien_flows = MagicMock()
         self.napp.check_consistency(switch)
@@ -614,6 +647,7 @@ class TestMain(TestCase):
         flow1 = MagicMock(id="1", match_id="2")
         flow1_dict = {
             "_id": flow1.match_id,
+            "id": flow1.match_id,
             "flow_id": flow1.id,
             "match_id": flow1.match_id,
             "flow": {"match": {"in_port": 1}},
@@ -625,7 +659,15 @@ class TestMain(TestCase):
             switch.id: [flow1_dict]
         }
         self.napp.delete_matched_flows([flow1_dict], {switch.id: switch})
-        self.napp.flow_controller.delete_flows_by_ids.assert_called_with([flow1.id])
+
+        self.napp.flow_controller.upsert_flows.call_count == 1
+        call_args = self.napp.flow_controller.upsert_flows.call_args
+        assert list(call_args[0][0]) == [flow1.match_id]
+
+        # second arg should be the same dict values, except with state deleted
+        expected = dict(flow1_dict)
+        expected["state"] == "deleted"
+        assert list(call_args[0][1])[0] == expected
 
     def test_add_barrier_request(self):
         """Test add barrier request."""

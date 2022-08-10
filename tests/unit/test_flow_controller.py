@@ -41,6 +41,7 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
                     ("flow.cookie", 1),
                     ("state", 1),
                     ("inserted_at", 1),
+                    ("updated_at", 1),
                 ],
             ),
             (
@@ -81,12 +82,6 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         assert arg1 == {"flow_id": {"$in": [self.flow_id]}}
         assert arg2["$set"]["state"] == "installed"
 
-    def test_delete_flows_by_ids(self) -> None:
-        """Test delete_flows_by_ids."""
-        assert self.flow_controller.delete_flows_by_ids([self.flow_id])
-        args = self.flow_controller.db.flows.delete_many.call_args[0]
-        assert args[0] == {"flow_id": {"$in": [self.flow_id]}}
-
     def test_delete_flow_by_id(self) -> None:
         """Test delete_flow_by_id."""
         assert self.flow_controller.delete_flow_by_id(self.flow_id)
@@ -101,6 +96,7 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         args = self.flow_controller.db.flows.find.call_args[0]
         assert args[0] == {
             "updated_at": {"$lte": dt},
+            "state": {"$ne": "deleted"},
             "switch": self.dpid,
         }
         args = self.flow_controller.db.flows.find(
@@ -112,17 +108,7 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         """Test get_flows."""
         assert not list(self.flow_controller.get_flows(self.dpid))
         args = self.flow_controller.db.flows.find.call_args[0]
-        assert args[0] == {"switch": self.dpid}
-
-    def test_get_flows_by_cookie(self) -> None:
-        """Test get_flows_by_cookie."""
-        cookie = 0
-        assert not list(self.flow_controller.get_flows_by_cookie(self.dpid, cookie))
-        args = self.flow_controller.db.flows.find.call_args[0]
-        assert args[0] == {
-            "switch": self.dpid,
-            "flow.cookie": Decimal128(Decimal(cookie)),
-        }
+        assert args[0] == {"switch": self.dpid, "state": {"$ne": "deleted"}}
 
     def test_get_flows_by_state(self) -> None:
         """Test get_flows_by_cookie."""
@@ -138,12 +124,9 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         assert args[0] == {"_id": self.dpid}
         assert args[1]["$set"]["state"] == "active"
 
-    def test_get_flow_check_gte_updated_at(self) -> None:
-        """Test get_flow_check_gte_updated_at."""
-        dt = datetime.utcnow()
+    def test_get_flow_check(self) -> None:
+        """Test get_flow_check."""
         state = "active"
-        assert self.flow_controller.get_flow_check_gte_updated_at(
-            self.dpid, dt, state=state
-        )
+        assert self.flow_controller.get_flow_check(self.dpid, state=state)
         args = self.flow_controller.db.flow_checks.find_one.call_args[0]
-        assert args[0] == {"_id": self.dpid, "state": state, "updated_at": {"$gte": dt}}
+        assert args[0] == {"_id": self.dpid, "state": state}
