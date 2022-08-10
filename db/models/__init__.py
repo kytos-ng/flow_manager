@@ -17,6 +17,7 @@ class FlowEntryState(Enum):
 
     PENDING = "pending"  # initial state, it has been stored, but not confirmed yet
     INSTALLED = "installed"  # final state, when the installtion has been confirmed
+    DELETED = "deleted"  # final state when the flow gets soft deleted
 
 
 class DocumentBaseModel(BaseModel):
