@@ -67,6 +67,11 @@ the requests when creating and removing flows:
 
 Other fields are not supported and will generate error messages from the NApp.
 
+Flow consistency mechanism
+==========================
+
+This NApp provides a consistency mechanism for all managed flows. All expected flows are stored in MongoDB and checked when ``kytos/of_core.flow_stats.received`` event is received comparing the installed flows with the stored flows. If flows are missing they will eventually be installed. Similarly, if unexpected flows are installed (alien), they will eventually be removed, unless they are intentionally configured to be ignored. By default, the consistency mechanism is enabled on ``settings.py`` ``ENABLE_CONSISTENCY_CHECK = True``, running every ``STATS_INTERVAL`` (60 seconds). This interval can be adapted as needed on kytos/of_core `settings.py file <https://github.com/kytos-ng/of_core/blob/master/settings.py>`_. Depending on your topology size you might want to set a higher interval.
+
 Installing
 ==========
 
@@ -86,6 +91,17 @@ Requirements
 
 Events
 ======
+
+Subscribed
+----------
+
+- ``kytos/of_core.handshake.completed``
+- ``kytos.flow_manager.flows.(install|delete)``
+- ``kytos/of_core.flow_stats.received``
+- ``kytos/of_core.v0x0[14].messages.in.ofpt_flow_removed``
+- ``kytos/of_core.v0x0[14].messages.in.ofpt_barrier_reply``
+- ``kytos/core.openflow.connection.error``
+- ``.*.of_core.*.ofpt_error``
 
 Generated
 ---------
@@ -158,18 +174,6 @@ Content:
      'error_code': <error_code>,
      'error_exception': <some_exception_content>
    }
-
-Flow consistency mechanism
-==========================
-
-This NApp is also responsible for the consistency of the installed flows
-through kytos/flow_manager. To do this, all the flows sent to the switches are
-stored in the kytos/storehouse NApp and checked every X seconds if the
-flows installed in the switches are consistent with the stored data.
-
-By default, the consistency mechanism is enabled, running every 60 seconds.
-This resource can be disabled in the ``settings.py`` file, changing the time of
-the check to 0.
 
 
 .. TAGs

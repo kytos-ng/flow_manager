@@ -27,11 +27,12 @@ Security
 
 Added
 =====
-- MongoDB integration with pymongo
-- Flows are stored now on MongoDB flows collections
-- Consistency checks executions are stored on MongoDB flow_checks collection
+- MongoDB integration with ``pymongo``
+- Added and soft deleted flows are stored now on MongoDB ``flows`` collections.
+- Consistency checks executions are stored on MongoDB ``flow_checks`` collection
 - FlowController and DB models
 - Added log.info entry for kytos.flow_manager.flows.(install|delete) handler for troubleshooting
+- ``CONSISTENCY_MIN_VERDICT_INTERVAL``, granular control for the minimum expected interval that consistency check should wait before detecting inconsistencies
 
 Changed
 =======
@@ -40,6 +41,7 @@ Changed
 - Endpoint /flow_manager/v2/flows/ writes first to the database now to optimize consistency for bulk operations.
 - Set KytosEvent priority for OFPT_FLOW_MOD and OFPT_BARRIER_REQUEST
 - OFPT_BARRIER_REQUEST is sent in bulk once per flows
+- Consistency check will act slower than ``FLOW_STATS`` to enhance consistency
 
 Deprecated
 ==========
