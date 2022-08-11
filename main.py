@@ -4,7 +4,6 @@
 import time
 from collections import OrderedDict, defaultdict
 from datetime import datetime, timedelta
-from enum import Enum
 from threading import Lock
 
 from flask import jsonify, request
@@ -28,12 +27,14 @@ from kytos.core.helpers import listen_to, now
 
 from .barrier_request import new_barrier_request
 from .controllers import FlowController
+from .db.models import FlowEntryState
 from .exceptions import InvalidCommandError, SwitchNotConnectedError
 from .settings import (
     CONN_ERR_MAX_RETRIES,
     CONN_ERR_MIN_WAIT,
     CONN_ERR_MULTIPLIER,
     CONSISTENCY_COOKIE_IGNORED_RANGE,
+    CONSISTENCY_MIN_VERDICT_INTERVAL,
     CONSISTENCY_TABLE_ID_IGNORED_RANGE,
     ENABLE_BARRIER_REQUEST,
     ENABLE_CONSISTENCY_CHECK,
@@ -47,13 +48,6 @@ from .utils import (
     get_min_wait_diff,
     is_ignored,
 )
-
-
-class FlowEntryState(Enum):
-    """Enum for stored Flow Entry states."""
-
-    PENDING = "pending"  # initial state, it has been stored, but not confirmed yet
-    INSTALLED = "installed"  # final state, when the installtion has been confirmed
 
 
 class Main(KytosNApp):
@@ -74,6 +68,9 @@ class Main(KytosNApp):
             self.cookie_ignored_range = CONSISTENCY_COOKIE_IGNORED_RANGE
         if _valid_consistency_ignored(CONSISTENCY_TABLE_ID_IGNORED_RANGE):
             self.tab_id_ignored_range = CONSISTENCY_TABLE_ID_IGNORED_RANGE
+        self._consistency_verdict = max(
+            CONSISTENCY_MIN_VERDICT_INTERVAL, STATS_INTERVAL + STATS_INTERVAL // 2
+        )
 
         self.flow_controller = self.get_flow_controller()
         self.flow_controller.bootstrap_indexes()
@@ -85,7 +82,6 @@ class Main(KytosNApp):
         self._pending_barrier_max_size = FLOWS_DICT_MAX_SIZE
 
         self._flow_mods_sent_error = {}
-        self._flow_mods_sent_error_lock = Lock()
         self._flow_mods_retry_count = {}
         self._flow_mods_retry_count_lock = Lock()
         self.resent_flows = set()
@@ -130,10 +126,10 @@ class Main(KytosNApp):
                 raise
         log.info(f"Flows resent to Switch {dpid}")
 
-    @listen_to(".*.connection.lost")
-    def on_connection_lost(self, event):
-        """On switch connection lost handler."""
-        switch = event.content["source"].switch
+    @listen_to("kytos/of_core.handshake.completed")
+    def on_handshake_completed(self, event):
+        """On switch connection handshake completed."""
+        switch = event.content["switch"]
         if not switch:
             return
         self.reset_flow_check(switch.id)
@@ -180,35 +176,40 @@ class Main(KytosNApp):
         message = event.message
         xid = int(message.header.xid)
         with self._pending_barrier_lock:
-            flow_xid = self._pending_barrier_reply[switch.id].pop(xid, None)
-            if not flow_xid:
+            flow_xids = self._pending_barrier_reply[switch.id].pop(xid, None)
+            if not flow_xids:
                 log.error(
-                    f"Failed to pop barrier reply xid: {xid}, flow xid: {flow_xid}"
+                    f"Failed to pop barrier reply xid: {xid}, flow xids: {flow_xids}"
                 )
                 return
-        with self._flow_mods_sent_lock:
-            if flow_xid not in self._flow_mods_sent:
-                log.error(
-                    f"Flow xid: {flow_xid} not in flow mods sent. Inconsistent state"
-                )
-                return
-            flow, _ = self._flow_mods_sent[flow_xid]
 
+        flows = []
+        with self._flow_mods_sent_lock:
+            for flow_xid in flow_xids:
+                flow, cmd = self._flow_mods_sent[flow_xid]
+                if (
+                    cmd != "add"
+                    or flow_xid not in self._flow_mods_sent
+                    or flow_xid in self._flow_mods_sent_error
+                ):
+                    continue
+                flows.append(flow)
         """
         It should only publish installed flow if it the original FlowMod xid hasn't
         errored out. OFPT_ERROR messages could be received first if the barrier request
         hasn't been sent out or processed yet this can happen if the network latency
         is super low.
         """
-        with self._flow_mods_sent_error_lock:
-            error_kwargs = self._flow_mods_sent_error.get(flow_xid)
-        if not error_kwargs:
-            self._publish_installed_flow(switch, flow)
+        if flows:
+            self._publish_installed_flow(switch, flows)
 
-    def _publish_installed_flow(self, switch, flow):
+    def _publish_installed_flow(self, switch, flows):
         """Publish installed flow when it's confirmed."""
-        self._send_napp_event(switch, flow, "add")
-        self.flow_controller.update_flow_state(flow.id, FlowEntryState.INSTALLED.value)
+        for flow in flows:
+            self._send_napp_event(switch, flow, "add")
+        self.flow_controller.update_flows_state(
+            [flow.id for flow in flows], FlowEntryState.INSTALLED.value
+        )
 
     @listen_to("kytos/of_core.flow_stats.received")
     def on_flow_stats_publish_installed_flows(self, event):
@@ -315,21 +316,19 @@ class Main(KytosNApp):
         """Check consistency of stored and installed flows given a switch."""
         if not ENABLE_CONSISTENCY_CHECK or not switch.is_enabled():
             return
-        flow_check = self.flow_controller.get_flow_check_gte_updated_at(
-            switch.id, datetime.utcnow() - timedelta(seconds=STATS_INTERVAL / 2)
-        )
-        if flow_check:
-            log.info(
-                f"Skipping recent consistency check exec on switch {switch.id}, "
-                f"last checked at {flow_check['updated_at']}"
-            )
+
+        flow_check = self.flow_controller.get_flow_check(switch.id)
+        verdict_dt = datetime.utcnow() - timedelta(seconds=self._consistency_verdict)
+
+        # Skip, if the last relative run is within the verdict datetime
+        if flow_check and flow_check["updated_at"] >= verdict_dt:
             return
 
-        self.flow_controller.upsert_flow_check(switch.id)
         log.debug(f"check_consistency on switch {switch.id} has started")
         self.check_alien_flows(switch)
         self.check_missing_flows(switch)
         log.debug(f"check_consistency on switch {switch.id} is done")
+        self.flow_controller.upsert_flow_check(switch.id)
 
     def is_not_ignored_flow(self, flow) -> bool:
         """Is not ignored flow."""
@@ -344,12 +343,13 @@ class Main(KytosNApp):
         """Build switch.flows indexed by id."""
         return {flow.id: flow for flow in switch.flows if filter_flow(flow)}
 
-    def check_missing_flows(self, switch, stats_interval=STATS_INTERVAL):
+    def check_missing_flows(self, switch):
         """Check missing flows on a switch and install them."""
+        verdict_dt = datetime.utcnow() - timedelta(seconds=self._consistency_verdict)
         dpid = switch.dpid
         flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
         for flow in self.flow_controller.get_flows_lte_updated_at(
-            switch.id, datetime.utcnow() - timedelta(seconds=stats_interval)
+            switch.id, verdict_dt
         ):
             if flow["flow_id"] not in flows:
                 log.info(f"Consistency check: missing flow on switch {dpid}.")
@@ -365,24 +365,37 @@ class Main(KytosNApp):
                         f"Flow: {flow}"
                     )
 
-    def check_alien_flows(self, switch, stats_interval=STATS_INTERVAL):
+    def check_alien_flows(self, switch):
         """Check alien flows on a switch and delete them."""
         dpid = switch.dpid
         stored_by_flow_id = {}
         stored_by_match = {}
+        deleted_by_flow_id = {}
+
         for flow in self.flow_controller.get_flows(switch.id):
             stored_by_flow_id[flow["flow_id"]] = flow
             stored_by_match[flow["id"]] = flow
 
+        deleted_by_flow_id = {
+            flow["flow_id"]: flow
+            for flow in self.flow_controller.get_flows_by_state(
+                switch.id, FlowEntryState.DELETED.value
+            )
+        }
+
+        verdict_dt = datetime.utcnow() - timedelta(seconds=self._consistency_verdict)
         flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
         for flow_id, flow in flows.items():
             if flow_id not in stored_by_flow_id:
-
-                # Skip if it's been updated within the last consistency check
-                delta = datetime.utcnow() - timedelta(seconds=stats_interval)
                 if (
                     flow.match_id in stored_by_match
-                    and stored_by_match[flow.match_id]["updated_at"] >= delta
+                    and stored_by_match[flow.match_id]["updated_at"] >= verdict_dt
+                ):
+                    continue
+
+                if (
+                    flow.id in deleted_by_flow_id
+                    and deleted_by_flow_id[flow.id]["updated_at"] >= verdict_dt
                 ):
                     continue
 
@@ -408,9 +421,9 @@ class Main(KytosNApp):
         This deletion tries to minimize DB round trips, it aggregates all
         included cookies grouped by dpids, and then at the runtime it performs
         a non strict match iterating over the flows if they haven't been deleted yet.
-        If flows are matched, they will be bulk deleted.
+        If flows are matched, they will be bulk updated as deleted
         """
-        flow_ids_to_delete = set()
+        deleted_flows = {}
         cookies = list(
             {
                 int(value.get("cookie", 0)) & int(value.get("cookie_mask", 0))
@@ -422,16 +435,19 @@ class Main(KytosNApp):
         ).items():
             for flow_dict in flow_dicts:
                 for stored_flow in stored_flows:
-                    if stored_flow["flow_id"] in flow_ids_to_delete:
+                    if stored_flow["id"] in deleted_flows:
                         continue
                     if match_flow(
                         flow_dict["flow"],
                         switches[dpid].connection.protocol.version,
                         stored_flow["flow"],
                     ):
-                        flow_ids_to_delete.add(stored_flow["flow_id"])
-        if flow_ids_to_delete:
-            self.flow_controller.delete_flows_by_ids(list(flow_ids_to_delete))
+                        stored_flow["state"] = FlowEntryState.DELETED.value
+                        deleted_flows[stored_flow["id"]] = stored_flow
+        if deleted_flows:
+            self.flow_controller.upsert_flows(
+                deleted_flows.keys(), deleted_flows.values()
+            )
 
     # pylint: disable=attribute-defined-outside-init
     @rest("v2/flows")
@@ -628,7 +644,7 @@ class Main(KytosNApp):
                 try:
                     self._send_flow_mod(switch, flow_mod)
                     if send_barrier and i == len(flow_mods) - 1:
-                        self._send_barrier_request(switch, flow_mod)
+                        self._send_barrier_request(switch, flow_mods)
                 except SwitchNotConnectedError:
                     if reraise_conn:
                         raise
@@ -647,23 +663,25 @@ class Main(KytosNApp):
             self._flow_mods_sent.popitem(last=False)
         self._flow_mods_sent[xid] = (flow, command)
 
-    def _add_barrier_request(self, dpid, barrier_xid, flow_xid):
+    def _add_barrier_request(self, dpid, barrier_xid, flow_mods):
         """Add a barrier request."""
         if len(self._pending_barrier_reply[dpid]) >= self._pending_barrier_max_size:
             self._pending_barrier_reply[dpid].popitem(last=False)
-        self._pending_barrier_reply[dpid][barrier_xid] = flow_xid
+        self._pending_barrier_reply[dpid][barrier_xid] = [
+            flow_mod.header.xid for flow_mod in flow_mods
+        ]
 
-    def _send_barrier_request(self, switch, flow_mod):
+    def _send_barrier_request(self, switch, flow_mods):
         event_name = "kytos/flow_manager.messages.out.ofpt_barrier_request"
         if not switch.is_connected():
             raise SwitchNotConnectedError(
-                f"switch {switch.id} isn't connected", flow_mod
+                f"switch {switch.id} isn't connected", flow_mods
             )
 
         barrier_request = new_barrier_request(switch.connection.protocol.version)
         barrier_xid = barrier_request.header.xid
         with self._pending_barrier_lock:
-            self._add_barrier_request(switch.id, barrier_xid, flow_mod.header.xid)
+            self._add_barrier_request(switch.id, barrier_xid, flow_mods)
 
         content = {"destination": switch.connection, "message": barrier_request}
         event = KytosEvent(
@@ -727,8 +745,7 @@ class Main(KytosNApp):
             "error_command": error_command,
             "error_exception": event.content.get("exception"),
         }
-        with self._flow_mods_sent_error_lock:
-            self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
+        self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
         self._send_napp_event(
             switch,
             flow,
@@ -787,8 +804,7 @@ class Main(KytosNApp):
                 "error_type": error_type,
                 "error_code": error_code,
             }
-            with self._flow_mods_sent_error_lock:
-                self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
+            self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
             log.warning(
                 f"Deleting flow: {flow.as_dict()}, xid: {xid}, cookie: {flow.cookie}, "
                 f"error: {error_kwargs}"

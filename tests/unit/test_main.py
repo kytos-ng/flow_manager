@@ -53,6 +53,7 @@ class TestMain(TestCase):
         }
 
         self.napp = Main(controller)
+        self.napp._consistency_verdict = 30
 
     def test_rest_list_without_dpid(self):
         """Test list rest method withoud dpid."""
@@ -495,7 +496,7 @@ class TestMain(TestCase):
         self.napp.flow_controller.get_flows_lte_updated_at.return_value = [
             {"flow_id": "2", "flow": {}}
         ]
-        self.napp.check_missing_flows(switch, stats_interval=60)
+        self.napp.check_missing_flows(switch)
         mock_install_flows.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
@@ -513,17 +514,18 @@ class TestMain(TestCase):
                 "flow_id": "2",
                 "id": "3",
                 "flow": {},
-                "updated_at": datetime.utcnow() - timedelta(seconds=60),
+                "updated_at": datetime.utcnow()
+                - timedelta(seconds=self.napp._consistency_verdict),
             }
         ]
-        self.napp.check_alien_flows(switch, stats_interval=60)
+        self.napp.check_alien_flows(switch)
         mock_install_flows.assert_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_check_alien_flows_skipped(self, mock_install_flows):
+    def test_check_alien_flows_skip_recent_overwrite(self, mock_install_flows):
         """Test check_alien_flows skipped method.
 
-        This test checks the case when an alien recent flow should be skipped
+        This test checks the case when an alien recent overwrite should be skipped
         """
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
@@ -536,10 +538,41 @@ class TestMain(TestCase):
                 "flow_id": "2",
                 "id": "3",
                 "flow": {},
-                "updated_at": datetime.utcnow() - timedelta(seconds=5),
+                "updated_at": datetime.utcnow()
+                - timedelta(seconds=self.napp._consistency_verdict - 5),
             }
         ]
-        self.napp.check_alien_flows(switch, stats_interval=60)
+        self.napp.check_alien_flows(switch)
+        mock_install_flows.assert_not_called()
+
+    @patch("napps.kytos.flow_manager.main.Main._install_flows")
+    def test_check_alien_flows_skip_recent_delete(self, mock_install_flows):
+        """Test check_alien_flows skipped method.
+
+        This test checks the case when an alien recent delete should be skipped
+        """
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        flow_1 = MagicMock(id="1", match_id="3")
+        switch.flows = [flow_1]
+
+        response = [
+            {
+                "flow_id": "2",
+                "id": "3",
+                "state": "installed",
+                "flow": {},
+                "updated_at": datetime.utcnow()
+                - timedelta(seconds=self.napp._consistency_verdict),
+            }
+        ]
+        self.napp.flow_controller.get_flows.return_value = response
+
+        response[0]["state"] = "deleted"
+        response[0]["flow_id"] = "1"
+        self.napp.flow_controller.get_flows_by_state.return_value = response
+
+        self.napp.check_alien_flows(switch)
         mock_install_flows.assert_not_called()
 
     def test_consistency_cookie_ignored_range(self):
@@ -581,7 +614,7 @@ class TestMain(TestCase):
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
         switch.flows = []
-        self.napp.flow_controller.get_flow_check_gte_updated_at.return_value = None
+        self.napp.flow_controller.get_flow_check.return_value = None
         self.napp.check_missing_flows = MagicMock()
         self.napp.check_alien_flows = MagicMock()
         self.napp.check_consistency(switch)
@@ -614,6 +647,7 @@ class TestMain(TestCase):
         flow1 = MagicMock(id="1", match_id="2")
         flow1_dict = {
             "_id": flow1.match_id,
+            "id": flow1.match_id,
             "flow_id": flow1.id,
             "match_id": flow1.match_id,
             "flow": {"match": {"in_port": 1}},
@@ -625,16 +659,25 @@ class TestMain(TestCase):
             switch.id: [flow1_dict]
         }
         self.napp.delete_matched_flows([flow1_dict], {switch.id: switch})
-        self.napp.flow_controller.delete_flows_by_ids.assert_called_with([flow1.id])
+
+        assert self.napp.flow_controller.upsert_flows.call_count == 1
+        call_args = self.napp.flow_controller.upsert_flows.call_args
+        assert list(call_args[0][0]) == [flow1.match_id]
+
+        # second arg should be the same dict values, except with state deleted
+        expected = dict(flow1_dict)
+        assert expected["state"] == "deleted"
+        assert list(call_args[0][1])[0] == expected
 
     def test_add_barrier_request(self):
         """Test add barrier request."""
         dpid = "00:00:00:00:00:00:00:01"
         barrier_xid = 1
-        flow_xid = 2
-        assert flow_xid not in self.napp._pending_barrier_reply[dpid]
-        self.napp._add_barrier_request(dpid, barrier_xid, flow_xid)
-        assert self.napp._pending_barrier_reply[dpid][barrier_xid] == flow_xid
+        flow_mods_xids = [2]
+        flow_mods = [MagicMock(header=MagicMock(xid=xid)) for xid in flow_mods_xids]
+        assert barrier_xid not in self.napp._pending_barrier_reply[dpid]
+        self.napp._add_barrier_request(dpid, barrier_xid, flow_mods)
+        assert self.napp._pending_barrier_reply[dpid][barrier_xid] == flow_mods_xids
 
     def test_add_barrier_request_max_size_fifo(self):
         """Test add barrier request max size fifo popitem."""
@@ -649,7 +692,9 @@ class TestMain(TestCase):
 
         for i in range(max_size + overflow):
             self.napp._add_barrier_request(
-                dpid, barrier_xid_offset + i, flow_xid_offset + i
+                dpid,
+                barrier_xid_offset + i,
+                [MagicMock(header=MagicMock(xid=flow_xid_offset + i))],
             )
         assert len(self.napp._pending_barrier_reply[dpid]) == max_size
 
@@ -665,13 +710,13 @@ class TestMain(TestCase):
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
 
-        flow_mod = MagicMock()
-        flow_mod.header.xid = 123
+        flow_mods_xids = [123]
+        flow_mods = [MagicMock(header=MagicMock(xid=xid)) for xid in flow_mods_xids]
 
-        self.napp._send_barrier_request(switch, flow_mod)
+        self.napp._send_barrier_request(switch, flow_mods)
         assert (
-            list(self.napp._pending_barrier_reply[switch.id].values())[0]
-            == flow_mod.header.xid
+            list(self.napp._pending_barrier_reply[switch.id].values())[-1]
+            == flow_mods_xids
         )
 
     @patch("napps.kytos.flow_manager.main.Main._publish_installed_flow")
@@ -681,24 +726,24 @@ class TestMain(TestCase):
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
 
-        flow_mod = MagicMock()
-        flow_mod.header.xid = 123
+        flow_mods_xids = [123]
+        flow_mods = [MagicMock(header=MagicMock(xid=xid)) for xid in flow_mods_xids]
 
-        self.napp._send_barrier_request(switch, flow_mod)
+        self.napp._send_barrier_request(switch, flow_mods)
         assert (
-            list(self.napp._pending_barrier_reply[switch.id].values())[0]
-            == flow_mod.header.xid
+            list(self.napp._pending_barrier_reply[switch.id].values())[-1]
+            == flow_mods_xids
         )
 
-        barrier_xid = list(self.napp._pending_barrier_reply[switch.id].keys())[0]
-        self.napp._add_flow_mod_sent(flow_mod.header.xid, flow_mod, "add")
+        barrier_xid = list(self.napp._pending_barrier_reply[switch.id].keys())[-1]
+        for flow_mod in flow_mods:
+            self.napp._add_flow_mod_sent(flow_mod.header.xid, flow_mod, "add")
 
         event = MagicMock()
         event.message.header.xid = barrier_xid
         assert barrier_xid
         assert (
-            self.napp._pending_barrier_reply[switch.id][barrier_xid]
-            == flow_mod.header.xid
+            self.napp._pending_barrier_reply[switch.id][barrier_xid] == flow_mods_xids
         )
         event.source.switch = switch
 
@@ -742,11 +787,11 @@ class TestMain(TestCase):
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
-        flow = MagicMock(id="1")
-        self.napp._publish_installed_flow(switch, flow)
+        flows = [MagicMock(id="1")]
+        self.napp._publish_installed_flow(switch, flows)
         mock_send_napp_event.assert_called()
-        self.napp.flow_controller.update_flow_state.assert_called_with(
-            flow.id, "installed"
+        self.napp.flow_controller.update_flows_state.assert_called_with(
+            [flow.id for flow in flows], "installed"
         )
 
     @patch("napps.kytos.flow_manager.main.Main._send_barrier_request")
