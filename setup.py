@@ -242,9 +242,9 @@ def symlink_if_different(path, target):
 
 def read_version_from_json():
     """Read the NApp version from NApp kytos.json file."""
-    file = Path('kytos.json')
+    file = Path("kytos.json")
     metadata = json.loads(file.read_text(encoding="utf8"))
-    return metadata['version']
+    return metadata["version"]
 
 
 def read_requirements(path="requirements/run.txt"):
