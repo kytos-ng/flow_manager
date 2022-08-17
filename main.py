@@ -104,7 +104,11 @@ class Main(KytosNApp):
         log.debug("flow-manager stopping")
 
     @listen_to("kytos/of_core.handshake.completed")
-    def resend_stored_flows(self, event):
+    def on_resend_stored_flows(self, event):
+        """Resend stored Flows."""
+        self.resend_stored_flows(event)
+
+    def resend_stored_flows(self, event) -> None:
         """Resend stored Flows."""
         # if consistency check is enabled, it should take care of this
         if ENABLE_CONSISTENCY_CHECK:
