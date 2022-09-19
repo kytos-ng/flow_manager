@@ -39,49 +39,6 @@ class FlowSerializer13(FlowSerializer):
         # Invert match_values index
         self._match_values = {b: a for a, b in self._match_names.items()}
 
-    def from_dict(self, dictionary):
-        """Return an OF 1.0 FlowMod message from serialized dictionary."""
-        flow_mod = FlowMod()
-        instruction = InstructionApplyAction()
-        flow_mod.instructions.append(instruction)
-
-        for field, data in dictionary.items():
-            if field in self.flow_attributes:
-                setattr(flow_mod, field, data)
-            elif field == "match":
-                tlvs = self._match_from_dict(data)
-                flow_mod.match.oxm_match_fields.append(list(tlvs))
-            elif field == "actions":
-                actions = self._actions_from_list(data)
-                instruction.actions.extend(list(actions))
-
-        return flow_mod
-
-    def _match_from_dict(self, dictionary):
-        known_fields = (
-            (field, data)
-            for field, data in dictionary.items()
-            if field in self._match_names
-        )
-        for field_name, data in known_fields:
-            tlv = OxmTLV()
-            tlv.oxm_field = self._match_names[field_name]
-            # set oxm_value
-            if field_name in ("dl_vlan_pcp", "nw_proto"):
-                tlv.oxm_value = data.to_bytes(1, "big")
-            elif field_name == "dl_vlan":
-                vid = data | VlanId.OFPVID_PRESENT
-                tlv.oxm_value = vid.to_bytes(2, "big")
-            elif field_name in ("dl_src", "dl_dst"):
-                tlv.oxm_value = HWAddress(data).pack()
-            elif field_name in ("nw_src", "nw_dst"):
-                tlv.oxm_value = IPAddress(data).pack()
-            elif field_name == "in_port":
-                tlv.oxm_value = data.to_bytes(4, "big")
-            else:
-                tlv.oxm_value = data.to_bytes(2, "big")
-            yield tlv
-
     @classmethod
     def _actions_from_list(cls, action_list):
         for action in action_list:

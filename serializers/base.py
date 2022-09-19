@@ -1,29 +1,25 @@
 """Abstract class for serializing flows."""
 from abc import ABC, abstractmethod
 
-from pyof.v0x01.controller2switch.flow_mod import FlowModCommand as CommonFlowModCommand
+from pyof.v0x04.controller2switch.flow_mod import FlowModCommand as CommonFlowModCommand
 
 
 class FlowSerializer(ABC):
-    """Common code for OF 1.0 and 1.3 flow serialization.
+    """Code 1.3 flow serialization.
 
     For a FlowMod dictionary, create a FlowMod message and, for a FlowStats,
     create a dictionary.
     """
 
-    # These values are the same in both versions 1.0 and 1.3
+    # These values are for version 1.3
     OFPFC_ADD = CommonFlowModCommand.OFPFC_ADD
     OFPFC_DELETE = CommonFlowModCommand.OFPFC_DELETE
 
     def __init__(self):
-        """Initialize common attributes of 1.0 and 1.3 versions."""
+        """Initialize common attributes of version 1.3."""
         self.flow_attributes = set(
             ("priority", "idle_timeout", "hard_timeout", "cookie")
         )
-
-    @abstractmethod
-    def from_dict(self, dictionary):
-        """Return a FlowMod instance created from a serialized dictionary."""
 
     @abstractmethod
     def to_dict(self, flow_stats):
