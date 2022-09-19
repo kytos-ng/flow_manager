@@ -11,11 +11,9 @@ from pyof.v0x04.common.action import (
     ActionSetField,
     ActionType,
 )
-from pyof.v0x04.common.flow_instructions import InstructionApplyAction
 from pyof.v0x04.common.flow_instructions import InstructionType as IType
 from pyof.v0x04.common.flow_match import OxmOfbMatchField, OxmTLV, VlanId
 from pyof.v0x04.common.port import PortNo
-from pyof.v0x04.controller2switch.flow_mod import FlowMod
 
 
 # pylint: disable=too-many-return-statements, inconsistent-return-statements

@@ -13,8 +13,8 @@ from napps.kytos.of_core.msg_prios import of_msg_prio
 from napps.kytos.of_core.settings import STATS_INTERVAL
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
 from pyof.v0x04.asynchronous.error_msg import BadActionCode
-from pyof.v0x04.common.port import PortConfig
 from pyof.v0x04.common.header import Type
+from pyof.v0x04.common.port import PortConfig
 from werkzeug.exceptions import (
     BadRequest,
     FailedDependency,
