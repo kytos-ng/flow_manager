@@ -161,7 +161,7 @@ class TestFlowSerializer13(TestCase):
         return_value="actions_to_list",
     )
     @patch(
-        "napps.kytos.flow_manager.serializers.v0x04.FlowSerializer13." "_match_to_dict",
+        "napps.kytos.flow_manager.serializers.v0x04.FlowSerializer13._match_to_dict",
         return_value="match_to_dict",
     )
     def test_to_dict(self, *args):
@@ -210,7 +210,7 @@ class TestFlowSerializer13(TestCase):
         self.assertEqual(match_dict, expected)
 
     @patch(
-        "napps.kytos.flow_manager.serializers.v0x04.FlowSerializer13." "_filter_actions"
+        "napps.kytos.flow_manager.serializers.v0x04.FlowSerializer13._filter_actions"
     )
     def test_actions_to_list(self, mock_filter_actions):
         """Test _actions_to_list method."""
