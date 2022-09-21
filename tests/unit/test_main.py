@@ -9,6 +9,7 @@ from napps.kytos.flow_manager.exceptions import (
     SwitchNotConnectedError,
 )
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
+from pyof.v0x01.asynchronous.error_msg import ErrorType
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 
 from kytos.core.helpers import now
@@ -468,6 +469,15 @@ class TestMain(TestCase):
             error_type=2,
         )
         self.napp.flow_controller.delete_flow_by_id.assert_called_with(flow.id)
+
+    def test_handle_errors_ofpet_hello_failed(self):
+        """Test handle_errors ofpet_hello_failed."""
+        content = MagicMock()
+        event = MagicMock(content=dict(message=content))
+        content.error_type = ErrorType.OFPET_HELLO_FAILED
+        content.code = 5
+        self.napp.handle_errors(event)
+        content.data.pack.assert_not_called()
 
     @patch("napps.kytos.flow_manager.main.ENABLE_CONSISTENCY_CHECK", False)
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
