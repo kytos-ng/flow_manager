@@ -18,6 +18,8 @@ Deprecated
 
 Removed
 =======
+- Removed support for OpenFlow 1.0
+- Removed `serializers` package
 
 Security
 ========
