@@ -12,9 +12,9 @@ from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.msg_prios import of_msg_prio
 from napps.kytos.of_core.settings import STATS_INTERVAL
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
-from pyof.v0x01.asynchronous.error_msg import BadActionCode, ErrorType
-from pyof.v0x01.common.phy_port import PortConfig
+from pyof.v0x04.asynchronous.error_msg import BadActionCode, ErrorType
 from pyof.v0x04.common.header import Type
+from pyof.v0x04.common.port import PortConfig
 from werkzeug.exceptions import (
     BadRequest,
     FailedDependency,
@@ -147,7 +147,7 @@ class Main(KytosNApp):
         """Check the consistency of a switch upon receiving flow stats."""
         self.check_consistency(event.content["switch"])
 
-    @listen_to("kytos/of_core.v0x0[14].messages.in.ofpt_flow_removed")
+    @listen_to("kytos/of_core.v0x04.messages.in.ofpt_flow_removed")
     def on_ofpt_flow_removed(self, event):
         """Listen to OFPT_FLOW_REMOVED and publish to subscribers."""
         self._on_ofpt_flow_removed(event)
@@ -158,7 +158,7 @@ class Main(KytosNApp):
         flow = event.message
         self._send_napp_event(switch, flow, "delete")
 
-    @listen_to("kytos/of_core.v0x0[14].messages.in.ofpt_barrier_reply")
+    @listen_to("kytos/of_core.v0x04.messages.in.ofpt_barrier_reply")
     def on_ofpt_barrier_reply(self, event):
         """Listen to OFPT_BARRIER_REPLY.
 
@@ -785,13 +785,9 @@ class Main(KytosNApp):
 
         if message.code == BadActionCode.OFPBAC_BAD_OUT_PORT:
             actions = []
-            if hasattr(error_packet, "actions"):
-                # Get actions from the flow mod (OF 1.0)
-                actions = error_packet.actions
-            else:
-                # Get actions from the list of flow mod instructions (OF 1.3)
-                for instruction in error_packet.instructions:
-                    actions.extend(instruction.actions)
+            # Get actions from the list of flow mod instructions (OF 1.3)
+            for instruction in error_packet.instructions:
+                actions.extend(instruction.actions)
 
             for action in actions:
                 iface = switch.get_interface_by_port_no(action.port)

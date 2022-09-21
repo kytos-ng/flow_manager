@@ -1,7 +1,7 @@
 """Module to test the utils module."""
 # pylint: disable=import-error
 import pytest
-from napps.kytos.flow_manager.match import match10_no_strict, match_flow
+from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.flow_manager.v0x04.match import _match_cookie, match13_no_strict
 
 
@@ -114,6 +114,5 @@ def test_match_no_strict_return_false_cases(to_install, stored, should_match):
 def test_match_func_calls() -> None:
     """Test match func calls."""
     assert match_flow({}, 0x04, {}) == match13_no_strict({}, {})
-    assert match_flow({}, 0x01, {}) == match10_no_strict({}, {})
     with pytest.raises(NotImplementedError):
         match_flow({}, 0x20, {})
