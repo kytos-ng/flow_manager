@@ -1,5 +1,5 @@
 """DB models."""
-# pylint: disable=no-self-use,unused-argument,invalid-name,unused-argument
+# pylint: disable=unused-argument,invalid-name,unused-argument
 # pylint: disable=no-self-argument,no-name-in-module
 
 
