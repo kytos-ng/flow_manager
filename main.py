@@ -12,7 +12,7 @@ from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.msg_prios import of_msg_prio
 from napps.kytos.of_core.settings import STATS_INTERVAL
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
-from pyof.v0x04.asynchronous.error_msg import BadActionCode
+from pyof.v0x04.asynchronous.error_msg import BadActionCode, ErrorType
 from pyof.v0x04.common.header import Type
 from pyof.v0x04.common.port import PortConfig
 from werkzeug.exceptions import (
@@ -769,13 +769,15 @@ class Main(KytosNApp):
     def handle_errors(self, event):
         """handle OpenFlow error."""
         message = event.content["message"]
+        error_type = message.error_type
+        error_code = message.code
+        if error_type == ErrorType.OFPET_HELLO_FAILED:
+            return
 
         connection = event.source
         switch = connection.switch
 
         xid = message.header.xid.value
-        error_type = message.error_type
-        error_code = message.code
         error_data = message.data.pack()
 
         # Get the packet responsible for the error

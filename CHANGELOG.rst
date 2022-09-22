@@ -10,6 +10,10 @@ file.
 Added
 =====
 
+Fixed
+=====
+- Fixed handling ``OFPT_ERROR`` correctly when OF negotiation fails
+
 Changed
 =======
 
