@@ -129,7 +129,7 @@ class Main(KytosNApp):
                 # reraise to land on core dead letter
                 raise
         log.info(f"Flows resent to Switch {dpid}")
-
+   
     @listen_to("kytos/of_core.handshake.completed")
     def on_handshake_completed(self, event):
         """On switch connection handshake completed."""
@@ -137,7 +137,7 @@ class Main(KytosNApp):
         if not switch:
             return
         self.reset_flow_check(switch.id)
-
+        
     def reset_flow_check(self, dpid):
         """Reset flow check."""
         self.flow_controller.upsert_flow_check(dpid, state="inactive")
@@ -476,6 +476,33 @@ class Main(KytosNApp):
             switch_flows[switch.dpid] = {"flows": flows_dict}
 
         return jsonify(switch_flows)
+
+    @rest("v2/stored_flows")
+    @rest("v2/stored_flows/<dpid>")
+    def list_stored(self, dpid=None):
+        """Retrieve all stored flows.
+        """
+        if dpid is None:
+            switches = [switch.dpid for switch in self.controller.switches.values()]
+        else:
+            switches = [dpid]
+        args = request.args
+        state = args.get("state")
+
+        flows_collection = {}
+
+        for switch in switches:
+            if state is None:
+                flows_list = list(self.flow_controller.get_flows(switch))
+            else:
+                flows_list = list(self.flow_controller.get_flows_by_state(
+                        switch, state
+                        ))
+            for flow in flows_list:
+                if "_id" in flow:
+                    flow.pop("_id")
+            flows_collection[switch] = {"flows":flows_list} 
+        return jsonify(flows_collection)
 
     @listen_to("kytos.flow_manager.flows.(install|delete)")
     def on_flows_install_delete(self, event):

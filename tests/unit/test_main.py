@@ -109,6 +109,73 @@ class TestMain(TestCase):
         self.assertEqual(response.json, expected)
         self.assertEqual(response.status_code, 200)
 
+    def test_rest_list_stored_with_dpid(self):
+        """Test list_stored rest method with dpid."""
+        switch_dpid = "00:00:00:00:00:00:00:01"
+        flow_dict = {
+            "id": 1,
+            "flow_id": 1,
+            "state": "installed",
+            "flow": {"priority": 10,"cookie": 84114964,"switch":switch_dpid},
+        }
+        
+        self.napp.flow_controller.get_flows.return_value = [flow_dict]
+
+        api = get_test_client(self.napp.controller, self.napp)
+        url = f"{self.API_URL}/v2/stored_flows/00:00:00:00:00:00:00:01"
+
+        response = api.get(url)
+        expected = {"00:00:00:00:00:00:00:01": {"flows":[flow_dict]}}
+        
+        self.assertEqual(response.json, expected)
+        self.assertEqual(response.status_code, 200)
+    
+    def test_rest_list_stored_without_dpid(self):
+        """Test list_stored rest method without dpid."""
+       
+        flow_dict = {
+            "id": 1,
+            "flow_id": 1,
+            "state": "installed",
+            "flow": {"priority": 10,"cookie": 84114964},
+        }
+        flow = MagicMock()
+        flow.as_dict.return_value = flow_dict
+
+        flow_stored = MagicMock()
+        flow_stored.as_dict.return_value = [flow_dict]
+        self.napp.flow_controller.get_flows.return_value = [flow_dict]
+
+        api = get_test_client(self.napp.controller, self.napp)
+        url = f"{self.API_URL}/v2/stored_flows"
+
+        response = api.get(url)
+
+        self.assertEqual(response.json["00:00:00:00:00:00:00:01"]["flows"], [flow_dict])
+        self.assertEqual(response.status_code, 200)
+
+    def test_rest_list_stored_installed(self):
+        """Test list_stored rest method for installed flows."""
+        switch_dpid = "00:00:00:00:00:00:00:01"
+        flow_dict = {
+            "id": 1,
+            "flow_id": 1,
+            "state": "installed",
+            "flow": {"priority": 10,"cookie": 84114964},
+        }
+        self.napp.flow_controller.get_flows_by_state.return_value = [flow_dict]
+
+        api = get_test_client(self.napp.controller, self.napp)
+        url = f"{self.API_URL}/v2/stored_flows/00:00:00:00:00:00:00:01?state=installed"
+
+        response = api.get(url)
+        expected = {"00:00:00:00:00:00:00:01": {"flows": [flow_dict]}}
+        print(response.json)
+        self.assertEqual(response.json, expected)
+        for flow_i in response.json[switch_dpid]["flows"]:
+            self.assertEqual(flow_i["state"], "installed")
+        self.assertEqual(response.status_code, 200)
+    
     def test_list_flows_fail_case(self):
         """Test the failure case to recover all flows from a switch by dpid.
 

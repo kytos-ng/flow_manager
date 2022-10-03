@@ -10,6 +10,8 @@ file.
 Added
 =====
 
+- Added endpoints ``GET v2/stored_flows`` and ``GET v2/stored_flows/<dpid>`` for listing flows from flows collection. Query parameter filter for state is supported.
+
 Fixed
 =====
 - Fixed handling ``OFPT_ERROR`` correctly when OF negotiation fails
