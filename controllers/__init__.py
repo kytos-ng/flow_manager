@@ -4,6 +4,7 @@ import os
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
+from operator import le
 from typing import Iterator, List, Optional
 
 import pymongo
@@ -182,3 +183,11 @@ class FlowController:
     def get_flow_check(self, dpid: str, state="active") -> Optional[dict]:
         """Get flow check."""
         return self.db.flow_checks.find_one({"_id": dpid, "state": state})
+
+    def find_flows(
+        self, query_expression: dict, projection: dict = None
+    ) -> Optional[dict]:
+        """Generic method for getting flows with flexible filtering capabilities."""
+        for flow in self.db.flows.find(query_expression, projection):
+            flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
+            yield flow

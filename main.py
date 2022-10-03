@@ -129,7 +129,7 @@ class Main(KytosNApp):
                 # reraise to land on core dead letter
                 raise
         log.info(f"Flows resent to Switch {dpid}")
-   
+
     @listen_to("kytos/of_core.handshake.completed")
     def on_handshake_completed(self, event):
         """On switch connection handshake completed."""
@@ -137,7 +137,7 @@ class Main(KytosNApp):
         if not switch:
             return
         self.reset_flow_check(switch.id)
-        
+
     def reset_flow_check(self, dpid):
         """Reset flow check."""
         self.flow_controller.upsert_flow_check(dpid, state="inactive")
@@ -478,30 +478,26 @@ class Main(KytosNApp):
         return jsonify(switch_flows)
 
     @rest("v2/stored_flows")
-    @rest("v2/stored_flows/<dpid>")
-    def list_stored(self, dpid=None):
-        """Retrieve all stored flows.
+    def list_stored(self):
+        """Retrieve stored flows, where `_id` is excluded in the response.
+
+        It is possible dynamically parametrize the switches and state.
+        `dpids` is as a list of dpids separated by comma.
+        If `dpids` is not specified all documents are returned.
         """
-        if dpid is None:
-            switches = [switch.dpid for switch in self.controller.switches.values()]
-        else:
-            switches = [dpid]
         args = request.args
-        state = args.get("state")
+        dpids = args.getlist("dpids", type=str)
+        state = args.get("state", type=str)
 
-        flows_collection = {}
-
-        for switch in switches:
-            if state is None:
-                flows_list = list(self.flow_controller.get_flows(switch))
-            else:
-                flows_list = list(self.flow_controller.get_flows_by_state(
-                        switch, state
-                        ))
-            for flow in flows_list:
-                if "_id" in flow:
-                    flow.pop("_id")
-            flows_collection[switch] = {"flows":flows_list} 
+        query_expression = {}
+        if dpids:
+            query_expression["switch"] = {"$in": dpids}
+        if state:
+            query_expression["state"] = state
+        projection = {"_id": False}
+        flows_collection = list(
+            self.flow_controller.find_flows(query_expression, projection)
+        )
         return jsonify(flows_collection)
 
     @listen_to("kytos.flow_manager.flows.(install|delete)")
