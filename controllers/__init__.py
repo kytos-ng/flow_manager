@@ -184,10 +184,25 @@ class FlowController:
         """Get flow check."""
         return self.db.flow_checks.find_one({"_id": dpid, "state": state})
 
+    def _find_flows(self, query_expression: dict, projection: dict) -> Optional[dict]:
+        """Generic method to look for flows given a query and projection"""
+        flows = self.db.flows.find(query_expression, projection)
+        flows_by_dpid = {}
+        for flow in flows:
+            flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
+            if flow["switch"] not in flows_by_dpid:
+                flows_by_dpid[flow["switch"]] = []
+            flows_by_dpid[flow["switch"]].append(flow)
+        return flows_by_dpid
+
     def find_flows(
-        self, query_expression: dict, projection: dict = None
+        self, dpids: Optional[list[str]] = None, state: Optional[str] = None
     ) -> Optional[dict]:
         """Generic method for getting flows with flexible filtering capabilities."""
-        for flow in self.db.flows.find(query_expression, projection):
-            flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
-            yield flow
+        query_expression = {}
+        if dpids:
+            query_expression.update({"switch": {"$in": dpids}})
+        if state:
+            query_expression.update({"state": state})
+        projection = {"_id": False}
+        return self._find_flows(query_expression, projection=projection)

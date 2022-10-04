@@ -482,22 +482,13 @@ class Main(KytosNApp):
         """Retrieve stored flows, where `_id` is excluded in the response.
 
         It is possible dynamically parametrize the switches and state.
-        `dpids` is as a list of dpids separated by comma.
-        If `dpids` is not specified all documents are returned.
+        `dpid` is as a list of dpids separated by comma.
+        If `dpid` is not specified all documents are returned.
         """
         args = request.args
-        dpids = args.getlist("dpids", type=str)
+        dpids = args.getlist("dpid", type=str)
         state = args.get("state", type=str)
-
-        query_expression = {}
-        if dpids:
-            query_expression["switch"] = {"$in": dpids}
-        if state:
-            query_expression["state"] = state
-        projection = {"_id": False}
-        flows_collection = list(
-            self.flow_controller.find_flows(query_expression, projection)
-        )
+        flows_collection = dict(self.flow_controller.find_flows(dpids, state))
         return jsonify(flows_collection)
 
     @listen_to("kytos.flow_manager.flows.(install|delete)")

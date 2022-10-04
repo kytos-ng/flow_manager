@@ -139,9 +139,11 @@ paths:
         - List
       summary: Retrieve a list of stored flows.
       parameters:
-        - name: dpids
+        - name: dpid
           schema:
             type: array
+            items:
+              type: string
           description: List of switch ids
           required: false
           in: query
@@ -150,7 +152,7 @@ paths:
           in: query
           schema:
             type: string
-          description: state of the flows to retrieve.
+          description: State of the flows to retrieve.
           required: false
           example: "installed"
       responses:
@@ -159,9 +161,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/FlowDoc'
+                type: object
+                properties:
+                  switch: 
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FlowDoc'
+        '404':
+          description: Path not found.
   /api/kytos/flow_manager/v2/delete:
     post:
       tags:
