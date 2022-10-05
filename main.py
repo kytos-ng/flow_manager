@@ -477,6 +477,20 @@ class Main(KytosNApp):
 
         return jsonify(switch_flows)
 
+    @rest("v2/stored_flows")
+    def list_stored(self):
+        """Retrieve stored flows, where `_id` is excluded in the response.
+
+        It is possible dynamically parametrize the switches and state.
+        `dpid` is as a list of dpids separated by comma.
+        If `dpid` is not specified all documents are returned.
+        """
+        args = request.args
+        dpids = args.getlist("dpid", type=str)
+        state = args.get("state", type=str)
+        flows_collection = dict(self.flow_controller.find_flows(dpids, state))
+        return jsonify(flows_collection)
+
     @listen_to("kytos.flow_manager.flows.(install|delete)")
     def on_flows_install_delete(self, event):
         """Install or delete flows in the switches through events.

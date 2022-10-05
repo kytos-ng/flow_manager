@@ -10,6 +10,8 @@ file.
 Added
 =====
 
+- Added endpoint ``GET v2/stored_flows`` for listing flows from flows collection. Query parameter filter for `state` and `dpid` is supported. A list of flows per switch is returned.
+
 Fixed
 =====
 - Fixed handling ``OFPT_ERROR`` correctly when OF negotiation fails
