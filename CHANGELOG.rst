@@ -13,6 +13,7 @@ Added
 Fixed
 =====
 - Fixed handling ``OFPT_ERROR`` correctly when OF negotiation fails
+- Fixed consistency check to run immediately when FlowStats is first received.
 
 Changed
 =======
