@@ -109,6 +109,72 @@ class TestMain(TestCase):
         self.assertEqual(response.json, expected)
         self.assertEqual(response.status_code, 200)
 
+    def test_rest_list_stored_all_documents(self):
+        """Test list_stored rest method."""
+        flow_dict = {
+            "switch": "00:00:00:00:00:00:00:01",
+            "id": 1,
+            "flow_id": 1,
+            "state": "installed",
+            "flow": {"priority": 10, "cookie": 84114964},
+        }
+
+        self.napp.flow_controller.find_flows.return_value = {
+            "00:00:00:00:00:00:00:01": [flow_dict]
+        }
+
+        api = get_test_client(self.napp.controller, self.napp)
+        url = f"{self.API_URL}/v2/stored_flows"
+
+        response = api.get(url)
+        expected = [flow_dict]
+        assert response.json["00:00:00:00:00:00:00:01"] == expected
+        assert response.status_code == 200
+
+    def test_rest_list_stored_by_state(self):
+        """Test list_stored rest method."""
+        flow_dict = {
+            "switch": "00:00:00:00:00:00:00:01",
+            "id": 1,
+            "flow_id": 1,
+            "state": "installed",
+            "flow": {"priority": 10, "cookie": 84114964},
+        }
+
+        self.napp.flow_controller.find_flows.return_value = {
+            "00:00:00:00:00:00:00:01": [flow_dict]
+        }
+
+        api = get_test_client(self.napp.controller, self.napp)
+        url = f"{self.API_URL}/v2/stored_flows?state=installed"
+
+        response = api.get(url)
+        for swith in response.json:
+            assert response.json[swith][0]["state"] == "installed"
+        assert response.status_code == 200
+
+    def test_rest_list_stored_by_dpids(self):
+        """Test list_stored rest method."""
+        flow_dict = {
+            "switch": "00:00:00:00:00:00:00:01",
+            "id": 1,
+            "flow_id": 1,
+            "state": "installed",
+            "flow": {"priority": 10, "cookie": 84114964},
+        }
+
+        self.napp.flow_controller.find_flows.return_value = {
+            "00:00:00:00:00:00:00:01": [flow_dict]
+        }
+
+        api = get_test_client(self.napp.controller, self.napp)
+        url = f"{self.API_URL}/v2/stored_flows?dpid=00:00:00:00:00:00:00:01"
+
+        response = api.get(url)
+        for swith in response.json:
+            assert swith == "00:00:00:00:00:00:00:01"
+        assert response.status_code == 200
+
     def test_list_flows_fail_case(self):
         """Test the failure case to recover all flows from a switch by dpid.
 

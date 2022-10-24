@@ -134,3 +134,11 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         assert self.flow_controller.get_flow_check(self.dpid, state=state)
         args = self.flow_controller.db.flow_checks.find_one.call_args[0]
         assert args[0] == {"_id": self.dpid, "state": state}
+
+    def test_find_flows(self) -> None:
+        """Test find_flows."""
+        state = "installed"
+        assert not list(self.flow_controller.find_flows(dpids=[self.dpid], state=state))
+        args = self.flow_controller.db.flows.find.call_args[0]
+        assert args[0]["switch"]["$in"] == [self.dpid]
+        assert args[0]["state"] == "installed"

@@ -133,6 +133,42 @@ paths:
            description: Invalid JSON flow.
         '404':
           description: Datapath not found.
+  /api/kytos/flow_manager/v2/stored_flows:
+    get:
+      tags:
+        - List
+      summary: Retrieve a list of stored flows.
+      parameters:
+        - name: dpid
+          schema:
+            type: array
+            items:
+              type: string
+          description: List of switch ids
+          required: false
+          in: query
+          example: ["00:00:00:00:00:00:00:01","00:00:00:00:00:00:00:02"]
+        - name: state
+          in: query
+          schema:
+            type: string
+          description: State of the flows to retrieve.
+          required: false
+          example: "installed"
+      responses:
+        '200':
+          description: Operation Successful.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  switch: 
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FlowDoc'
+        '404':
+          description: Path not found.
   /api/kytos/flow_manager/v2/delete:
     post:
       tags:
@@ -292,3 +328,20 @@ components:
           type: boolean
           description: The force option is for ignoring switch connection errors, and delegating the flows to be automatically sent later on via consistency check.
           default: false
+    FlowDoc:
+      type: object
+      properties:
+        id:
+          type: string
+        switch:
+          type: string
+        flow_id:
+          type: string
+        state:
+          type: string
+        updated_at:
+          type: string
+        flow: 
+          type: object
+          items:
+            $ref: '#/components/schemas/Flow'
