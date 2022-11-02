@@ -5,6 +5,7 @@ import time
 from collections import OrderedDict, defaultdict
 from datetime import datetime, timedelta
 from threading import Lock
+from typing import Optional
 
 from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow
@@ -328,9 +329,10 @@ class Main(KytosNApp):
         if flow_check and flow_check["updated_at"] >= verdict_dt:
             return
 
+        verdict_dt = verdict_dt if flow_check else None
         log.debug(f"check_consistency on switch {switch.id} has started")
-        self.check_alien_flows(switch)
-        self.check_missing_flows(switch)
+        self.check_alien_flows(switch, verdict_dt)
+        self.check_missing_flows(switch, verdict_dt)
         log.debug(f"check_consistency on switch {switch.id} is done")
         self.flow_controller.upsert_flow_check(switch.id)
 
@@ -347,9 +349,9 @@ class Main(KytosNApp):
         """Build switch.flows indexed by id."""
         return {flow.id: flow for flow in switch.flows if filter_flow(flow)}
 
-    def check_missing_flows(self, switch):
+    def check_missing_flows(self, switch, verdict_dt: Optional[datetime] = None):
         """Check missing flows on a switch and install them."""
-        verdict_dt = datetime.utcnow() - timedelta(seconds=self._consistency_verdict)
+        verdict_dt = datetime.utcnow() if not verdict_dt else verdict_dt
         dpid = switch.dpid
         flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
         for flow in self.flow_controller.get_flows_lte_updated_at(
@@ -369,7 +371,7 @@ class Main(KytosNApp):
                         f"Flow: {flow}"
                     )
 
-    def check_alien_flows(self, switch):
+    def check_alien_flows(self, switch, verdict_dt: Optional[datetime] = None):
         """Check alien flows on a switch and delete them."""
         dpid = switch.dpid
         stored_by_flow_id = {}
@@ -387,7 +389,7 @@ class Main(KytosNApp):
             )
         }
 
-        verdict_dt = datetime.utcnow() - timedelta(seconds=self._consistency_verdict)
+        verdict_dt = datetime.utcnow() if not verdict_dt else verdict_dt
         flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
         for flow_id, flow in flows.items():
             if flow_id not in stored_by_flow_id:
