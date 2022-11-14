@@ -445,7 +445,11 @@ class Main(KytosNApp):
                         continue
                     if match_flow(
                         flow_dict["flow"],
-                        switches[dpid].connection.protocol.version,
+                        switches[dpid].connection.protocol.version
+                        if dpid in switches
+                        and switches[dpid].connection
+                        and switches[dpid].connection.protocol
+                        else 0x04,
                         stored_flow["flow"],
                     ):
                         stored_flow["state"] = FlowEntryState.DELETED.value

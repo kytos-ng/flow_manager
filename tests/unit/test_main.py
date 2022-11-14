@@ -770,6 +770,38 @@ class TestMain(TestCase):
         assert expected["state"] == "deleted"
         assert list(call_args[0][1])[0] == expected
 
+    def test_delete_matched_flows_connection_none(self):
+        """Test delete_matched_flows connection none."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        # To simulate a coner case when a handshake hasn't been completed
+        switch.connection = None
+        switch.id = dpid
+        flow1 = MagicMock(id="1", match_id="2")
+        flow1_dict = {
+            "_id": flow1.match_id,
+            "id": flow1.match_id,
+            "flow_id": flow1.id,
+            "match_id": flow1.match_id,
+            "flow": {"match": {"in_port": 1}},
+        }
+        flow1.__getitem__.side_effect = flow1_dict.__getitem__
+        flows = [flow1]
+        switch.flows = flows
+        self.napp.flow_controller.get_flows_by_cookies.return_value = {
+            switch.id: [flow1_dict]
+        }
+        self.napp.delete_matched_flows([flow1_dict], {switch.id: switch})
+
+        assert self.napp.flow_controller.upsert_flows.call_count == 1
+        call_args = self.napp.flow_controller.upsert_flows.call_args
+        assert list(call_args[0][0]) == [flow1.match_id]
+
+        # second arg should be the same dict values, except with state deleted
+        expected = dict(flow1_dict)
+        assert expected["state"] == "deleted"
+        assert list(call_args[0][1])[0] == expected
+
     def test_add_barrier_request(self):
         """Test add barrier request."""
         dpid = "00:00:00:00:00:00:00:01"
