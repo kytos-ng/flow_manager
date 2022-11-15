@@ -479,7 +479,8 @@ class Main(KytosNApp):
 
     @rest("v2/stored_flows")
     def list_stored(self):
-        """Retrieve stored flows, where `_id` is excluded in the response.
+        """Retrieve stored flows (only installed flows by default),
+        where `_id` is excluded in the response.
 
         It is possible dynamically parametrize the switches and state.
         `dpid` is as a list of dpids separated by comma.
@@ -488,6 +489,8 @@ class Main(KytosNApp):
         args = request.args
         dpids = args.getlist("dpid", type=str)
         state = args.get("state", type=str)
+        if state is None:
+            state = "installed"
         flows_collection = dict(self.flow_controller.find_flows(dpids, state))
         return jsonify(flows_collection)
 
