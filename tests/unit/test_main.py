@@ -608,6 +608,9 @@ class TestMain(TestCase):
         flow_1 = MagicMock(id="1", match_id="3")
         switch.flows = [flow_1]
 
+        verdict_dt = datetime.utcnow() - timedelta(
+            seconds=self.napp._consistency_verdict
+        )
         # different flow_id, but same match_id and recent updated
         self.napp.flow_controller.get_flows.return_value = [
             {
@@ -618,7 +621,7 @@ class TestMain(TestCase):
                 - timedelta(seconds=self.napp._consistency_verdict - 5),
             }
         ]
-        self.napp.check_alien_flows(switch)
+        self.napp.check_alien_flows(switch, verdict_dt)
         mock_install_flows.assert_not_called()
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
@@ -695,8 +698,30 @@ class TestMain(TestCase):
         self.napp.check_alien_flows = MagicMock()
         self.napp.check_consistency(switch)
         self.napp.flow_controller.upsert_flow_check.assert_called_with(switch.id)
-        self.napp.check_missing_flows.assert_called_with(switch)
-        self.napp.check_alien_flows.assert_called_with(switch)
+        self.napp.check_missing_flows.assert_called_with(switch, None)
+        self.napp.check_alien_flows.assert_called_with(switch, None)
+
+    def test_check_consistency_flow_check_exists(self):
+        """Test check_consistency when flow_check exists, this is the case
+        when a consistency check has run before."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        switch.flows = []
+        dtnow = datetime.utcnow() - timedelta(seconds=self.napp._consistency_verdict)
+        self.napp.flow_controller.get_flow_check.return_value = {"updated_at": dtnow}
+        self.napp.check_missing_flows = MagicMock()
+        self.napp.check_alien_flows = MagicMock()
+        self.napp.check_consistency(switch)
+        self.napp.flow_controller.upsert_flow_check.assert_called_with(switch.id)
+        check_missing_flows = self.napp.check_missing_flows
+        check_missing_flows.assert_called()
+        assert check_missing_flows.call_args[0][0] == switch
+        assert check_missing_flows.call_args[0][1] <= dtnow + timedelta(seconds=5)
+        check_alien_flows = self.napp.check_alien_flows
+        check_alien_flows.assert_called()
+        assert check_alien_flows.call_args[0][0] == switch
+        assert check_alien_flows.call_args[0][1] <= dtnow + timedelta(seconds=5)
 
     def test_reset_flow_check(self):
         """Test reset_flow_Check."""
@@ -719,6 +744,38 @@ class TestMain(TestCase):
         """Test delete_matched_flows."""
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        flow1 = MagicMock(id="1", match_id="2")
+        flow1_dict = {
+            "_id": flow1.match_id,
+            "id": flow1.match_id,
+            "flow_id": flow1.id,
+            "match_id": flow1.match_id,
+            "flow": {"match": {"in_port": 1}},
+        }
+        flow1.__getitem__.side_effect = flow1_dict.__getitem__
+        flows = [flow1]
+        switch.flows = flows
+        self.napp.flow_controller.get_flows_by_cookies.return_value = {
+            switch.id: [flow1_dict]
+        }
+        self.napp.delete_matched_flows([flow1_dict], {switch.id: switch})
+
+        assert self.napp.flow_controller.upsert_flows.call_count == 1
+        call_args = self.napp.flow_controller.upsert_flows.call_args
+        assert list(call_args[0][0]) == [flow1.match_id]
+
+        # second arg should be the same dict values, except with state deleted
+        expected = dict(flow1_dict)
+        assert expected["state"] == "deleted"
+        assert list(call_args[0][1])[0] == expected
+
+    def test_delete_matched_flows_connection_none(self):
+        """Test delete_matched_flows connection none."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        # To simulate a coner case when a handshake hasn't been completed
+        switch.connection = None
         switch.id = dpid
         flow1 = MagicMock(id="1", match_id="2")
         flow1_dict = {

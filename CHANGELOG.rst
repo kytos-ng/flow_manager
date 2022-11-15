@@ -15,6 +15,9 @@ Added
 Fixed
 =====
 - Fixed handling ``OFPT_ERROR`` correctly when OF negotiation fails
+- Fixed consistency check to run immediately when FlowStats is first received.
+- Fixed flow ``instructions`` to be stored.
+- Handled connection exception corner case before an OpenFlow handshake
 
 Changed
 =======

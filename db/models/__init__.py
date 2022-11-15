@@ -98,6 +98,7 @@ class FlowSubDoc(BaseModel):
     hard_timeout = 0
     match: Optional[MatchSubDoc]
     actions: Optional[List[dict]]
+    instructions: Optional[List[dict]]
 
     class Config:
         """Config."""
