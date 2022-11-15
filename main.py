@@ -495,8 +495,6 @@ class Main(KytosNApp):
         args = request.args
         dpids = args.getlist("dpid", type=str)
         state = args.get("state", type=str)
-        if state is None:
-            state = "installed"
         flows_collection = dict(self.flow_controller.find_flows(dpids, state))
         return jsonify(flows_collection)
 
