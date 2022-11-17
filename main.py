@@ -13,9 +13,8 @@ from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.msg_prios import of_msg_prio
 from napps.kytos.of_core.settings import STATS_INTERVAL
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
-from pyof.v0x04.asynchronous.error_msg import BadActionCode, ErrorType
+from pyof.v0x04.asynchronous.error_msg import ErrorType
 from pyof.v0x04.common.header import Type
-from pyof.v0x04.common.port import PortConfig
 from werkzeug.exceptions import (
     BadRequest,
     FailedDependency,
@@ -793,29 +792,7 @@ class Main(KytosNApp):
         error_code = message.code
         if error_type == ErrorType.OFPET_HELLO_FAILED:
             return
-
-        connection = event.source
-        switch = connection.switch
-
         xid = message.header.xid.value
-        error_data = message.data.pack()
-
-        # Get the packet responsible for the error
-        error_packet = connection.protocol.unpack(error_data)
-
-        if message.code == BadActionCode.OFPBAC_BAD_OUT_PORT:
-            actions = []
-            # Get actions from the list of flow mod instructions (OF 1.3)
-            for instruction in error_packet.instructions:
-                actions.extend(instruction.actions)
-
-            for action in actions:
-                iface = switch.get_interface_by_port_no(action.port)
-
-                # Set interface to drop packets forwarded to it
-                if iface:
-                    iface.config = PortConfig.OFPPC_NO_FWD
-
         try:
             flow, error_command = self._flow_mods_sent[xid]
         except KeyError:

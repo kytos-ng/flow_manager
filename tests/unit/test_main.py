@@ -9,7 +9,7 @@ from napps.kytos.flow_manager.exceptions import (
     SwitchNotConnectedError,
 )
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
-from pyof.v0x01.asynchronous.error_msg import ErrorType
+from pyof.v0x04.asynchronous.error_msg import ErrorType
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 
 from kytos.core.helpers import now
