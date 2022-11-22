@@ -175,6 +175,45 @@ class TestMain(TestCase):
             assert swith == "00:00:00:00:00:00:00:01"
         assert response.status_code == 200
 
+    def test_rest_list_stored_by_cookie(self):
+        """Test list_stored rest method"""
+        flow_dict = {
+            "switch": "00:00:00:00:00:00:00:01",
+            "id": 1,
+            "flow_id": 1,
+            "state": "installed",
+            "flow": {"priority": 10, "cookie": "84114964"},
+        }
+
+        self.napp.flow_controller.find_flows.return_value = {
+            "00:00:00:00:00:00:00:01": [flow_dict]
+        }
+
+        api = get_test_client(self.napp.controller, self.napp)
+        url = (
+            f"{self.API_URL}/v2/stored_flows?"
+            "cookie_range=84114964&cookie_range=84114964"
+        )
+
+        response = api.get(url)
+        for switch in response.json:
+            assert switch == "00:00:00:00:00:00:00:01"
+        assert response.status_code == 200
+
+    def test_rest_list_stored_by_cookie_fail(self):
+        """Test list_stored rest method failing with BadRequest"""
+        api = get_test_client(self.napp.controller, self.napp)
+        url = f"{self.API_URL}/v2/stored_flows?cookie_range=84114964"
+        response = api.get(url)
+        assert response.status_code == 400
+
+        url = (
+            f"{self.API_URL}/v2/stored_flows?cookie_range=84114964"
+            "&cookie_range=84114964&cookie_range=84114964"
+        )
+        response = api.get(url)
+        assert response.status_code == 400
+
     def test_list_flows_fail_case(self):
         """Test the failure case to recover all flows from a switch by dpid.
 

@@ -493,7 +493,13 @@ class Main(KytosNApp):
         args = request.args
         dpids = args.getlist("dpid", type=str)
         state = args.get("state", type=str)
-        flows_collection = dict(self.flow_controller.find_flows(dpids, state))
+        cookie_range = args.getlist("cookie_range", type=int)
+        if not (len(cookie_range) == 2 or len(cookie_range) == 0):
+            msg = "cookie_range only accepts exactly two values"
+            raise BadRequest(msg)
+        flows_collection = dict(
+            self.flow_controller.find_flows(dpids, state, cookie_range)
+        )
         return jsonify(flows_collection)
 
     @listen_to("kytos.flow_manager.flows.(install|delete)")

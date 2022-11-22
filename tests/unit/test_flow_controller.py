@@ -138,7 +138,14 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
     def test_find_flows(self) -> None:
         """Test find_flows."""
         state = "installed"
-        assert not list(self.flow_controller.find_flows(dpids=[self.dpid], state=state))
+        cookie_range = [84114963, 84114965]
+        assert not list(
+            self.flow_controller.find_flows(
+                dpids=[self.dpid], state=state, cookie_range=cookie_range
+            )
+        )
         args = self.flow_controller.db.flows.find.call_args[0]
         assert args[0]["switch"]["$in"] == [self.dpid]
         assert args[0]["state"] == "installed"
+        assert args[0]["flow.cookie"]["$gte"] == Decimal128(Decimal(cookie_range[0]))
+        assert args[0]["flow.cookie"]["$lte"] == Decimal128(Decimal(cookie_range[1]))
