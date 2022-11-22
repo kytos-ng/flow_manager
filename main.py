@@ -495,7 +495,7 @@ class Main(KytosNApp):
         state = args.get("state", type=str)
         cookie_range = args.getlist("cookie_range", type=int)
         if not (len(cookie_range) == 2 or len(cookie_range) == 0):
-            msg = "cookie_range only accepts exactly two values"
+            msg = "cookie_range only accepts exactly two values."
             raise BadRequest(msg)
         flows_collection = dict(
             self.flow_controller.find_flows(dpids, state, cookie_range)
