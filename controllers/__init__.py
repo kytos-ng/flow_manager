@@ -51,6 +51,7 @@ class FlowController:
                 "flows",
                 [
                     ("switch", pymongo.ASCENDING),
+                    ("flow.cookie", pymongo.ASCENDING),
                     ("state", pymongo.ASCENDING),
                     ("inserted_at", pymongo.ASCENDING),
                     ("updated_at", pymongo.ASCENDING),

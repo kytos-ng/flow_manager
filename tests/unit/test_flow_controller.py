@@ -39,6 +39,7 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
                 "flows",
                 [
                     ("switch", 1),
+                    ("flow.cookie", 1),
                     ("state", 1),
                     ("inserted_at", 1),
                     ("updated_at", 1),
