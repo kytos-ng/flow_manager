@@ -46,11 +46,11 @@ class FlowController:
         """Bootstrap indexes."""
         index_tuples = [
             ("flows", [("flow_id", pymongo.ASCENDING)], {"unique": True}),
+            ("flows", [("flow.cookie", pymongo.ASCENDING)], {}),
             (
                 "flows",
                 [
                     ("switch", pymongo.ASCENDING),
-                    ("flow.cookie", pymongo.ASCENDING),
                     ("state", pymongo.ASCENDING),
                     ("inserted_at", pymongo.ASCENDING),
                     ("updated_at", pymongo.ASCENDING),
