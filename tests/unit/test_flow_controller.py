@@ -35,6 +35,7 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         expected_indexes = [
             ("flows", [("flow_id", 1)]),
             ("flows", [("flow.cookie", 1)]),
+            ("flows", [("state", 1)]),
             (
                 "flows",
                 [

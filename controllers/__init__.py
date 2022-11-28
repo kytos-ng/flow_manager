@@ -47,6 +47,7 @@ class FlowController:
         index_tuples = [
             ("flows", [("flow_id", pymongo.ASCENDING)], {"unique": True}),
             ("flows", [("flow.cookie", pymongo.ASCENDING)], {}),
+            ("flows", [("state", pymongo.ASCENDING)], {}),
             (
                 "flows",
                 [
