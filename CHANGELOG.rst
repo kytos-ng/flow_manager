@@ -12,6 +12,7 @@ Added
 
 - Added endpoint ``GET v2/stored_flows`` for listing flows from flows collection. Query parameter filter for `state` and `dpid` is supported. A list of flows per switch is returned.
 - Added query paramater filter for `cookie_range` to the endpoint ``GET v2/stored_flows``.
+- Added query paramater filter for `state` to the endpoint ``GET v2/stored_flows``.
 
 Fixed
 =====
