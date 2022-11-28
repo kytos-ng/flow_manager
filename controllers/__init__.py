@@ -46,6 +46,7 @@ class FlowController:
         """Bootstrap indexes."""
         index_tuples = [
             ("flows", [("flow_id", pymongo.ASCENDING)], {"unique": True}),
+            ("flows", [("flow.cookie", pymongo.ASCENDING)], {}),
             (
                 "flows",
                 [
@@ -196,7 +197,10 @@ class FlowController:
         return flows_by_dpid
 
     def find_flows(
-        self, dpids: Optional[list[str]] = None, state: Optional[str] = None
+        self,
+        dpids: Optional[list[str]] = None,
+        state: Optional[str] = None,
+        cookie_range: Optional[list[int]] = None,
     ) -> Optional[dict]:
         """Generic method for getting flows with flexible filtering capabilities."""
         query_expression = {}
@@ -204,5 +208,14 @@ class FlowController:
             query_expression.update({"switch": {"$in": dpids}})
         if state:
             query_expression.update({"state": state})
+        if cookie_range:
+            query_expression.update(
+                {
+                    "flow.cookie": {
+                        "$gte": Decimal128(Decimal(cookie_range[0])),
+                        "$lte": Decimal128(Decimal(cookie_range[1])),
+                    }
+                }
+            )
         projection = {"_id": False}
         return self._find_flows(query_expression, projection=projection)

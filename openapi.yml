@@ -155,6 +155,15 @@ paths:
           description: State of the flows to retrieve.
           required: false
           example: "installed"
+        - name: cookie_range
+          in: query
+          schema:
+            type: array
+            items:
+              type: int
+          description: Range of cookies
+          required: false
+          example: [84114963, 84114965]
       responses:
         '200':
           description: Operation Successful.
@@ -169,6 +178,8 @@ paths:
                       $ref: '#/components/schemas/FlowDoc'
         '404':
           description: Path not found.
+        '400':
+          description: cookie_range only accepts exactly two values.
   /api/kytos/flow_manager/v2/delete:
     post:
       tags:
