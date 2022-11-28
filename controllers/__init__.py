@@ -218,5 +218,7 @@ class FlowController:
                     }
                 }
             )
+        if 1:
+            print("HELLO")
         projection = {"_id": False}
         return self._find_flows(query_expression, projection=projection)
