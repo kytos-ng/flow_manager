@@ -105,15 +105,24 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         args = self.flow_controller.db.flows.find.call_args[0]
         assert args[0] == {"switch": self.dpid, "state": {"$ne": "deleted"}}
 
-    def test_get_flows_by_cookies(self) -> None:
-        """Test get_flows_by_cookies."""
-        cookies = [0]
-        assert not list(self.flow_controller.get_flows_by_cookies([self.dpid], cookies))
+    def test_get_flows_by_cookie_ranges(self) -> None:
+        """Test get_flows_by_cookie_ranges."""
+        cookie_ranges = [(0x64, 0x65)]
+        assert not list(
+            self.flow_controller.get_flows_by_cookie_ranges([self.dpid], cookie_ranges)
+        )
         args = self.flow_controller.db.flows.aggregate.call_args[0]
         assert args[0][0]["$match"] == {
             "switch": {"$in": [self.dpid]},
             "state": {"$ne": "deleted"},
-            "flow.cookie": {"$in": [Decimal128(Decimal(cookie)) for cookie in cookies]},
+            "$or": [
+                {
+                    "flow.cookie": {
+                        "$gte": Decimal128(Decimal(cookie_ranges[0][0])),
+                        "$lte": Decimal128(Decimal(cookie_ranges[0][1])),
+                    }
+                }
+            ],
         }
 
     def test_get_flows_by_state(self) -> None:
