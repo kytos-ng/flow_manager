@@ -43,10 +43,12 @@ from .settings import (
 from .utils import (
     _valid_consistency_ignored,
     build_command_from_flow_mod,
+    build_cookie_range_tuple,
     build_flow_mod_from_command,
     cast_fields,
     get_min_wait_diff,
     is_ignored,
+    merge_cookie_ranges,
 )
 
 
@@ -424,19 +426,23 @@ class Main(KytosNApp):
         """Try to delete many matched stored flows given flow_dicts for switches.
 
         This deletion tries to minimize DB round trips, it aggregates all
-        included cookies grouped by dpids, and then at the runtime it performs
-        a non strict match iterating over the flows if they haven't been deleted yet.
-        If flows are matched, they will be bulk updated as deleted
+        included cookies grouped by dpids and cookie ranges, and then at the runtime
+        it performs a non strict match iterating over the flows if they haven't been
+        deleted yet. If flows are matched, they will be bulk updated as deleted.
         """
         deleted_flows = {}
-        cookies = list(
+        cookie_ranges = list(
             {
-                int(value.get("cookie", 0)) & int(value.get("cookie_mask", 0))
+                build_cookie_range_tuple(
+                    int(value.get("cookie", 0)),
+                    int(value.get("cookie_mask", 0)),
+                )
                 for value in [flow.get("flow", {}) for flow in flow_dicts]
             }
         )
-        for dpid, stored_flows in self.flow_controller.get_flows_by_cookies(
-            list(switches.keys()), cookies
+        cookie_ranges = merge_cookie_ranges(cookie_ranges)
+        for dpid, stored_flows in self.flow_controller.get_flows_by_cookie_ranges(
+            list(switches.keys()), cookie_ranges
         ).items():
             for flow_dict in flow_dicts:
                 for stored_flow in stored_flows:

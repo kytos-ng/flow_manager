@@ -4,7 +4,6 @@ import os
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
-from operator import le
 from typing import Iterator, List, Optional
 
 import pymongo
@@ -139,20 +138,30 @@ class FlowController:
             flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
             yield flow
 
-    def get_flows_by_cookies(self, dpids: List[str], cookies: List[int]) -> dict:
-        """Get flows by cookies grouped by dpid."""
+    def get_flows_by_cookie_ranges(
+        self, dpids: list[str], cookie_ranges: list[tuple[int, int]]
+    ) -> dict:
+        """Get flows by cookie ranges [low, high] (inclusive) grouped by dpid."""
+        query_match = {
+            "$match": {
+                "switch": {"$in": dpids},
+                "state": {"$ne": "deleted"},
+            }
+        }
+        if cookie_ranges:
+            query_match["$match"]["$or"] = [
+                {
+                    "flow.cookie": {
+                        "$gte": Decimal128(Decimal(low)),
+                        "$lte": Decimal128(Decimal(high)),
+                    }
+                }
+                for low, high in cookie_ranges
+            ]
         flows = defaultdict(list)
         for document in self.db.flows.aggregate(
             [
-                {
-                    "$match": {
-                        "switch": {"$in": dpids},
-                        "state": {"$ne": "deleted"},
-                        "flow.cookie": {
-                            "$in": [Decimal128(Decimal(cookie)) for cookie in cookies]
-                        },
-                    }
-                },
+                query_match,
                 {"$group": {"_id": "$switch", "flows": {"$push": "$$ROOT"}}},
             ]
         ):

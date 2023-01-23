@@ -795,7 +795,7 @@ class TestMain(TestCase):
         flow1.__getitem__.side_effect = flow1_dict.__getitem__
         flows = [flow1]
         switch.flows = flows
-        self.napp.flow_controller.get_flows_by_cookies.return_value = {
+        self.napp.flow_controller.get_flows_by_cookie_ranges.return_value = {
             switch.id: [flow1_dict]
         }
         self.napp.delete_matched_flows([flow1_dict], {switch.id: switch})
@@ -827,7 +827,7 @@ class TestMain(TestCase):
         flow1.__getitem__.side_effect = flow1_dict.__getitem__
         flows = [flow1]
         switch.flows = flows
-        self.napp.flow_controller.get_flows_by_cookies.return_value = {
+        self.napp.flow_controller.get_flows_by_cookie_ranges.return_value = {
             switch.id: [flow1_dict]
         }
         self.napp.delete_matched_flows([flow1_dict], {switch.id: switch})

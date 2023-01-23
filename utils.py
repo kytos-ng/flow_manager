@@ -8,6 +8,34 @@ from kytos.core import log
 from .exceptions import InvalidCommandError
 
 
+def build_cookie_range_tuple(cookie: int, cookie_mask: int) -> tuple[int, int]:
+    """Build a cookie range tuple.
+
+    cookie_mask 1's mean exact match and 0's mean don't care. To compute the
+    maximum cookie value, you get the mask binary complement up to 8 bytes and
+    logically add to the initial value of the cookie.
+    """
+    cookie_high = cookie | (~cookie_mask & 0xFFFFFFFFFFFFFFFF)
+    return cookie & cookie_mask, cookie_high
+
+
+def merge_cookie_ranges(cookie_ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Merge overlaping cookie ranges to simplify DB "$or" operator query complexity."""
+    if len(cookie_ranges) <= 1:
+        return cookie_ranges
+    ranges = sorted(cookie_ranges, key=lambda x: (x[0], x[1]))
+    stack = [ranges[0]]
+    for i in range(1, len(ranges)):
+        range_low, range_high = ranges[i]
+        stack_low, stack_high = stack[-1]
+        if range_low <= stack_high:
+            stack.pop()
+            stack.append((min(stack_low, range_low), max(stack_high, range_high)))
+        else:
+            stack.append((range_low, range_high))
+    return stack
+
+
 def build_flow_mod_from_command(flow, command):
     """Build a FlowMod serialized given a command."""
     if command == "delete":

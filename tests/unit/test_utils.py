@@ -9,8 +9,10 @@ from napps.kytos.flow_manager.utils import (
     _valid_consistency_ignored,
     _validate_range,
     build_command_from_flow_mod,
+    build_cookie_range_tuple,
     build_flow_mod_from_command,
     get_min_wait_diff,
+    merge_cookie_ranges,
 )
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 
@@ -33,6 +35,85 @@ def test_build_flow_mod_from_command_exc():
     """test build_flow_mod_from_command."""
     with pytest.raises(InvalidCommandError):
         build_flow_mod_from_command(MagicMock(), "invalid_command")
+
+
+@pytest.mark.parametrize(
+    "cookie,cookie_mask,expected",
+    [
+        (
+            0x0000000000000000,
+            0xFFFFFFFFFFFFFFFF,
+            (0x0000000000000000, 0x0000000000000000),
+        ),
+        (
+            0x0000000000000000,
+            0x0000000000000000,
+            (0x0000000000000000, 0xFFFFFFFFFFFFFFFF),
+        ),
+        (
+            0xAA00000000000000,
+            0xFFFFFFFFFFFFFFFF,
+            (0xAA00000000000000, 0xAA00000000000000),
+        ),
+        (
+            0xAA00000000000000,
+            0xFF00000000000000,
+            (0xAA00000000000000, 0xAAFFFFFFFFFFFFFF),
+        ),
+        (
+            0xAA00000000000000,
+            0x0000000000000000,
+            (0x0000000000000000, 0xFFFFFFFFFFFFFFFF),
+        ),
+        (
+            0x0000000000000064,
+            0xFFFFFFFFFFFFFFFE,
+            (0x0000000000000064, 0x0000000000000065),
+        ),
+        (
+            0x0000000000000060,
+            0xFFFFFFFFFFFFFFF0,
+            (0x0000000000000060, 0x000000000000006F),
+        ),
+    ],
+)
+def test_build_cookie_range_tuple(cookie, cookie_mask, expected) -> None:
+    """Test build_range_tuple."""
+    assert build_cookie_range_tuple(cookie, cookie_mask) == expected
+
+
+@pytest.mark.parametrize(
+    "cookie_ranges,merged",
+    [
+        (
+            [(0, 10), (0, 5), (10, 11), (13, 14), (12, 20)],
+            [(0, 11), (12, 20)],
+        ),
+        (
+            [(0, 10), (13, 14), (12, 20), (0, 5), (10, 11)],
+            [(0, 11), (12, 20)],
+        ),
+        (
+            [(0, 10), (0, 5), (10, 11), (12, 14), (13, 20)],
+            [(0, 11), (12, 20)],
+        ),
+        (
+            [(0, 10), (19, 21), (18, 20), (12, 13)],
+            [(0, 10), (12, 13), (18, 21)],
+        ),
+        (
+            [(0, 10)],
+            [(0, 10)],
+        ),
+        (
+            [],
+            [],
+        ),
+    ],
+)
+def test_merge_cookie_ranges(cookie_ranges, merged) -> None:
+    """Test merge_cookie_ranges."""
+    assert merge_cookie_ranges(cookie_ranges) == merged
 
 
 @pytest.mark.parametrize(
