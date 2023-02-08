@@ -50,7 +50,7 @@ class MatchSubDoc(BaseModel):
     dl_src: Optional[str]
     dl_dst: Optional[str]
     dl_type: Optional[int]
-    dl_vlan: Union[int, str]
+    dl_vlan: Union[int, str, None]
     dl_vlan_pcp: Optional[int]
     nw_src: Optional[str]
     nw_dst: Optional[str]
