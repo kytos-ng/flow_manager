@@ -50,7 +50,7 @@ class MatchSubDoc(BaseModel):
     dl_src: Optional[str]
     dl_dst: Optional[str]
     dl_type: Optional[int]
-    dl_vlan: Optional[int]
+    dl_vlan: Optional[str]
     dl_vlan_pcp: Optional[int]
     nw_src: Optional[str]
     nw_dst: Optional[str]
@@ -86,6 +86,20 @@ class MatchSubDoc(BaseModel):
     v6_hdr: Optional[int]
     metadata: Optional[int]
     tun_id: Optional[int]
+
+    @validator("dl_vlan")
+    def vlan_with_mask(cls, v):
+        """Validate vlan format"""
+        try:
+            int(v)
+        except ValueError:
+            try:
+                [int(part) for part in v.split("/")]
+            except ValueError:
+                raise ValueError(
+                    "must be an integer or an integer with a mask in format vlan/mask"
+                )
+        return v
 
 
 class FlowSubDoc(BaseModel):
