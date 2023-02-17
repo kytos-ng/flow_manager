@@ -13,9 +13,9 @@ from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.msg_prios import of_msg_prio
 from napps.kytos.of_core.settings import STATS_INTERVAL
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
+from pyof.foundation.exceptions import PackException
 from pyof.v0x04.asynchronous.error_msg import ErrorType
 from pyof.v0x04.common.header import Type
-from pyof.foundation.exceptions import PackException
 from werkzeug.exceptions import (
     BadRequest,
     FailedDependency,
