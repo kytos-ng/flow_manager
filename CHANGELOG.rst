@@ -7,6 +7,14 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2022.3.1] - 2023-02-17
+***********************
+
+Added
+=====
+- Handled ``PackException`` to return bad request if a flow can't be packed.
+
+
 [2022.3.0] - 2022-12-15
 ***********************
 
