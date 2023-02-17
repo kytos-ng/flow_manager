@@ -240,6 +240,15 @@ class TestMain(TestCase):
 
         self.assertEqual(mock_install_flows.call_count, 2)
 
+    def test_rest_add_pack_exc(self):
+        """Test add pack exception."""
+        api = get_test_client(self.napp.controller, self.napp)
+        url = f"{self.API_URL}/v2/flows"
+        response = api.post(url, json={"flows": [{"cookie": 27115650311270694912}]})
+        self.assertEqual(response.status_code, 400)
+        data = response.json
+        assert "FlowMod.cookie" in data["description"]
+
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     def test_rest_add_and_delete_with_dpid(self, mock_install_flows):
         """Test add and delete rest method with dpid."""

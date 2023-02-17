@@ -15,6 +15,7 @@ from napps.kytos.of_core.settings import STATS_INTERVAL
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
 from pyof.v0x04.asynchronous.error_msg import ErrorType
 from pyof.v0x04.common.header import Type
+from pyof.foundation.exceptions import PackException
 from werkzeug.exceptions import (
     BadRequest,
     FailedDependency,
@@ -623,6 +624,8 @@ class Main(KytosNApp):
 
         except SwitchNotConnectedError as error:
             raise FailedDependency(str(error))
+        except PackException as error:
+            raise BadRequest(str(error))
 
     def _install_flows(
         self,
@@ -650,6 +653,7 @@ class Main(KytosNApp):
             for flow_dict in flows_list:
                 flow = serializer.from_dict(flow_dict, switch)
                 flow_mod = build_flow_mod_from_command(flow, command)
+                flow_mod.pack()
                 flow_mods.append(flow_mod)
                 flows.append(flow)
                 flow_dicts.append(
