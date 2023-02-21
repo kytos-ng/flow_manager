@@ -13,6 +13,7 @@ file.
 Added
 =====
 - Handled ``PackException`` to return bad request if a flow can't be packed.
+- Fixed not iterable error when sending a FlowMod during OpenFlow connection.
 
 
 [2022.3.0] - 2022-12-15

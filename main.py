@@ -270,6 +270,8 @@ class Main(KytosNApp):
         Returns:
             bool: True if retried, False if max retries have been reached.
         """
+        if event.message.header.message_type != Type.OFPT_FLOW_MOD:
+            return False
         if max_retries <= 0:
             raise ValueError(f"max_retries: {max_retries} should be > 0")
 
@@ -313,7 +315,7 @@ class Main(KytosNApp):
             flow_mod.header.xid = xid
             self._send_flow_mod(flow.switch, flow_mod)
             if send_barrier:
-                self._send_barrier_request(flow.switch, flow_mod)
+                self._send_barrier_request(flow.switch, [flow_mod])
             return True
         except SwitchNotConnectedError:
             log.info(f"Switch {switch.id} isn't connected, it'll retry.")
