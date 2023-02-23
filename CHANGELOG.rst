@@ -7,6 +7,12 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+Added
+=====
+
+- Added support for VLAN with mask. The type of ``dl_vlan`` changed from ``int`` to ``str``. After upgrading, run the script in ``scripts/update_vlan_type.py``.
+
+
 [2022.3.0] - 2022-12-15
 ***********************
 
