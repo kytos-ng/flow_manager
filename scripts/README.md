@@ -49,3 +49,17 @@ And then, to insert (or update) the flows:
 ```
 CMD=insert_flows python3 scripts/storehouse_to_mongo.py
 ```
+
+### Migrate integer `dl_vlan` to string
+
+#### Pre-requisites
+
+Same pre-requisites as the script above.
+
+#### How to use
+
+Just run the script once to upgrade all flows with a match on `dl_vlan`.
+
+```
+python3 scripts/update_vlan_type.py
+```
