@@ -46,12 +46,14 @@ class FlowController:
         index_tuples = [
             ("flows", [("flow_id", pymongo.ASCENDING)], {"unique": True}),
             ("flows", [("flow.cookie", pymongo.ASCENDING)], {}),
+            ("flows", [("flow.priority", pymongo.ASCENDING)], {}),
             ("flows", [("state", pymongo.ASCENDING)], {}),
             (
                 "flows",
                 [
                     ("switch", pymongo.ASCENDING),
                     ("flow.cookie", pymongo.ASCENDING),
+                    ("flow.priority", pymongo.ASCENDING),
                     ("state", pymongo.ASCENDING),
                     ("inserted_at", pymongo.ASCENDING),
                     ("updated_at", pymongo.ASCENDING),
@@ -197,7 +199,9 @@ class FlowController:
 
     def _find_flows(self, query_expression: dict, projection: dict) -> Optional[dict]:
         """Generic method to look for flows given a query and projection"""
-        flows = self.db.flows.find(query_expression, projection)
+        flows = self.db.flows.find(query_expression, projection).sort(
+            [("flow.priority", -1), ("updated_at", 1)]
+        )
         flows_by_dpid = {}
         for flow in flows:
             flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())

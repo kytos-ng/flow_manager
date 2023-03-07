@@ -35,12 +35,14 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         expected_indexes = [
             ("flows", [("flow_id", 1)]),
             ("flows", [("flow.cookie", 1)]),
+            ("flows", [("flow.priority", 1)]),
             ("flows", [("state", 1)]),
             (
                 "flows",
                 [
                     ("switch", 1),
                     ("flow.cookie", 1),
+                    ("flow.priority", 1),
                     ("state", 1),
                     ("inserted_at", 1),
                     ("updated_at", 1),
@@ -160,3 +162,10 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
         assert args[0]["state"] == "installed"
         assert args[0]["flow.cookie"]["$gte"] == Decimal128(Decimal(cookie_range[0]))
         assert args[0]["flow.cookie"]["$lte"] == Decimal128(Decimal(cookie_range[1]))
+
+    def test_find_flows_sorted(self) -> None:
+        """Test find_flows to sort flows."""
+        assert not list(self.flow_controller.find_flows())
+        assert self.flow_controller.db.flows.find().sort.call_count == 1
+        args = self.flow_controller.db.flows.find().sort.call_args[0]
+        assert args[0] == [("flow.priority", -1), ("updated_at", 1)]

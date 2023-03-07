@@ -160,7 +160,7 @@ paths:
           schema:
             type: array
             items:
-              type: int
+              type: integer
           description: Range of cookies
           required: false
           example: [84114963, 84114965]
