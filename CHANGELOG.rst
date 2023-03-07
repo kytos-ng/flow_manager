@@ -7,6 +7,10 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+Changed
+=======
+- Update endpoint ``GET v2/stored_flows`` to return the flows in descending order by `priority`.
+
 [2022.3.1] - 2023-02-17
 ***********************
 
