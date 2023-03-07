@@ -256,8 +256,11 @@ components:
           format: int16
           example: 2048
         dl_vlan:
-          type: string
-          example: "40/4088"
+          oneOf:
+            - type: string
+              example: "40/4088"
+            - type: integer
+              example: 40
         dl_vlan_pcp:
           type: integer
           format: int8

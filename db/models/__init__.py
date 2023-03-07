@@ -6,7 +6,7 @@
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from bson.decimal128 import Decimal128
 from pydantic import BaseModel, Field, validator
@@ -50,7 +50,7 @@ class MatchSubDoc(BaseModel):
     dl_src: Optional[str]
     dl_dst: Optional[str]
     dl_type: Optional[int]
-    dl_vlan: Optional[str]
+    dl_vlan: Optional[Union[int, str]]
     dl_vlan_pcp: Optional[int]
     nw_src: Optional[str]
     nw_dst: Optional[str]
@@ -91,7 +91,7 @@ class MatchSubDoc(BaseModel):
     def vlan_with_mask(cls, v):
         """Validate vlan format"""
         try:
-            int(v)
+            return int(v)
         except ValueError:
             try:
                 [int(part) for part in v.split("/")]
