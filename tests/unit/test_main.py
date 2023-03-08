@@ -10,6 +10,7 @@ from napps.kytos.flow_manager.exceptions import (
 )
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
 from pyof.v0x04.asynchronous.error_msg import ErrorType
+from pyof.v0x04.common.header import Type
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 
 from kytos.core.helpers import now
@@ -239,6 +240,15 @@ class TestMain(TestCase):
             self.assertEqual(response_2.status_code, 400)
 
         self.assertEqual(mock_install_flows.call_count, 2)
+
+    def test_rest_add_pack_exc(self):
+        """Test add pack exception."""
+        api = get_test_client(self.napp.controller, self.napp)
+        url = f"{self.API_URL}/v2/flows"
+        response = api.post(url, json={"flows": [{"cookie": 27115650311270694912}]})
+        self.assertEqual(response.status_code, 400)
+        data = response.json
+        assert "FlowMod.cookie" in data["description"]
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     def test_rest_add_and_delete_with_dpid(self, mock_install_flows):
@@ -975,11 +985,13 @@ class TestMain(TestCase):
 
         flow = MagicMock()
         flow.as_dict.return_value = {}
+        flow.header.message_type = Type.OFPT_FLOW_MOD
         flow.xid = 1
         self.napp._flow_mods_sent[flow.xid] = (flow, "add")
 
         mock_ev = MagicMock()
-        mock_ev.event.content = {"destination": switch}
+        mock_ev.message = flow
+        mock_ev.content["destination"] = switch
         min_wait = 0.2
         multiplier = 2
         assert self.napp._retry_on_openflow_connection_error(
@@ -1003,6 +1015,7 @@ class TestMain(TestCase):
 
         flow = MagicMock()
         flow.as_dict.return_value = {}
+        flow.header.message_type = Type.OFPT_FLOW_MOD
         flow.xid = 1
         self.napp._flow_mods_sent[flow.xid] = (flow, "add")
 
@@ -1010,7 +1023,7 @@ class TestMain(TestCase):
         self.napp._flow_mods_retry_count[flow.xid] = (3, now(), 10)
 
         mock_ev = MagicMock()
-        mock_ev.event.content = {"destination": switch}
+        mock_ev.message = flow
         min_wait = 0.2
         assert not self.napp._retry_on_openflow_connection_error(
             mock_ev,
@@ -1021,24 +1034,33 @@ class TestMain(TestCase):
         )
         assert mock_send.call_count == 1
 
-    def test_retry_on_openflow_connection_error_early_return(self):
+    def test_retry_on_openflow_connection_error_early_return_max_retries(self):
         """Test retry on openflow connection error early returns."""
         max_retries = 0
         min_wait = 0.2
         multiplier = 2
+        mock, flow = MagicMock(), MagicMock()
+        flow.header.message_type = Type.OFPT_FLOW_MOD
+        mock.message = flow
         with self.assertRaises(ValueError) as exc:
             self.napp._retry_on_openflow_connection_error(
-                {}, max_retries, min_wait, multiplier
+                mock, max_retries, min_wait, multiplier
             )
         assert "should be > 0" in str(exc.exception)
 
         self.napp._flow_mods_sent = {}
-        mock = MagicMock()
+        mock, flow = MagicMock(), MagicMock()
+        flow.header.message_type = Type.OFPT_FLOW_MOD
+        mock.message = flow
         with self.assertRaises(ValueError) as exc:
             self.napp._retry_on_openflow_connection_error(
                 mock, max_retries + 1, min_wait, multiplier
             )
         assert "not found on flow mods sent" in str(exc.exception)
+
+    def test_retry_on_openflow_connection_error_early_return_msg_type(self):
+        """Test retry on openflow connection error early returns."""
+        assert not self.napp._retry_on_openflow_connection_error(MagicMock())
 
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     def test_send_openflow_connection_error(self, mock_send):

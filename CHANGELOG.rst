@@ -10,9 +10,22 @@ file.
 Added
 =====
 
-- Added support for VLAN with mask. The type of ``dl_vlan`` changed from ``int`` to ``str``. After upgrading, run the script in ``scripts/update_vlan_type.py``.
+- Added support for VLAN with mask. ``dl_vlan`` now also supports a string ``"vlan/mask"``.
+
+Changed
+=======
+- Update endpoint ``GET v2/stored_flows`` to return the flows in descending order by `priority`.
+
+[2022.3.1] - 2023-02-17
+***********************
+
+Added
+=====
+- Handled ``PackException`` to return bad request if a flow can't be packed.
+- Fixed not iterable error when sending a FlowMod during OpenFlow connection.
 
 
+>>>>>>> master
 [2022.3.0] - 2022-12-15
 ***********************
 

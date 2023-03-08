@@ -13,6 +13,7 @@ from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.msg_prios import of_msg_prio
 from napps.kytos.of_core.settings import STATS_INTERVAL
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
+from pyof.foundation.exceptions import PackException
 from pyof.v0x04.asynchronous.error_msg import ErrorType
 from pyof.v0x04.common.header import Type
 from werkzeug.exceptions import (
@@ -269,6 +270,8 @@ class Main(KytosNApp):
         Returns:
             bool: True if retried, False if max retries have been reached.
         """
+        if event.message.header.message_type != Type.OFPT_FLOW_MOD:
+            return False
         if max_retries <= 0:
             raise ValueError(f"max_retries: {max_retries} should be > 0")
 
@@ -312,7 +315,7 @@ class Main(KytosNApp):
             flow_mod.header.xid = xid
             self._send_flow_mod(flow.switch, flow_mod)
             if send_barrier:
-                self._send_barrier_request(flow.switch, flow_mod)
+                self._send_barrier_request(flow.switch, [flow_mod])
             return True
         except SwitchNotConnectedError:
             log.info(f"Switch {switch.id} isn't connected, it'll retry.")
@@ -623,6 +626,8 @@ class Main(KytosNApp):
 
         except SwitchNotConnectedError as error:
             raise FailedDependency(str(error))
+        except PackException as error:
+            raise BadRequest(str(error))
 
     def _install_flows(
         self,
@@ -650,6 +655,7 @@ class Main(KytosNApp):
             for flow_dict in flows_list:
                 flow = serializer.from_dict(flow_dict, switch)
                 flow_mod = build_flow_mod_from_command(flow, command)
+                flow_mod.pack()
                 flow_mods.append(flow_mod)
                 flows.append(flow)
                 flow_dicts.append(
