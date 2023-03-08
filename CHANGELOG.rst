@@ -25,7 +25,6 @@ Added
 - Fixed not iterable error when sending a FlowMod during OpenFlow connection.
 
 
->>>>>>> master
 [2022.3.0] - 2022-12-15
 ***********************
 
