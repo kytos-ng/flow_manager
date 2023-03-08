@@ -7,6 +7,11 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+Added
+=====
+
+- Added support for VLAN with mask. ``dl_vlan`` now also supports a string ``"vlan/mask"``.
+
 Changed
 =======
 - Update endpoint ``GET v2/stored_flows`` to return the flows in descending order by `priority`.

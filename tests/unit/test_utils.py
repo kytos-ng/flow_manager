@@ -140,7 +140,6 @@ class TestUtils(TestCase):
         test_data = [((1,), ValueError), ((2, 1), ValueError), ((1, "1"), TypeError)]
         for values, exception in test_data:
             with self.subTest(values=values, exception=exception):
-
                 with self.assertRaises(exception) as exc:
                     _validate_range(values)
 
