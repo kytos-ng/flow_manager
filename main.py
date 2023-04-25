@@ -506,7 +506,10 @@ class Main(KytosNApp):
             cookies = params.getlist("cookie_range")
             cookie_range = [int(v) for v in cookies]
         except (ValueError, TypeError):
-            raise HTTPException(400, detail="cookie_range couldn't be cast as an int")
+            raise HTTPException(
+                400,
+                detail=f"cookie_range {cookies} couldn't be cast as an int"
+            )
         if not (len(cookie_range) == 2 or len(cookie_range) == 0):
             msg = "cookie_range only accepts exactly two values."
             raise HTTPException(400, msg)
