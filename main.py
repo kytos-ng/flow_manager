@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from threading import Lock
 from typing import Optional
 
-from flask import jsonify, request
 from napps.kytos.flow_manager.match import match_flow
 from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.msg_prios import of_msg_prio
@@ -16,15 +15,16 @@ from napps.kytos.of_core.v0x04.flow import Flow as Flow04
 from pyof.foundation.exceptions import PackException
 from pyof.v0x04.asynchronous.error_msg import ErrorType
 from pyof.v0x04.common.header import Type
-from werkzeug.exceptions import (
-    BadRequest,
-    FailedDependency,
-    NotFound,
-    UnsupportedMediaType,
-)
 
 from kytos.core import KytosEvent, KytosNApp, log, rest
 from kytos.core.helpers import listen_to, now
+from kytos.core.rest_api import (
+    HTTPException,
+    JSONResponse,
+    Request,
+    content_type_json_or_415,
+    get_json_or_400,
+)
 
 from .barrier_request import new_barrier_request
 from .controllers import FlowController
@@ -467,21 +467,21 @@ class Main(KytosNApp):
                 deleted_flows.keys(), deleted_flows.values()
             )
 
-    # pylint: disable=attribute-defined-outside-init
     @rest("v2/flows")
-    @rest("v2/flows/<dpid>")
-    def list(self, dpid=None):
+    @rest("v2/flows/{dpid}")
+    async def list(self, request: Request) -> JSONResponse:
         """Retrieve all flows from a switch identified by dpid.
 
         If no dpid is specified, return all flows from all switches.
         """
+        dpid = request.path_params.get("dpid")
         if dpid is None:
             switches = self.controller.switches.values()
         else:
             switches = [self.controller.get_switch_by_dpid(dpid)]
 
             if not any(switches):
-                raise NotFound("Switch not found")
+                raise HTTPException(404, "Switch not found")
 
         switch_flows = {}
 
@@ -489,27 +489,31 @@ class Main(KytosNApp):
             flows_dict = [cast_fields(flow.as_dict()) for flow in switch.flows]
             switch_flows[switch.dpid] = {"flows": flows_dict}
 
-        return jsonify(switch_flows)
+        return JSONResponse(switch_flows)
 
     @rest("v2/stored_flows")
-    def list_stored(self):
+    def list_stored(self, request: Request) -> JSONResponse:
         """Retrieve stored flows, where `_id` is excluded in the response.
 
         It is possible dynamically parametrize the switches and state.
         `dpid` is as a list of dpids separated by comma.
         If `dpid` is not specified all documents are returned.
         """
-        args = request.args
-        dpids = args.getlist("dpid", type=str)
-        state = args.get("state", type=str)
-        cookie_range = args.getlist("cookie_range", type=int)
+        params = request.query_params
+        dpids = params.getlist("dpid")
+        state = params.get("state")
+        try:
+            cookies = params.getlist("cookie_range")
+            cookie_range = [int(v) for v in cookies]
+        except (ValueError, TypeError):
+            raise HTTPException(400, detail="cookie_range couldn't be cast as an int")
         if not (len(cookie_range) == 2 or len(cookie_range) == 0):
             msg = "cookie_range only accepts exactly two values."
-            raise BadRequest(msg)
+            raise HTTPException(400, msg)
         flows_collection = dict(
             self.flow_controller.find_flows(dpids, state, cookie_range)
         )
-        return jsonify(flows_collection)
+        return JSONResponse(flows_collection)
 
     @listen_to("kytos.flow_manager.flows.(install|delete)")
     def on_flows_install_delete(self, event):
@@ -552,52 +556,45 @@ class Main(KytosNApp):
             self._send_napp_event(switch, error.flow, "error")
 
     @rest("v2/flows", methods=["POST"])
-    @rest("v2/flows/<dpid>", methods=["POST"])
-    def add(self, dpid=None):
+    @rest("v2/flows/{dpid}", methods=["POST"])
+    def add(self, request: Request) -> JSONResponse:
         """Install new flows in the switch identified by dpid.
 
         If no dpid is specified, install flows in all switches.
         """
-        return self._send_flow_mods_from_request(dpid, "add")
+        dpid = request.path_params.get("dpid")
+        return self._send_flow_mods_from_request(request, dpid, "add")
 
     @rest("v2/delete", methods=["POST"])
-    @rest("v2/delete/<dpid>", methods=["POST"])
+    @rest("v2/delete/{dpid}", methods=["POST"])
     @rest("v2/flows", methods=["DELETE"])
-    @rest("v2/flows/<dpid>", methods=["DELETE"])
-    def delete(self, dpid=None):
+    @rest("v2/flows/{dpid}", methods=["DELETE"])
+    def delete(self, request: Request) -> JSONResponse:
         """Delete existing flows in the switch identified by dpid.
 
         If no dpid is specified, delete flows from all switches.
         """
-        return self._send_flow_mods_from_request(dpid, "delete")
+        dpid = request.path_params.get("dpid")
+        return self._send_flow_mods_from_request(request, dpid, "delete")
 
     def _get_all_switches_enabled(self):
         """Get a list of all switches enabled."""
         switches = self.controller.switches.values()
         return [switch for switch in switches if switch.is_enabled()]
 
-    def _send_flow_mods_from_request(self, dpid, command, flows_dict=None):
+    def _send_flow_mods_from_request(
+        self, request: Request, dpid: Optional[str], command: str
+    ):
         """Install FlowsMods from request."""
-        if flows_dict is None:
-            flows_dict = request.get_json() or {}
-            content_type = request.content_type
-            # Get flow to check if the request is well-formed
-            flows = flows_dict.get("flows", [])
 
-            if content_type is None:
-                result = "The request body is empty"
-                raise BadRequest(result)
+        content_type_json_or_415(request)
+        flows_dict = get_json_or_400(request)
 
-            if content_type != "application/json":
-                result = (
-                    "The content type must be application/json "
-                    f"(received {content_type})."
-                )
-                raise UnsupportedMediaType(result)
-
-            if not any(flows_dict) or not any(flows):
-                result = "The request body is not well-formed."
-                raise BadRequest(result)
+        # Get flow to check if the request is well-formed
+        flows = flows_dict.get("flows", [])
+        if not any(flows_dict) or not any(flows):
+            result = "The request body doesn't have any flows"
+            raise HTTPException(400, detail=result)
 
         force = bool(flows_dict.get("force", False))
         log.info(
@@ -612,22 +609,24 @@ class Main(KytosNApp):
                     self._get_all_switches_enabled(),
                     reraise_conn=not force,
                 )
-                return jsonify({"response": "FlowMod Messages Sent"}), 202
+                return JSONResponse(
+                    {"response": "FlowMod Messages Sent"}, status_code=202
+                )
 
             switch = self.controller.get_switch_by_dpid(dpid)
             if not switch:
-                return jsonify({"response": "dpid not found."}), 404
+                return JSONResponse({"response": "dpid not found."}, status_code=404)
 
             if not switch.is_enabled() and command == "add":
-                raise NotFound("switch is disabled.")
+                raise HTTPException(404, detail=f"Switch {dpid} is disabled.")
 
             self._install_flows(command, flows_dict, [switch], reraise_conn=not force)
-            return jsonify({"response": "FlowMod Messages Sent"}), 202
+            return JSONResponse({"response": "FlowMod Messages Sent"}, status_code=202)
 
         except SwitchNotConnectedError as error:
-            raise FailedDependency(str(error))
+            raise HTTPException(424, detail=str(error))
         except PackException as error:
-            raise BadRequest(str(error))
+            raise HTTPException(400, detail=str(error))
 
     def _install_flows(
         self,
