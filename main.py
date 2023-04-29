@@ -590,7 +590,7 @@ class Main(KytosNApp):
         """Install FlowsMods from request."""
 
         content_type_json_or_415(request)
-        flows_dict = get_json_or_400(request)
+        flows_dict = get_json_or_400(request, self.controller.loop)
         if not isinstance(flows_dict, dict):
             raise HTTPException(400, detail=f"Invalid payload: {flows_dict}")
 
