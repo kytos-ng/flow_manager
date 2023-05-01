@@ -215,9 +215,11 @@ class TestMain:
         assert response.status_code == 404
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    async def test_rest_add_and_delete_without_dpid(self, mock_install_flows):
+    async def test_rest_add_and_delete_without_dpid(
+        self, mock_install_flows, event_loop
+    ):
         """Test add and delete rest method without dpid."""
-
+        self.napp.controller.loop = event_loop
         flows = {"flows": [{"match": {"in_port": 1}}]}
         coros = [
             self.api_client.post(f"{self.base_endpoint}/flows", json=flows),
@@ -229,8 +231,9 @@ class TestMain:
 
         assert mock_install_flows.call_count == 2
 
-    async def test_rest_add_pack_exc(self):
+    async def test_rest_add_pack_exc(self, event_loop):
         """Test add pack exception."""
+        self.napp.controller.loop = event_loop
         body = {"flows": [{"cookie": 27115650311270694912}]}
         endpoint = f"{self.base_endpoint}/flows"
         response = await self.api_client.post(endpoint, json=body)
@@ -239,8 +242,11 @@ class TestMain:
         assert "FlowMod.cookie" in data["description"]
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    async def test_rest_add_and_delete_with_dpi_fail(self, mock_install_flows):
+    async def test_rest_add_and_delete_with_dpi_fail(
+        self, mock_install_flows, event_loop
+    ):
         """Test fail case the add and delete rest method with dpid."""
+        self.napp.controller.loop = event_loop
         data = {"flows": [{"match": {"in_port": 1}}]}
 
         dpids = [
@@ -269,8 +275,11 @@ class TestMain:
         assert responses[1].status_code == 404
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    async def test_rest_flow_mod_add_switch_not_connected(self, mock_install_flows):
+    async def test_rest_flow_mod_add_switch_not_connected(
+        self, mock_install_flows, event_loop
+    ):
         """Test sending a flow mod when a swith isn't connected."""
+        self.napp.controller.loop = event_loop
         mock_install_flows.side_effect = SwitchNotConnectedError(
             "error", flow=MagicMock()
         )
@@ -282,25 +291,20 @@ class TestMain:
 
         assert response.status_code == 424
 
-    @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
-    @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
-    @patch("napps.kytos.flow_manager.main.Main._send_barrier_request")
     @patch("napps.kytos.flow_manager.main.Main._send_flow_mod")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
-    async def test_rest_flow_mod_add_switch_not_connected_force(self, *args):
+    async def test_rest_flow_mod_add_switch_not_connected_force(
+        self, mock_flow_factory, mock_send_flow_mod, event_loop
+    ):
         """Test sending a flow mod when a swith isn't connected with force option."""
-        (
-            mock_flow_factory,
-            mock_send_flow_mod,
-            _,
-            _,
-            _,
-        ) = args
-
+        self.napp.controller.loop = event_loop
+        self.napp._send_napp_event = MagicMock()
+        self.napp._add_flow_mod_sent = MagicMock()
+        self.napp._send_barrier_request = MagicMock()
         mock_send_flow_mod.side_effect = SwitchNotConnectedError(
             "error", flow=MagicMock()
         )
-
+        self.napp.controller.loop = event_loop
         _id = str(uuid4())
         match_id = str(uuid4())
         serializer = MagicMock()
