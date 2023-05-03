@@ -16,6 +16,11 @@ Changed
 =======
 - Update endpoint ``GET v2/stored_flows`` to return the flows in descending order by `priority`.
 
+General Information
+===================
+- ``@rest`` endpoints are now run by ``starlette/uvicorn`` instead of ``flask/werkzeug``.
+
+
 [2022.3.1] - 2023-02-17
 ***********************
 

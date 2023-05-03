@@ -1,9 +1,10 @@
 """Test Main methods."""
+import asyncio
 from datetime import datetime, timedelta
-from unittest import TestCase
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from napps.kytos.flow_manager.exceptions import (
     InvalidCommandError,
     SwitchNotConnectedError,
@@ -27,18 +28,16 @@ from kytos.lib.helpers import (
 
 
 # pylint: disable=protected-access, too-many-public-methods
-class TestMain(TestCase):
+class TestMain:
     """Tests for the Main class."""
 
-    API_URL = "http://localhost:8181/api/kytos/flow_manager"
-
-    def setUp(self):
+    def setup_method(self):
+        """Setup method."""
         patch("kytos.core.helpers.run_on_thread", lambda x: x).start()
         # pylint: disable=import-outside-toplevel
         from napps.kytos.flow_manager.main import Main
 
         Main.get_flow_controller = MagicMock()
-        self.addCleanup(patch.stopall)
 
         controller = get_controller_mock()
         self.switch_01 = get_switch_mock("00:00:00:00:00:00:00:01", 0x04)
@@ -56,8 +55,10 @@ class TestMain(TestCase):
 
         self.napp = Main(controller)
         self.napp._consistency_verdict = 30
+        self.api_client = get_test_client(controller, self.napp)
+        self.base_endpoint = "kytos/flow_manager/v2"
 
-    def test_rest_list_without_dpid(self):
+    async def test_rest_list_without_dpid(self):
         """Test list rest method withoud dpid."""
         flow_dict = {
             "priority": 13,
@@ -78,18 +79,16 @@ class TestMain(TestCase):
         self.switch_01.flows.append(flow_1)
         self.switch_02.flows.append(flow_2)
 
-        api = get_test_client(self.napp.controller, self.napp)
-        url = f"{self.API_URL}/v2/flows"
-
-        response = api.get(url)
+        endpoint = f"{self.base_endpoint}/flows"
+        response = await self.api_client.get(endpoint)
         expected = {
             "00:00:00:00:00:00:00:01": {"flows": [flow_dict]},
             "00:00:00:00:00:00:00:02": {"flows": [flow_dict_2]},
         }
-        self.assertEqual(response.json, expected)
-        self.assertEqual(response.status_code, 200)
+        assert response.json() == expected
+        assert response.status_code == 200
 
-    def test_rest_list_with_dpid(self):
+    async def test_rest_list_with_dpid(self):
         """Test list rest method with dpid."""
         flow_dict = {
             "priority": 13,
@@ -101,16 +100,14 @@ class TestMain(TestCase):
         flow_1.as_dict.return_value = flow_dict
         self.switch_01.flows.append(flow_1)
 
-        api = get_test_client(self.napp.controller, self.napp)
-        url = f"{self.API_URL}/v2/flows/00:00:00:00:00:00:00:01"
+        endpoint = f"{self.base_endpoint}/flows/00:00:00:00:00:00:00:01"
+        response = await self.api_client.get(endpoint)
 
-        response = api.get(url)
         expected = {"00:00:00:00:00:00:00:01": {"flows": [flow_dict]}}
+        assert response.json() == expected
+        assert response.status_code == 200
 
-        self.assertEqual(response.json, expected)
-        self.assertEqual(response.status_code, 200)
-
-    def test_rest_list_stored_all_documents(self):
+    async def test_rest_list_stored_all_documents(self):
         """Test list_stored rest method."""
         flow_dict = {
             "switch": "00:00:00:00:00:00:00:01",
@@ -124,205 +121,190 @@ class TestMain(TestCase):
             "00:00:00:00:00:00:00:01": [flow_dict]
         }
 
-        api = get_test_client(self.napp.controller, self.napp)
-        url = f"{self.API_URL}/v2/stored_flows"
+        endpoint = f"{self.base_endpoint}/stored_flows"
+        response = await self.api_client.get(endpoint)
 
-        response = api.get(url)
         expected = [flow_dict]
-        assert response.json["00:00:00:00:00:00:00:01"] == expected
         assert response.status_code == 200
+        assert response.json()["00:00:00:00:00:00:00:01"] == expected
 
-    def test_rest_list_stored_by_state(self):
+    async def test_rest_list_stored_by_state(self):
         """Test list_stored rest method."""
+        dpid = "00:00:00:00:00:00:00:01"
         flow_dict = {
-            "switch": "00:00:00:00:00:00:00:01",
+            "switch": dpid,
             "id": 1,
             "flow_id": 1,
             "state": "installed",
             "flow": {"priority": 10, "cookie": 84114964},
         }
 
-        self.napp.flow_controller.find_flows.return_value = {
-            "00:00:00:00:00:00:00:01": [flow_dict]
-        }
+        self.napp.flow_controller.find_flows.return_value = {dpid: [flow_dict]}
 
-        api = get_test_client(self.napp.controller, self.napp)
-        url = f"{self.API_URL}/v2/stored_flows?state=installed"
+        endpoint = f"{self.base_endpoint}/stored_flows?state=installed"
+        response = await self.api_client.get(endpoint)
 
-        response = api.get(url)
-        for swith in response.json:
-            assert response.json[swith][0]["state"] == "installed"
         assert response.status_code == 200
+        data = response.json()
+        assert data[dpid][0]["state"] == "installed"
 
-    def test_rest_list_stored_by_dpids(self):
+    async def test_rest_list_stored_by_dpids(self):
         """Test list_stored rest method."""
+        dpid = "00:00:00:00:00:00:00:01"
         flow_dict = {
-            "switch": "00:00:00:00:00:00:00:01",
+            "switch": dpid,
             "id": 1,
             "flow_id": 1,
             "state": "installed",
             "flow": {"priority": 10, "cookie": 84114964},
         }
 
-        self.napp.flow_controller.find_flows.return_value = {
-            "00:00:00:00:00:00:00:01": [flow_dict]
-        }
+        self.napp.flow_controller.find_flows.return_value = {dpid: [flow_dict]}
 
-        api = get_test_client(self.napp.controller, self.napp)
-        url = f"{self.API_URL}/v2/stored_flows?dpid=00:00:00:00:00:00:00:01"
+        endpoint = f"{self.base_endpoint}/stored_flows?dpid={dpid}"
+        response = await self.api_client.get(endpoint)
 
-        response = api.get(url)
-        for swith in response.json:
-            assert swith == "00:00:00:00:00:00:00:01"
         assert response.status_code == 200
+        assert dpid in response.json()
 
-    def test_rest_list_stored_by_cookie(self):
+    async def test_rest_list_stored_by_cookie(self):
         """Test list_stored rest method"""
+        dpid = "00:00:00:00:00:00:00:01"
         flow_dict = {
-            "switch": "00:00:00:00:00:00:00:01",
+            "switch": dpid,
             "id": 1,
             "flow_id": 1,
             "state": "installed",
             "flow": {"priority": 10, "cookie": "84114964"},
         }
 
-        self.napp.flow_controller.find_flows.return_value = {
-            "00:00:00:00:00:00:00:01": [flow_dict]
-        }
+        self.napp.flow_controller.find_flows.return_value = {dpid: [flow_dict]}
 
-        api = get_test_client(self.napp.controller, self.napp)
-        url = (
-            f"{self.API_URL}/v2/stored_flows?"
+        endpoint = (
+            f"{self.base_endpoint}/stored_flows?"
             "cookie_range=84114964&cookie_range=84114964"
         )
+        response = await self.api_client.get(endpoint)
 
-        response = api.get(url)
-        for switch in response.json:
-            assert switch == "00:00:00:00:00:00:00:01"
         assert response.status_code == 200
+        assert dpid in response.json()
 
-    def test_rest_list_stored_by_cookie_fail(self):
+    async def test_rest_list_stored_by_cookie_fail(self):
         """Test list_stored rest method failing with BadRequest"""
-        api = get_test_client(self.napp.controller, self.napp)
-        url = f"{self.API_URL}/v2/stored_flows?cookie_range=84114964"
-        response = api.get(url)
+        endpoint = f"{self.base_endpoint}/stored_flows?cookie_range=x"
+        response = await self.api_client.get(endpoint)
         assert response.status_code == 400
+        assert "cast as an int" in response.json()["description"]
 
-        url = (
-            f"{self.API_URL}/v2/stored_flows?cookie_range=84114964"
-            "&cookie_range=84114964&cookie_range=84114964"
+        endpoint = (
+            f"{self.base_endpoint}/stored_flows?"
+            "cookie_range=1&cookie_range=2&cookie_range=3"
         )
-        response = api.get(url)
+        response = await self.api_client.get(endpoint)
         assert response.status_code == 400
+        assert "exactly two values" in response.json()["description"]
 
-    def test_list_flows_fail_case(self):
+    async def test_list_flows_fail_case(self):
         """Test the failure case to recover all flows from a switch by dpid.
 
         Failure case: Switch not found.
         """
-        api = get_test_client(self.napp.controller, self.napp)
-        url = f"{self.API_URL}/v2/flows/00:00:00:00:00:00:00:05"
-        response = api.get(url)
-        self.assertEqual(response.status_code, 404)
+        dpid = "00:00:00:00:00:00:00:05"
+        endpoint = f"{self.base_endpoint}/flows/{dpid}"
+        response = await self.api_client.get(endpoint)
+        assert response.status_code == 404
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_rest_add_and_delete_without_dpid(self, mock_install_flows):
+    async def test_rest_add_and_delete_without_dpid(
+        self, mock_install_flows, event_loop
+    ):
         """Test add and delete rest method without dpid."""
-        api = get_test_client(self.napp.controller, self.napp)
+        self.napp.controller.loop = event_loop
+        flows = {"flows": [{"match": {"in_port": 1}}]}
+        coros = [
+            self.api_client.post(f"{self.base_endpoint}/flows", json=flows),
+            self.api_client.post(f"{self.base_endpoint}/delete", json=flows),
+        ]
+        responses = await asyncio.gather(*coros)
+        assert responses[0].status_code == 202
+        assert responses[1].status_code == 202
 
-        for method in ["flows", "delete"]:
-            url = f"{self.API_URL}/v2/{method}"
+        assert mock_install_flows.call_count == 2
 
-            response_1 = api.post(url, json={"flows": [{"priority": 25}]})
-            response_2 = api.post(url)
-
-            self.assertEqual(response_1.status_code, 202)
-            self.assertEqual(response_2.status_code, 400)
-
-        self.assertEqual(mock_install_flows.call_count, 2)
-
-    def test_rest_add_pack_exc(self):
+    async def test_rest_add_pack_exc(self, event_loop):
         """Test add pack exception."""
-        api = get_test_client(self.napp.controller, self.napp)
-        url = f"{self.API_URL}/v2/flows"
-        response = api.post(url, json={"flows": [{"cookie": 27115650311270694912}]})
-        self.assertEqual(response.status_code, 400)
-        data = response.json
+        self.napp.controller.loop = event_loop
+        body = {"flows": [{"cookie": 27115650311270694912}]}
+        endpoint = f"{self.base_endpoint}/flows"
+        response = await self.api_client.post(endpoint, json=body)
+        assert response.status_code == 400
+        data = response.json()
         assert "FlowMod.cookie" in data["description"]
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_rest_add_and_delete_with_dpid(self, mock_install_flows):
-        """Test add and delete rest method with dpid."""
-        api = get_test_client(self.napp.controller, self.napp)
-        data = {"flows": [{"priority": 25}]}
-        for method in ["flows", "delete"]:
-            url_1 = f"{self.API_URL}/v2/{method}/00:00:00:00:00:00:00:01"
-            url_2 = f"{self.API_URL}/v2/{method}/00:00:00:00:00:00:00:02"
-
-            response_1 = api.post(url_1, json=data)
-            response_2 = api.post(url_2, json=data)
-
-            self.assertEqual(response_1.status_code, 202)
-            if method == "delete":
-                self.assertEqual(response_2.status_code, 202)
-
-        self.assertEqual(mock_install_flows.call_count, 3)
-
-    @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_rest_add_and_delete_with_dpi_fail(self, mock_install_flows):
+    async def test_rest_add_and_delete_with_dpi_fail(
+        self, mock_install_flows, event_loop
+    ):
         """Test fail case the add and delete rest method with dpid."""
-        api = get_test_client(self.napp.controller, self.napp)
-        data = {"flows": [{"priority": 25}]}
-        for method in ["flows", "delete"]:
-            url_1 = f"{self.API_URL}/v2/{method}/00:00:00:00:00:00:00:01"
-            url_2 = f"{self.API_URL}/v2/{method}/00:00:00:00:00:00:00:02"
-            url_3 = f"{self.API_URL}/v2/{method}/00:00:00:00:00:00:00:03"
+        self.napp.controller.loop = event_loop
+        data = {"flows": [{"match": {"in_port": 1}}]}
 
-            response_1 = api.post(url_1)
-            response_2 = api.post(url_2, data=data)
-            response_3 = api.post(url_2, json={})
-            response_4 = api.post(url_3, json=data)
+        dpids = [
+            "00:00:00:00:00:00:00:02",
+            "00:00:00:00:00:00:00:03",
+        ]
 
-            self.assertEqual(response_1.status_code, 400)
-            self.assertEqual(response_2.status_code, 415)
-            self.assertEqual(response_3.status_code, 400)
-            self.assertEqual(response_4.status_code, 404)
+        coros = [
+            self.api_client.post(f"{self.base_endpoint}/flows/{dpids[0]}", json=data),
+            self.api_client.post(f"{self.base_endpoint}/flows/{dpids[1]}", json=data),
+        ]
 
-        self.assertEqual(mock_install_flows.call_count, 0)
+        assert mock_install_flows.call_count == 0
+
+        responses = await asyncio.gather(*coros)
+        assert responses[0].status_code == 404
+        assert responses[1].status_code == 404
+
+        coros = [
+            self.api_client.post(f"{self.base_endpoint}/delete/{dpids[0]}", json=data),
+            self.api_client.post(f"{self.base_endpoint}/delete/{dpids[1]}", json=data),
+        ]
+
+        responses = await asyncio.gather(*coros)
+        assert responses[0].status_code == 202
+        assert responses[1].status_code == 404
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_rest_flow_mod_add_switch_not_connected(self, mock_install_flows):
+    async def test_rest_flow_mod_add_switch_not_connected(
+        self, mock_install_flows, event_loop
+    ):
         """Test sending a flow mod when a swith isn't connected."""
-        api = get_test_client(self.napp.controller, self.napp)
+        self.napp.controller.loop = event_loop
         mock_install_flows.side_effect = SwitchNotConnectedError(
             "error", flow=MagicMock()
         )
 
-        url = f"{self.API_URL}/v2/flows"
-        response = api.post(url, json={"flows": [{"priority": 25}]})
+        endpoint = f"{self.base_endpoint}/flows"
+        response = await self.api_client.post(
+            endpoint, json={"flows": [{"priority": 25}]}
+        )
 
-        self.assertEqual(response.status_code, 424)
+        assert response.status_code == 424
 
-    @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
-    @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
-    @patch("napps.kytos.flow_manager.main.Main._send_barrier_request")
     @patch("napps.kytos.flow_manager.main.Main._send_flow_mod")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
-    def test_rest_flow_mod_add_switch_not_connected_force(self, *args):
+    async def test_rest_flow_mod_add_switch_not_connected_force(
+        self, mock_flow_factory, mock_send_flow_mod, event_loop
+    ):
         """Test sending a flow mod when a swith isn't connected with force option."""
-        (
-            mock_flow_factory,
-            mock_send_flow_mod,
-            _,
-            _,
-            _,
-        ) = args
-
-        api = get_test_client(self.napp.controller, self.napp)
+        self.napp.controller.loop = event_loop
+        self.napp._send_napp_event = MagicMock()
+        self.napp._add_flow_mod_sent = MagicMock()
+        self.napp._send_barrier_request = MagicMock()
         mock_send_flow_mod.side_effect = SwitchNotConnectedError(
             "error", flow=MagicMock()
         )
-
+        self.napp.controller.loop = event_loop
         _id = str(uuid4())
         match_id = str(uuid4())
         serializer = MagicMock()
@@ -333,11 +315,14 @@ class TestMain(TestCase):
         serializer.from_dict.return_value = flow
         mock_flow_factory.return_value = serializer
 
-        url = f"{self.API_URL}/v2/flows"
         flow_dict = {"flows": [{"priority": 25}]}
-        response = api.post(url, json=dict(flow_dict, **{"force": True}))
 
-        self.assertEqual(response.status_code, 202)
+        endpoint = f"{self.base_endpoint}/flows"
+        response = await self.api_client.post(
+            endpoint, json=dict(flow_dict, **{"force": True})
+        )
+
+        assert response.status_code == 202
 
         flow_dicts = [
             {
@@ -355,7 +340,7 @@ class TestMain(TestCase):
         """Test _get_all_switches_enabled method."""
         switches = self.napp._get_all_switches_enabled()
 
-        self.assertEqual(switches, [self.switch_01])
+        assert switches == [self.switch_01]
 
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
@@ -486,7 +471,7 @@ class TestMain(TestCase):
             name="kytos.flow_manager.flows.xpto",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.napp.handle_flows_install_delete(event)
 
         # install_flow exceptions
@@ -511,11 +496,12 @@ class TestMain(TestCase):
 
         self.napp._add_flow_mod_sent(xid, flow, "add")
 
-        self.assertEqual(self.napp._flow_mods_sent[xid], (flow, "add"))
+        assert self.napp._flow_mods_sent[xid] == (flow, "add")
 
-    @patch("kytos.core.buffers.KytosEventBuffer.put")
-    def test_send_flow_mod(self, mock_buffers_put):
+    def test_send_flow_mod(self):
         """Test _send_flow_mod method."""
+        mock_buffers_put = MagicMock()
+        self.napp.controller.buffers.msg_out.put = mock_buffers_put
         switch = get_switch_mock("00:00:00:00:00:00:00:01", 0x04)
         flow_mod = MagicMock()
 
@@ -530,21 +516,22 @@ class TestMain(TestCase):
         switch.is_connected = MagicMock(return_value=False)
         flow_mod = MagicMock()
 
-        with self.assertRaises(SwitchNotConnectedError):
+        with pytest.raises(SwitchNotConnectedError):
             self.napp._send_flow_mod(switch, flow_mod)
 
         mock_buffers_put.assert_not_called()
 
-    @patch("kytos.core.buffers.KytosEventBuffer.put")
-    def test_send_napp_event(self, mock_buffers_put):
+    def test_send_napp_event(self):
         """Test _send_napp_event method."""
+        mock_buffers_put = MagicMock()
+        self.napp.controller.buffers.app.put = mock_buffers_put
         switch = get_switch_mock("00:00:00:00:00:00:00:01", 0x04)
         flow = MagicMock()
 
         for command in ["add", "delete", "delete_strict", "error"]:
             self.napp._send_napp_event(switch, flow, command)
 
-        self.assertEqual(mock_buffers_put.call_count, 4)
+        assert mock_buffers_put.call_count == 4
 
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     def test_handle_errors(self, mock_send_napp_event):
@@ -718,10 +705,9 @@ class TestMain(TestCase):
             (0x2B00000000000101, True),
         ]
         for cookie, is_not_ignored in expected:
-            with self.subTest(cookie=cookie, is_not_ignored=is_not_ignored):
-                flow.cookie = cookie
-                flow.table_id = 0
-                assert self.napp.is_not_ignored_flow(flow) == is_not_ignored
+            flow.cookie = cookie
+            flow.table_id = 0
+            assert self.napp.is_not_ignored_flow(flow) == is_not_ignored
 
     def test_consistency_table_id_ignored_range(self):
         """Test the consistency `table_id` ignored range."""
@@ -731,10 +717,9 @@ class TestMain(TestCase):
         flow = MagicMock()
         expected = [(0, True), (3, False), (4, True)]
         for table_id, is_not_ignored in expected:
-            with self.subTest(table_id=table_id, is_not_ignored=is_not_ignored):
-                flow.cookie = 0
-                flow.table_id = table_id
-                assert self.napp.is_not_ignored_flow(flow) == is_not_ignored
+            flow.cookie = 0
+            flow.table_id = table_id
+            assert self.napp.is_not_ignored_flow(flow) == is_not_ignored
 
     def test_check_consistency(self):
         """Test check_consistency."""
@@ -1042,21 +1027,21 @@ class TestMain(TestCase):
         mock, flow = MagicMock(), MagicMock()
         flow.header.message_type = Type.OFPT_FLOW_MOD
         mock.message = flow
-        with self.assertRaises(ValueError) as exc:
+        with pytest.raises(ValueError) as exc:
             self.napp._retry_on_openflow_connection_error(
                 mock, max_retries, min_wait, multiplier
             )
-        assert "should be > 0" in str(exc.exception)
+        assert "should be > 0" in str(exc)
 
         self.napp._flow_mods_sent = {}
         mock, flow = MagicMock(), MagicMock()
         flow.header.message_type = Type.OFPT_FLOW_MOD
         mock.message = flow
-        with self.assertRaises(ValueError) as exc:
+        with pytest.raises(ValueError) as exc:
             self.napp._retry_on_openflow_connection_error(
                 mock, max_retries + 1, min_wait, multiplier
             )
-        assert "not found on flow mods sent" in str(exc.exception)
+        assert "not found on flow mods sent" in str(exc)
 
     def test_retry_on_openflow_connection_error_early_return_msg_type(self):
         """Test retry on openflow connection error early returns."""
