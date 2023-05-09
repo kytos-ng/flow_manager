@@ -106,7 +106,7 @@ class FlowSubDoc(BaseModel):
     """Flow DB SubDocument Model."""
 
     table_id = 0
-    owner = "flow_manager"
+    owner: Optional[str]
     table_group = "base"
     priority = 0x8000
     cookie: Decimal128 = Decimal128("0")
