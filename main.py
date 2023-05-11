@@ -50,6 +50,7 @@ from .utils import (
     get_min_wait_diff,
     is_ignored,
     merge_cookie_ranges,
+    validate_cookies_and_masks,
 )
 
 
@@ -540,7 +541,17 @@ class Main(KytosNApp):
             command = "delete"
         else:
             msg = f'Invalid event "{event.name}", should be install|delete'
-            raise ValueError(msg)
+            log.error(msg)
+            return
+
+        try:
+            validate_cookies_and_masks(flow_dict, command)
+        except ValueError as exc:
+            log.error(str(exc))
+            return
+        except TypeError as exc:
+            log.error(f"{str(exc)} for flow_dict {flow_dict} ")
+            return
 
         force = bool(event.content.get("force", False))
         switch = self.controller.get_switch_by_dpid(dpid)
@@ -599,6 +610,11 @@ class Main(KytosNApp):
         if not any(flows_dict) or not any(flows):
             result = "The request body doesn't have any flows"
             raise HTTPException(400, detail=result)
+
+        try:
+            validate_cookies_and_masks(flows, command)
+        except ValueError as exc:
+            raise HTTPException(400, detail=str(exc))
 
         force = bool(flows_dict.get("force", False))
         log.info(
