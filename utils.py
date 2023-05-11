@@ -119,14 +119,14 @@ def _valid_consistency_ignored(consistency_ignored_list):
             try:
                 _validate_range(consistency_ignored)
             except (TypeError, ValueError) as error:
-                log.warn(msg, error)
+                log.warning(msg, error)
                 return False
         elif not isinstance(consistency_ignored, (int, tuple)):
             error_msg = (
                 "The elements must be of class int or tuple"
                 f" but they are: {type(consistency_ignored)}"
             )
-            log.warn(msg, error_msg)
+            log.warning(msg, error_msg)
             return False
     return True
 
@@ -140,3 +140,38 @@ def get_min_wait_diff(datetime_t2, datetime_t1, min_wait):
     if min_wait_diff <= 0:
         return 0
     return min_wait_diff
+
+
+def validate_cookies_and_masks(flows: list[dict], command: str) -> None:
+    """Validate cookies and masks."""
+    validators = {"add": validate_cookies_add, "delete": validate_cookies_del}
+    if command in validators:
+        validators[command](flows)
+
+
+def validate_cookies_add(flows: list[dict]) -> None:
+    """Validate cookies add."""
+    for flow in flows:
+        if "cookie_mask" in flow:
+            raise ValueError(
+                f"cookie_mask shouldn't be set when adding flows. flow: {flow}"
+            )
+
+
+def validate_cookies_del(flows: list[dict]) -> None:
+    """Validate cookies del."""
+    for flow in flows:
+        has_cookie, has_mask = "cookie" in flow, "cookie_mask" in flow
+
+        if not has_cookie and not has_mask:
+            continue
+        if has_cookie and not has_mask:
+            raise ValueError(
+                "cookie is set, cookie_mask should be set too "
+                f"when deleting flows. flow: {flow}"
+            )
+        if not has_cookie and has_mask:
+            raise ValueError(
+                "cookie_mask is set, cookie should be set too"
+                f"when deleting flows. flow: {flow}"
+            )
