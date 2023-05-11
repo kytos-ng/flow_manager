@@ -13,6 +13,8 @@ from napps.kytos.flow_manager.utils import (
     build_flow_mod_from_command,
     get_min_wait_diff,
     merge_cookie_ranges,
+    validate_cookies_add,
+    validate_cookies_del,
 )
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 
@@ -26,9 +28,11 @@ from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
         (FlowModCommand.OFPFC_MODIFY.value, str(FlowModCommand.OFPFC_MODIFY.value)),
     ],
 )
-def tet_build_command_from_flow_mod(value, expected):
+def test_build_command_from_flow_mod(value, expected):
     """Test build_command_from_flow_mod."""
-    assert build_command_from_flow_mod(value) == expected
+    mock = MagicMock()
+    mock.command.value = value
+    assert build_command_from_flow_mod(mock) == expected
 
 
 def test_build_flow_mod_from_command_exc():
@@ -129,6 +133,56 @@ def test_build_flow_mod_from_command(command, mock_method):
     mock = MagicMock()
     build_flow_mod_from_command(mock, command)
     assert getattr(mock, mock_method).call_count == 1
+
+
+@pytest.mark.parametrize(
+    "cookie,cookie_mask,should_raise",
+    [
+        (0x64, 0xFF, False),
+        (0x64, None, True),
+        (None, 0xFF, True),
+        (None, None, False),
+    ],
+)
+def test_validate_cookies_del(cookie, cookie_mask, should_raise):
+    """Test validate_cookies_del."""
+    flow = {}
+    if cookie:
+        flow["cookie"] = cookie
+    if cookie_mask:
+        flow["cookie_mask"] = cookie_mask
+
+    if should_raise:
+        with pytest.raises(ValueError) as exc:
+            validate_cookies_del([flow])
+        assert str(exc)
+    else:
+        assert not validate_cookies_del([flow])
+
+
+@pytest.mark.parametrize(
+    "cookie,cookie_mask,should_raise",
+    [
+        (0x64, 0xFF, True),
+        (0x64, None, False),
+        (None, 0xFF, True),
+        (None, None, False),
+    ],
+)
+def test_validate_cookies_add(cookie, cookie_mask, should_raise):
+    """Test validate_cookies_add."""
+    flow = {}
+    if cookie:
+        flow["cookie"] = cookie
+    if cookie_mask:
+        flow["cookie_mask"] = cookie_mask
+
+    if should_raise:
+        with pytest.raises(ValueError) as exc:
+            validate_cookies_add([flow])
+        assert str(exc)
+    else:
+        assert not validate_cookies_add([flow])
 
 
 class TestUtils(TestCase):

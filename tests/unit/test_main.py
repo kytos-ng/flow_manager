@@ -231,15 +231,26 @@ class TestMain:
 
         assert mock_install_flows.call_count == 2
 
-    async def test_rest_add_pack_exc(self, event_loop):
+    @pytest.mark.parametrize("cookie", [27115650311270694912, "a", -1])
+    async def test_rest_add_pack_exc(self, cookie, event_loop):
         """Test add pack exception."""
         self.napp.controller.loop = event_loop
-        body = {"flows": [{"cookie": 27115650311270694912}]}
+        body = {"flows": [{"cookie": cookie}]}
         endpoint = f"{self.base_endpoint}/flows"
         response = await self.api_client.post(endpoint, json=body)
         assert response.status_code == 400
         data = response.json()
         assert "FlowMod.cookie" in data["description"]
+
+    async def test_rest_del_missing_cookie_mask(self, event_loop):
+        """Test del missing cookie_mask."""
+        self.napp.controller.loop = event_loop
+        body = {"flows": [{"cookie": 0x64}]}
+        endpoint = f"{self.base_endpoint}/flows"
+        response = await self.api_client.request("DELETE", endpoint, json=body)
+        assert response.status_code == 400
+        data = response.json()
+        assert "cookie_mask should be set too" in data["description"]
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     async def test_rest_add_and_delete_with_dpi_fail(
@@ -464,15 +475,31 @@ class TestMain:
             content={},
         )
         self.napp.handle_flows_install_delete(event)
-        mock_log.error.assert_called()
+        assert mock_log.error.call_count == 1
 
         # invalid command
         event = get_kytos_event_mock(
             name="kytos.flow_manager.flows.xpto",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
-        with pytest.raises(ValueError):
-            self.napp.handle_flows_install_delete(event)
+        self.napp.handle_flows_install_delete(event)
+        assert mock_log.error.call_count == 2
+
+        # missing cookie_mask
+        event = get_kytos_event_mock(
+            name="kytos.flow_manager.flows.delete",
+            content={"dpid": dpid, "flow_dict": [{"cookie": 1}]},
+        )
+        self.napp.handle_flows_install_delete(event)
+        assert mock_log.error.call_count == 3
+
+        # type error
+        event = get_kytos_event_mock(
+            name="kytos.flow_manager.flows.delete",
+            content={"dpid": dpid, "flow_dict": 1},
+        )
+        self.napp.handle_flows_install_delete(event)
+        assert mock_log.error.call_count == 4
 
         # install_flow exceptions
         event = get_kytos_event_mock(
