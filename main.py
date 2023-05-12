@@ -29,7 +29,11 @@ from kytos.core.rest_api import (
 from .barrier_request import new_barrier_request
 from .controllers import FlowController
 from .db.models import FlowEntryState
-from .exceptions import InvalidCommandError, SwitchNotConnectedError
+from .exceptions import (
+    FlowSerializerError,
+    InvalidCommandError,
+    SwitchNotConnectedError,
+)
 from .settings import (
     CONN_ERR_MAX_RETRIES,
     CONN_ERR_MIN_WAIT,
@@ -647,6 +651,8 @@ class Main(KytosNApp):
             raise HTTPException(424, detail=str(error))
         except PackException as error:
             raise HTTPException(400, detail=str(error))
+        except FlowSerializerError as error:
+            raise HTTPException(400, detail=str(error))
 
     def _install_flows(
         self,
@@ -672,7 +678,14 @@ class Main(KytosNApp):
             serializer = FlowFactory.get_class(switch, Flow04)
             flows_list = flows_dict.get("flows", [])
             for flow_dict in flows_list:
-                flow = serializer.from_dict(flow_dict, switch)
+                try:
+                    flow = serializer.from_dict(flow_dict, switch)
+                except (TypeError, KeyError) as exc:
+                    raise FlowSerializerError(
+                        f"It couldn't serialize flow_dict: {flow_dict}. "
+                        f"Exception type: {type(exc)} "
+                        f"Error: {str(exc)} "
+                    )
                 flow_mod = build_flow_mod_from_command(flow, command)
                 flow_mod.pack()
                 flow_mods.append(flow_mod)
