@@ -242,6 +242,42 @@ class TestMain:
         data = response.json()
         assert "FlowMod.cookie" in data["description"]
 
+    async def test_rest_add_flow_serializer_type_error(self, event_loop):
+        """Test add flow serializer type error exception."""
+        self.napp.controller.loop = event_loop
+        body = {
+            "flows": [
+                {
+                    "priority": 101,
+                    "match": {"in_port": 1},
+                    "actions": [{"action_type": "output", "portx": 1}],
+                }
+            ],
+        }
+        endpoint = f"{self.base_endpoint}/flows"
+        response = await self.api_client.post(endpoint, json=body)
+        assert response.status_code == 400
+        data = response.json()
+        assert "portx" in data["description"]
+
+    async def test_rest_add_flow_serializer_key_error(self, event_loop):
+        """Test add flow serializer key error exception."""
+        self.napp.controller.loop = event_loop
+        body = {
+            "flows": [
+                {
+                    "priority": 101,
+                    "match": {"in_port": 1},
+                    "actions": [{"what": "1"}],
+                }
+            ],
+        }
+        endpoint = f"{self.base_endpoint}/flows"
+        response = await self.api_client.post(endpoint, json=body)
+        assert response.status_code == 400
+        data = response.json()
+        assert "what" in data["description"]
+
     async def test_rest_del_missing_cookie_mask(self, event_loop):
         """Test del missing cookie_mask."""
         self.napp.controller.loop = event_loop
