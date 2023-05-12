@@ -29,7 +29,11 @@ from kytos.core.rest_api import (
 from .barrier_request import new_barrier_request
 from .controllers import FlowController
 from .db.models import FlowEntryState
-from .exceptions import InvalidCommandError, SwitchNotConnectedError
+from .exceptions import (
+    FlowSerializerError,
+    InvalidCommandError,
+    SwitchNotConnectedError,
+)
 from .settings import (
     CONN_ERR_MAX_RETRIES,
     CONN_ERR_MIN_WAIT,
@@ -50,6 +54,7 @@ from .utils import (
     get_min_wait_diff,
     is_ignored,
     merge_cookie_ranges,
+    validate_cookies_and_masks,
 )
 
 
@@ -540,7 +545,17 @@ class Main(KytosNApp):
             command = "delete"
         else:
             msg = f'Invalid event "{event.name}", should be install|delete'
-            raise ValueError(msg)
+            log.error(msg)
+            return
+
+        try:
+            validate_cookies_and_masks(flow_dict, command)
+        except ValueError as exc:
+            log.error(str(exc))
+            return
+        except TypeError as exc:
+            log.error(f"{str(exc)} for flow_dict {flow_dict} ")
+            return
 
         force = bool(event.content.get("force", False))
         switch = self.controller.get_switch_by_dpid(dpid)
@@ -600,6 +615,11 @@ class Main(KytosNApp):
             result = "The request body doesn't have any flows"
             raise HTTPException(400, detail=result)
 
+        try:
+            validate_cookies_and_masks(flows, command)
+        except ValueError as exc:
+            raise HTTPException(400, detail=str(exc))
+
         force = bool(flows_dict.get("force", False))
         log.info(
             f"Send FlowMod from request dpid: {dpid}, command: {command}, "
@@ -631,6 +651,8 @@ class Main(KytosNApp):
             raise HTTPException(424, detail=str(error))
         except PackException as error:
             raise HTTPException(400, detail=str(error))
+        except FlowSerializerError as error:
+            raise HTTPException(400, detail=str(error))
 
     def _install_flows(
         self,
@@ -656,7 +678,14 @@ class Main(KytosNApp):
             serializer = FlowFactory.get_class(switch, Flow04)
             flows_list = flows_dict.get("flows", [])
             for flow_dict in flows_list:
-                flow = serializer.from_dict(flow_dict, switch)
+                try:
+                    flow = serializer.from_dict(flow_dict, switch)
+                except (TypeError, KeyError) as exc:
+                    raise FlowSerializerError(
+                        f"It couldn't serialize flow_dict: {flow_dict}. "
+                        f"Exception type: {type(exc)} "
+                        f"Error: {str(exc)} "
+                    )
                 flow_mod = build_flow_mod_from_command(flow, command)
                 flow_mod.pack()
                 flow_mods.append(flow_mod)

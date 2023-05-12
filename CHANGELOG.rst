@@ -13,6 +13,7 @@ Added
 - Added support for VLAN with mask. ``dl_vlan`` now also supports a string ``"vlan/mask"``.
 - Added two new fields to the collection ``flows``. ``owner`` has the name of the NApp that created the flow. ``table_group`` is the classification of a flow, for example: ``epl``, ``base`` and ``evpl``.
 - Added new script ``pipeline_related.py`` to add new fields ``owner`` and ``table_group`` to the flows on the collection ``flows`` on MongoDB
+- Added basic validation for ``cookie`` and ``cookie_mask`` when installing or removing flows.
 
 Changed
 =======
