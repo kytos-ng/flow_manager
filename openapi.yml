@@ -151,10 +151,12 @@ paths:
         - name: state
           in: query
           schema:
-            type: string
-          description: State of the flows to retrieve.
+            type: array
+            items:
+              type: string
+          description: List of states to retrieve
           required: false
-          example: "installed"
+          example: ["installed"]
         - name: cookie_range
           in: query
           schema:
