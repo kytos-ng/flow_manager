@@ -213,15 +213,15 @@ class FlowController:
     def find_flows(
         self,
         dpids: Optional[list[str]] = None,
-        state: Optional[str] = None,
+        states: Optional[list[str]] = None,
         cookie_range: Optional[list[int]] = None,
     ) -> Optional[dict]:
         """Generic method for getting flows with flexible filtering capabilities."""
         query_expression = {}
         if dpids:
             query_expression.update({"switch": {"$in": dpids}})
-        if state:
-            query_expression.update({"state": state})
+        if states:
+            query_expression.update({"state": {"$in": states}})
         if cookie_range:
             query_expression.update(
                 {

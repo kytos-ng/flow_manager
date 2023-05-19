@@ -506,7 +506,7 @@ class Main(KytosNApp):
         """
         params = request.query_params
         dpids = params.getlist("dpid")
-        state = params.get("state")
+        states = params.getlist("state")
         try:
             cookies = params.getlist("cookie_range")
             cookie_range = [int(v) for v in cookies]
@@ -518,7 +518,7 @@ class Main(KytosNApp):
             msg = "cookie_range only accepts exactly two values."
             raise HTTPException(400, msg)
         flows_collection = dict(
-            self.flow_controller.find_flows(dpids, state, cookie_range)
+            self.flow_controller.find_flows(dpids, states, cookie_range)
         )
         return JSONResponse(flows_collection)
 
