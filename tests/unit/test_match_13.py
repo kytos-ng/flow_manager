@@ -104,6 +104,11 @@ def test_empty_match(to_install, stored, should_match) -> None:
             {"match": {"ipv4_src": "192.168.1.2"}},
             False,
         ),
+        (
+            {"table_id": 1, "cookie": 100},
+            {"table_id": 0, "cookie": 100, "cookie_mask": 18446744073709551615},
+            False,
+        ),
     ],
 )
 def test_match_no_strict_return_false_cases(to_install, stored, should_match):

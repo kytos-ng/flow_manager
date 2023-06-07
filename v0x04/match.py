@@ -29,7 +29,9 @@ def match13_no_strict(flow_to_install, stored_flow_dict):
     """
     if not _match_cookie(flow_to_install, stored_flow_dict):
         return False
-
+    if flow_to_install.get("table_id") is not None and \
+       flow_to_install.get("table_id") != stored_flow_dict["table_id"]:
+        return False
     if "match" not in flow_to_install or "match" not in stored_flow_dict:
         return stored_flow_dict
     if not flow_to_install["match"]:
