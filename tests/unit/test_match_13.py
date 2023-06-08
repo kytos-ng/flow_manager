@@ -2,7 +2,11 @@
 # pylint: disable=import-error
 import pytest
 from napps.kytos.flow_manager.match import match_flow
-from napps.kytos.flow_manager.v0x04.match import _match_cookie, match13_no_strict
+from napps.kytos.flow_manager.v0x04.match import (
+    _match_cookie,
+    match13_no_strict,
+    _match_table_id,
+)
 
 
 @pytest.mark.parametrize(
@@ -114,6 +118,20 @@ def test_empty_match(to_install, stored, should_match) -> None:
 def test_match_no_strict_return_false_cases(to_install, stored, should_match):
     """Test match_no_strict return False cases that haven't been covered yet."""
     assert bool(match13_no_strict(to_install, stored)) == should_match
+
+
+@pytest.mark.parametrize(
+    "to_install,stored,should_match",
+    [
+        ({"table_id": 1}, {"table_id": 0}, False),
+        ({}, {"table_id": 12}, True),
+        ({"table_id": 255}, {"table_id": 99}, True),
+        ({"table_id": 100}, {"table_id": 100}, True),
+    ],
+)
+def test_match_table_id(to_install, stored, should_match):
+    """Test _match_table_id"""
+    assert bool(_match_table_id(to_install, stored)) == should_match
 
 
 def test_match_func_calls() -> None:
