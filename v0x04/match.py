@@ -1,4 +1,5 @@
 """Match for OF 1.3."""
+from pyof.v0x04.controller2switch.table_mod import Table
 
 
 def _match_cookie(flow_to_install, stored_flow_dict):
@@ -26,13 +27,12 @@ def _match_table_id(flow_to_install, stored_flow_dict):
     """Check if table ids are the same or there is a wildcard"""
     if flow_to_install.get("table_id") is None:
         return True
-    if flow_to_install["table_id"] == 0xff:
-        # Wildcard
+    if flow_to_install["table_id"] == Table.OFPTT_ALL.value:
         return True
     if flow_to_install["table_id"] != stored_flow_dict["table_id"]:
         return False
     return True
-    
+
 
 def match13_no_strict(flow_to_install, stored_flow_dict):
     """Match a flow that is either exact or more specific (non-strict) (OF1.3).
