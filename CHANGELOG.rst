@@ -27,6 +27,10 @@ General Information
 - ``@rest`` endpoints are now run by ``starlette/uvicorn`` instead of ``flask/werkzeug``.
 - Added new script ``scripts/pipeline_related.py`` to add new fields ``owner`` and ``table_group`` to the flows on the collection ``flows`` on MongoDB. If you are planning to use ``kytos/of_multi_table`` NApp and is upgrading to 2023.1 from 2022.3, you should use this script
 
+Fixed
+=====
+- Fixed matching flows when trying to delete flows with specified ``table_id``.
+
 
 [2022.3.1] - 2023-02-17
 ***********************
