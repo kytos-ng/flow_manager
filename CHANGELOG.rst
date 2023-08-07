@@ -23,6 +23,7 @@ Changed
 General Information
 ===================
 - ``@rest`` endpoints are now run by ``starlette/uvicorn`` instead of ``flask/werkzeug``.
+- ``scripts/drop_compound_index.py`` can be used to drop a compound index that has changed.
 
 Fixed
 =====
