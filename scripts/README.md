@@ -65,7 +65,7 @@ python3 pipeline_related.py
 
 ### Drop compound index
 
-On version `2023.1`, this `flows` compound index `switch_1_flow.cookie_1_state_1_inserted_at_1_updated_at_1` has changed. If you're upgrading to `2023.1` froma previous version, you should run the `drop_compound_index.py` script to drop it:
+On version `2023.1`, this `flows` compound index `switch_1_flow.cookie_1_state_1_inserted_at_1_updated_at_1` has changed. If you're upgrading to `2023.1` from a previous version, you should run the `drop_compound_index.py` script to drop it:
 
 ```
 CMD=drop_index python3 drop_compound_index.py
