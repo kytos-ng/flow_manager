@@ -49,3 +49,24 @@ And then, to insert (or update) the flows:
 ```
 CMD=insert_flows python3 scripts/storehouse_to_mongo.py
 ```
+
+### Add `owner` and `table_group` fields to `flows` collections
+
+### Pre-requisites
+Same requisites as above
+
+### How to use
+
+Run the script to upgrade all flows from `mef_eline`, `of_lldp` and `coloring` with new fields `owner` and `table_group`
+
+```
+python3 pipeline_related.py
+```
+
+### Drop compound index
+
+On version `2023.1`, this `flows` compound index `switch_1_flow.cookie_1_state_1_inserted_at_1_updated_at_1` has changed. If you're upgrading to `2023.1` froma previous version, you should run the `drop_compound_index.py` script to drop it:
+
+```
+CMD=drop_index python3 drop_compound_index.py
+```
