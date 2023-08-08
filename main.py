@@ -53,6 +53,7 @@ from .utils import (
     cast_fields,
     get_min_wait_diff,
     is_ignored,
+    map_cookie_list_as_tuples,
     merge_cookie_ranges,
     validate_cookies_and_masks,
 )
@@ -514,11 +515,14 @@ class Main(KytosNApp):
             raise HTTPException(
                 400, detail=f"cookie_range {cookies} couldn't be cast as an int"
             )
-        if not (len(cookie_range) == 2 or len(cookie_range) == 0):
-            msg = "cookie_range only accepts exactly two values."
-            raise HTTPException(400, msg)
+        try:
+            cookie_ranges = map_cookie_list_as_tuples(cookie_range)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+
+        cookie_ranges = merge_cookie_ranges(cookie_ranges)
         flows_collection = dict(
-            self.flow_controller.find_flows(dpids, states, cookie_range)
+            self.flow_controller.find_flows(dpids, states, cookie_ranges)
         )
         return JSONResponse(flows_collection)
 
