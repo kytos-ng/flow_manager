@@ -163,7 +163,7 @@ paths:
             type: array
             items:
               type: integer
-          description: Range of cookies
+          description: Inclusive range of cookies. The length of the list must be even, for example, [1, 2, 5, 6], would include from 1 to 2 and from 5 to 6.
           required: false
           example: [84114963, 84114965]
       responses:
