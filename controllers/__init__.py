@@ -214,7 +214,7 @@ class FlowController:
         self,
         dpids: Optional[list[str]] = None,
         states: Optional[list[str]] = None,
-        cookie_range: Optional[list[int]] = None,
+        cookie_ranges: Optional[list[tuple[int, int]]] = None,
     ) -> Optional[dict]:
         """Generic method for getting flows with flexible filtering capabilities."""
         query_expression = {}
@@ -222,13 +222,27 @@ class FlowController:
             query_expression.update({"switch": {"$in": dpids}})
         if states:
             query_expression.update({"state": {"$in": states}})
-        if cookie_range:
+        if cookie_ranges and len(cookie_ranges) == 1:
             query_expression.update(
                 {
                     "flow.cookie": {
-                        "$gte": Decimal128(Decimal(cookie_range[0])),
-                        "$lte": Decimal128(Decimal(cookie_range[1])),
+                        "$gte": Decimal128(Decimal(cookie_ranges[0][0])),
+                        "$lte": Decimal128(Decimal(cookie_ranges[0][1])),
                     }
+                }
+            )
+        if cookie_ranges and len(cookie_ranges) > 1:
+            query_expression.update(
+                {
+                    "$or": [
+                        {
+                            "flow.cookie": {
+                                "$gte": Decimal128(Decimal(low)),
+                                "$lte": Decimal128(Decimal(high)),
+                            }
+                        }
+                        for low, high in cookie_ranges
+                    ]
                 }
             )
         projection = {"_id": False}
