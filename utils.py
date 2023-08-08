@@ -20,7 +20,7 @@ def build_cookie_range_tuple(cookie: int, cookie_mask: int) -> tuple[int, int]:
 
 
 def map_cookie_list_as_tuples(cookies: list[int]) -> list[tuple[int, int]]:
-    """Mape cookie list as tuples."""
+    """Map cookie list as tuples."""
     if len(cookies) % 2 == 1:
         raise ValueError(f"Expected cookies length to be even, got length {cookies}")
     stack = []
