@@ -175,3 +175,12 @@ def validate_cookies_del(flows: list[dict]) -> None:
                 "cookie_mask is set, cookie should be set too"
                 f"when deleting flows. flow: {flow}"
             )
+
+
+def flows_to_log_info(message: str, flow_dict: dict[str, list]) -> None:
+    """Log flows, maximun flows in a log is 200"""
+    maximun = 200
+    i, j = 0, maximun
+    while flow_dict["flows"][i:j]:
+        log.info(f"{message} {flow_dict['flows'][i:j]}")
+        i, j = i + maximun, j + maximun
