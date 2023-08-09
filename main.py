@@ -562,7 +562,7 @@ class Main(KytosNApp):
         switch = self.controller.get_switch_by_dpid(dpid)
         flows_to_log_info(
             f"Send FlowMod from KytosEvent dpid: {dpid}, command: {command}, "
-            f"force: {force}, flows:",
+            f"force: {force}, ",
             flow_dict,
         )
         try:
@@ -625,7 +625,7 @@ class Main(KytosNApp):
         force = bool(flows_dict.get("force", False))
         flows_to_log_info(
             f"Send FlowMod from request dpid: {dpid}, command: {command}, "
-            f"force: {force}, flows:",
+            f"force: {force}, ",
             flows_dict,
         )
         try:
