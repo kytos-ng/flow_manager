@@ -21,6 +21,8 @@ Added
 Changed
 =======
 - Update endpoint ``GET v2/stored_flows`` to return the flows in order by ``priority`` descending and ``updated_at`` ascending.
+- Update endpoint ``GET v2/stored_flows`` to return the flows in descending order by `priority`.
+- Reduced the number of flows shown in the logs. Maximum number of shown flows is 200.
 
 General Information
 ===================
