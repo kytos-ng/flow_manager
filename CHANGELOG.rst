@@ -19,6 +19,7 @@ Added
 Changed
 =======
 - Update endpoint ``GET v2/stored_flows`` to return the flows in descending order by `priority`.
+- When creating a flow, ``actions`` and ``instruction`` are not allowed to be present at the same time.
 
 General Information
 ===================
