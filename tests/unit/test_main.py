@@ -458,14 +458,14 @@ class TestMain:
         mock_send_barrier_request.assert_called()
         self.napp.flow_controller.delete_flows_by_ids.assert_not_called()
 
-    @patch("napps.kytos.flow_manager.main.log")
+    @patch("napps.kytos.flow_manager.main.flows_to_log_info")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_event_add_flow(self, mock_install_flows, mock_log):
+    def test_event_add_flow(self, mock_install_flows, mock_flows_log):
         """Test method for installing flows on the switches through events."""
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid)
         self.napp.controller.switches = {dpid: switch}
-        mock_flow_dict = MagicMock()
+        mock_flow_dict = {"flows": [MagicMock()]}
         event = get_kytos_event_mock(
             name="kytos.flow_manager.flows.install",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
@@ -474,16 +474,16 @@ class TestMain:
         mock_install_flows.assert_called_with(
             "add", mock_flow_dict, [switch], reraise_conn=True
         )
-        mock_log.info.assert_called()
+        mock_flows_log.assert_called()
 
-    @patch("napps.kytos.flow_manager.main.log")
+    @patch("napps.kytos.flow_manager.main.flows_to_log_info")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_event_flows_install_delete(self, mock_install_flows, mock_log):
+    def test_event_flows_install_delete(self, mock_install_flows, mock_flows_log):
         """Test method for removing flows on the switches through events."""
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid)
         self.napp.controller.switches = {dpid: switch}
-        mock_flow_dict = MagicMock()
+        mock_flow_dict = {"flows": [MagicMock()]}
         event = get_kytos_event_mock(
             name="kytos.flow_manager.flows.delete",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
@@ -492,7 +492,7 @@ class TestMain:
         mock_install_flows.assert_called_with(
             "delete", mock_flow_dict, [switch], reraise_conn=True
         )
-        mock_log.info.assert_called()
+        mock_flows_log.assert_called()
 
     @patch("napps.kytos.flow_manager.main.log")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
@@ -502,7 +502,7 @@ class TestMain:
         (mock_send_napp_event, mock_install_flows, mock_log) = args
         dpid = "00:00:00:00:00:00:00:01"
         self.napp.controller.switches = {}
-        mock_flow_dict = MagicMock()
+        mock_flow_dict = {"flows": [MagicMock()]}
 
         # 723, 746-751, 873
         # missing event args
