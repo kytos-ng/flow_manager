@@ -53,6 +53,7 @@ from .utils import (
     build_cookie_range_tuple,
     build_flow_mod_from_command,
     cast_fields,
+    flows_to_log_info,
     get_min_wait_diff,
     is_ignored,
     merge_cookie_ranges,
@@ -561,9 +562,10 @@ class Main(KytosNApp):
 
         force = bool(event.content.get("force", False))
         switch = self.controller.get_switch_by_dpid(dpid)
-        log.info(
+        flows_to_log_info(
             f"Send FlowMod from KytosEvent dpid: {dpid}, command: {command}, "
-            f"force: {force}, flows_dict: {flow_dict}"
+            f"force: {force}, ",
+            flow_dict,
         )
         try:
             self._install_flows(command, flow_dict, [switch], reraise_conn=not force)
@@ -626,9 +628,10 @@ class Main(KytosNApp):
             raise HTTPException(400, detail=str(exc))
 
         force = bool(flows_dict.get("force", False))
-        log.info(
+        flows_to_log_info(
             f"Send FlowMod from request dpid: {dpid}, command: {command}, "
-            f"force: {force}, flows_dict: {flows_dict}"
+            f"force: {force}, ",
+            flows_dict,
         )
         try:
             if not dpid:
