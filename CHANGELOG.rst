@@ -26,6 +26,7 @@ General Information
 ===================
 - ``@rest`` endpoints are now run by ``starlette/uvicorn`` instead of ``flask/werkzeug``.
 - Added new script ``scripts/pipeline_related.py`` to add new fields ``owner`` and ``table_group`` to the flows on the collection ``flows`` on MongoDB. If you are planning to use ``kytos/of_multi_table`` NApp and is upgrading to 2023.1 from 2022.3, you should use this script
+- ``scripts/drop_compound_index.py`` can be used to drop a compound index that has changed. If you tried to upgrade to ``2022.3.2`` before and it ended up creating ``'flow.priority_1'`` index, then you also want to delete it by running ``CMD=drop_index INDEX_NAME=flow.priority_1 python3 drop_compound_index.py``
 
 Fixed
 =====
