@@ -23,6 +23,7 @@ Changed
 General Information
 ===================
 - ``@rest`` endpoints are now run by ``starlette/uvicorn`` instead of ``flask/werkzeug``.
+- ``scripts/drop_compound_index.py`` can be used to drop a compound index that has changed. If you tried to upgrade to ``2022.3.2`` before and it ended up creating ``'flow.priority_1'`` index, then you also want to delete it by running ``CMD=drop_index INDEX_NAME=flow.priority_1 python3 drop_compound_index.py``
 
 Fixed
 =====
