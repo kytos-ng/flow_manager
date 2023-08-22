@@ -7,23 +7,27 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2023.1.0] - 2023-06-05
+***********************
+
 Added
 =====
 
 - Added support for VLAN with mask. ``dl_vlan`` now also supports a string ``"vlan/mask"``.
 - Added two new fields to the collection ``flows``. ``owner`` has the name of the NApp that created the flow. ``table_group`` is the classification of a flow, for example: ``epl``, ``base`` and ``evpl``.
-- Added new script ``pipeline_related.py`` to add new fields ``owner`` and ``table_group`` to the flows on the collection ``flows`` on MongoDB
 - Added basic validation for ``cookie`` and ``cookie_mask`` when installing or removing flows.
 - Augmented ``GET v2/stored_flows`` state query filter to support a list of values.
 
 Changed
 =======
+- Update endpoint ``GET v2/stored_flows`` to return the flows in order by ``priority`` descending and ``updated_at`` ascending.
 - Update endpoint ``GET v2/stored_flows`` to return the flows in descending order by `priority`.
 - Reduced the number of flows shown in the logs. Maximum number of shown flows is 200.
 
 General Information
 ===================
 - ``@rest`` endpoints are now run by ``starlette/uvicorn`` instead of ``flask/werkzeug``.
+- Added new script ``scripts/pipeline_related.py`` to add new fields ``owner`` and ``table_group`` to the flows on the collection ``flows`` on MongoDB. If you are planning to use ``kytos/of_multi_table`` NApp and is upgrading to 2023.1 from 2022.3, you should use this script
 - ``scripts/drop_compound_index.py`` can be used to drop a compound index that has changed. If you tried to upgrade to ``2022.3.2`` before and it ended up creating ``'flow.priority_1'`` index, then you also want to delete it by running ``CMD=drop_index INDEX_NAME=flow.priority_1 python3 drop_compound_index.py``
 
 Fixed
