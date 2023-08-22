@@ -15,6 +15,7 @@ Added
 - Added new script ``pipeline_related.py`` to add new fields ``owner`` and ``table_group`` to the flows on the collection ``flows`` on MongoDB
 - Added basic validation for ``cookie`` and ``cookie_mask`` when installing or removing flows.
 - Augmented ``GET v2/stored_flows`` state query filter to support a list of values.
+- Augmented ``GET v2/stored_flows`` ``cookie_range`` to accept an even list of ranges
 
 Changed
 =======
