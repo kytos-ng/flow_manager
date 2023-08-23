@@ -7,6 +7,8 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+- Augmented ``GET v2/stored_flows`` ``cookie_range`` to accept an even list of ranges
+
 [2023.1.0] - 2023-06-05
 ***********************
 
@@ -17,7 +19,6 @@ Added
 - Added two new fields to the collection ``flows``. ``owner`` has the name of the NApp that created the flow. ``table_group`` is the classification of a flow, for example: ``epl``, ``base`` and ``evpl``.
 - Added basic validation for ``cookie`` and ``cookie_mask`` when installing or removing flows.
 - Augmented ``GET v2/stored_flows`` state query filter to support a list of values.
-- Augmented ``GET v2/stored_flows`` ``cookie_range`` to accept an even list of ranges
 
 Changed
 =======
