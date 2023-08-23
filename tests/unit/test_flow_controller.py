@@ -151,17 +151,39 @@ class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
     def test_find_flows(self) -> None:
         """Test find_flows."""
         states = ["installed"]
-        cookie_range = [84114963, 84114965]
+        cookie_ranges = [(84114963, 84114965)]
         assert not list(
             self.flow_controller.find_flows(
-                dpids=[self.dpid], states=states, cookie_range=cookie_range
+                dpids=[self.dpid], states=states, cookie_ranges=cookie_ranges
             )
         )
         args = self.flow_controller.db.flows.find.call_args[0]
         assert args[0]["switch"]["$in"] == [self.dpid]
         assert args[0]["state"]["$in"] == ["installed"]
-        assert args[0]["flow.cookie"]["$gte"] == Decimal128(Decimal(cookie_range[0]))
-        assert args[0]["flow.cookie"]["$lte"] == Decimal128(Decimal(cookie_range[1]))
+        assert args[0]["flow.cookie"]["$gte"] == Decimal128(
+            Decimal(cookie_ranges[0][0])
+        )
+        assert args[0]["flow.cookie"]["$lte"] == Decimal128(
+            Decimal(cookie_ranges[0][1])
+        )
+
+    def test_find_flows_many_cookie_ranges(self) -> None:
+        """Test find_flows many cookie ranges."""
+        states = ["installed"]
+        cookie_ranges = [(1, 5), (6, 9), (10, 12)]
+        assert not list(
+            self.flow_controller.find_flows(
+                dpids=[self.dpid], states=states, cookie_ranges=cookie_ranges
+            )
+        )
+        args = self.flow_controller.db.flows.find.call_args[0]
+        assert args[0]["switch"]["$in"] == [self.dpid]
+        assert args[0]["state"]["$in"] == ["installed"]
+        assert len(args[0]["$or"]) == len(cookie_ranges)
+        for expr, cookies in zip(args[0]["$or"], cookie_ranges):
+            low, high = cookies
+            assert expr["flow.cookie"]["$gte"] == Decimal128(Decimal(low))
+            assert expr["flow.cookie"]["$lte"] == Decimal128(Decimal(high))
 
     def test_find_flows_sorted(self) -> None:
         """Test find_flows to sort flows."""

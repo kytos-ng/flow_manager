@@ -12,6 +12,7 @@ from napps.kytos.flow_manager.utils import (
     build_cookie_range_tuple,
     build_flow_mod_from_command,
     get_min_wait_diff,
+    map_cookie_list_as_tuples,
     merge_cookie_ranges,
     validate_cookies_add,
     validate_cookies_del,
@@ -119,6 +120,31 @@ def test_build_cookie_range_tuple(cookie, cookie_mask, expected) -> None:
 def test_merge_cookie_ranges(cookie_ranges, merged) -> None:
     """Test merge_cookie_ranges."""
     assert merge_cookie_ranges(cookie_ranges) == merged
+
+
+@pytest.mark.parametrize(
+    "cookies,expected",
+    [
+        (
+            [1, 2, 4, 5],
+            [(1, 2), (4, 5)],
+        ),
+        (
+            [],
+            [],
+        ),
+    ],
+)
+def test_map_cookie_list_as_tuples(cookies, expected) -> None:
+    """Test map_cookie_list_as_tuples."""
+    assert map_cookie_list_as_tuples(cookies) == expected
+
+
+def test_map_cookie_list_as_tuples_fail() -> None:
+    """Test map_cookie_list_as_tuples."""
+    with pytest.raises(ValueError) as exc:
+        map_cookie_list_as_tuples([1, 2, 3])
+    assert "to be even" in str(exc)
 
 
 @pytest.mark.parametrize(

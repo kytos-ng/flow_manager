@@ -19,6 +19,16 @@ def build_cookie_range_tuple(cookie: int, cookie_mask: int) -> tuple[int, int]:
     return cookie & cookie_mask, cookie_high
 
 
+def map_cookie_list_as_tuples(cookies: list[int]) -> list[tuple[int, int]]:
+    """Map cookie list as tuples."""
+    if len(cookies) % 2 == 1:
+        raise ValueError(f"Expected cookies length to be even, got length {cookies}")
+    stack = []
+    for i in range(1, len(cookies), 2):
+        stack.append((cookies[i - 1], cookies[i]))
+    return stack
+
+
 def merge_cookie_ranges(cookie_ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
     """Merge overlaping cookie ranges to simplify DB "$or" operator query complexity."""
     if len(cookie_ranges) <= 1:

@@ -202,7 +202,7 @@ class TestMain:
         )
         response = await self.api_client.get(endpoint)
         assert response.status_code == 400
-        assert "exactly two values" in response.json()["description"]
+        assert "Expected cookies length to be even" in response.json()["description"]
 
     async def test_list_flows_fail_case(self):
         """Test the failure case to recover all flows from a switch by dpid.
