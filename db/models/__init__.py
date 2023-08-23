@@ -9,7 +9,7 @@ from enum import Enum
 from typing import List, Optional, Union
 
 from bson.decimal128 import Decimal128
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, root_validator, validator
 
 
 class FlowEntryState(Enum):
@@ -127,6 +127,15 @@ class FlowSubDoc(BaseModel):
         if isinstance(v, (int, str)):
             return Decimal128(Decimal(v))
         return v
+
+    @root_validator()
+    def validate_actions_intructions(cls, values) -> dict:
+        """Validate that actions and intructions are mutually exclusive"""
+        if values.get("actions") is not None and values.get("instructions") is not None:
+            raise ValueError(
+                'Cannot have both "actions" and "instructions" at the same time'
+            )
+        return values
 
 
 class FlowDoc(DocumentBaseModel):

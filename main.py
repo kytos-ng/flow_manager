@@ -12,6 +12,7 @@ from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.msg_prios import of_msg_prio
 from napps.kytos.of_core.settings import STATS_INTERVAL
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
+from pydantic import ValidationError
 from pyof.foundation.exceptions import PackException
 from pyof.v0x04.asynchronous.error_msg import ErrorType
 from pyof.v0x04.common.header import Type
@@ -23,6 +24,7 @@ from kytos.core.rest_api import (
     JSONResponse,
     Request,
     content_type_json_or_415,
+    error_msg,
     get_json_or_400,
 )
 
@@ -573,6 +575,9 @@ class Main(KytosNApp):
             )
         except SwitchNotConnectedError as error:
             self._send_napp_event(switch, error.flow, "error")
+        except ValidationError as error:
+            msg = error_msg(error.errors())
+            log.error(f"Error with validation: {error}")
 
     @rest("v2/flows", methods=["POST"])
     @rest("v2/flows/{dpid}", methods=["POST"])
@@ -656,6 +661,9 @@ class Main(KytosNApp):
             raise HTTPException(400, detail=str(error))
         except FlowSerializerError as error:
             raise HTTPException(400, detail=str(error))
+        except ValidationError as error:
+            msg = error_msg(error.errors())
+            raise HTTPException(400, detail=msg) from error
 
     def _install_flows(
         self,
