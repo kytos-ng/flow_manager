@@ -13,7 +13,7 @@ from napps.kytos.of_core.v0x04.flow import Flow as Flow04
 from pyof.v0x04.asynchronous.error_msg import ErrorType
 from pyof.v0x04.common.header import Type
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
-
+from pydantic import BaseModel, ValidationError
 from kytos.core.helpers import now
 from kytos.lib.helpers import (
     get_connection_mock,
@@ -322,6 +322,33 @@ class TestMain:
         assert responses[1].status_code == 404
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
+    async def test_rest_add_error(self, mock_install_flows, event_loop):
+        """Test rest endpoint with ValidationError"""
+        self.napp.controller.loop = event_loop
+        switch = MagicMock()
+        switch.is_enabled = lambda: True
+        self.napp.controller.get_switch_by_dpid = lambda id: switch
+        dpid = "00:00:00:00:00:00:00:02"
+        data = {
+            "flows": [
+                {
+                    "instructions": [
+                        {
+                            "instruction_type": "apply_actions",
+                            "actions": [{"action_type": "output", "port": 10}],
+                        }
+                    ],
+                    "actions": [{"action_type": "output", "port": 31}],
+                }
+            ]
+        }
+        mock_install_flows.side_effect = ValidationError("", BaseModel)
+        response = await self.api_client.post(
+            f"{self.base_endpoint}/flows/{dpid}", json=data
+        )
+        assert response.status_code == 400
+
+    @patch("napps.kytos.flow_manager.main.Main._install_flows")
     async def test_rest_flow_mod_add_switch_not_connected(
         self, mock_install_flows, event_loop
     ):
@@ -458,14 +485,14 @@ class TestMain:
         mock_send_barrier_request.assert_called()
         self.napp.flow_controller.delete_flows_by_ids.assert_not_called()
 
-    @patch("napps.kytos.flow_manager.main.log")
+    @patch("napps.kytos.flow_manager.main.flows_to_log_info")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_event_add_flow(self, mock_install_flows, mock_log):
+    def test_event_add_flow(self, mock_install_flows, mock_flows_log):
         """Test method for installing flows on the switches through events."""
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid)
         self.napp.controller.switches = {dpid: switch}
-        mock_flow_dict = MagicMock()
+        mock_flow_dict = {"flows": [MagicMock()]}
         event = get_kytos_event_mock(
             name="kytos.flow_manager.flows.install",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
@@ -474,16 +501,44 @@ class TestMain:
         mock_install_flows.assert_called_with(
             "add", mock_flow_dict, [switch], reraise_conn=True
         )
-        mock_log.info.assert_called()
+        mock_flows_log.assert_called()
 
     @patch("napps.kytos.flow_manager.main.log")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_event_flows_install_delete(self, mock_install_flows, mock_log):
+    def test_event_add_flow_error(self, mock_install_flows, mock_log):
+        """Test event of adding a flow with ValidationError"""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid)
+        self.napp.controller.switches = {dpid: switch}
+        mock_flow_dict = {
+            "flows": [
+                {
+                    "instructions": [
+                        {
+                            "instruction_type": "apply_actions",
+                            "actions": [{"action_type": "output", "port": 10}],
+                        }
+                    ],
+                    "actions": [{"action_type": "output", "port": 31}],
+                }
+            ]
+        }
+        event = get_kytos_event_mock(
+            name="kytos.flow_manager.flows.install",
+            content={"dpid": dpid, "flow_dict": mock_flow_dict},
+        )
+        mock_install_flows.side_effect = ValidationError("", BaseModel)
+        self.napp.handle_flows_install_delete(event)
+        assert mock_log.error.call_count == 1
+
+    @patch("napps.kytos.flow_manager.main.flows_to_log_info")
+    @patch("napps.kytos.flow_manager.main.Main._install_flows")
+    def test_event_flows_install_delete(self, mock_install_flows, mock_flows_log):
         """Test method for removing flows on the switches through events."""
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid)
         self.napp.controller.switches = {dpid: switch}
-        mock_flow_dict = MagicMock()
+        mock_flow_dict = {"flows": [MagicMock()]}
         event = get_kytos_event_mock(
             name="kytos.flow_manager.flows.delete",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
@@ -492,7 +547,7 @@ class TestMain:
         mock_install_flows.assert_called_with(
             "delete", mock_flow_dict, [switch], reraise_conn=True
         )
-        mock_log.info.assert_called()
+        mock_flows_log.assert_called()
 
     @patch("napps.kytos.flow_manager.main.log")
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
@@ -502,7 +557,7 @@ class TestMain:
         (mock_send_napp_event, mock_install_flows, mock_log) = args
         dpid = "00:00:00:00:00:00:00:01"
         self.napp.controller.switches = {}
-        mock_flow_dict = MagicMock()
+        mock_flow_dict = {"flows": [MagicMock()]}
 
         # 723, 746-751, 873
         # missing event args

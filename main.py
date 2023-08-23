@@ -12,6 +12,7 @@ from napps.kytos.of_core.flow import FlowFactory
 from napps.kytos.of_core.msg_prios import of_msg_prio
 from napps.kytos.of_core.settings import STATS_INTERVAL
 from napps.kytos.of_core.v0x04.flow import Flow as Flow04
+from pydantic import ValidationError
 from pyof.foundation.exceptions import PackException
 from pyof.v0x04.asynchronous.error_msg import ErrorType
 from pyof.v0x04.common.header import Type
@@ -23,6 +24,7 @@ from kytos.core.rest_api import (
     JSONResponse,
     Request,
     content_type_json_or_415,
+    error_msg,
     get_json_or_400,
 )
 
@@ -51,6 +53,7 @@ from .utils import (
     build_cookie_range_tuple,
     build_flow_mod_from_command,
     cast_fields,
+    flows_to_log_info,
     get_min_wait_diff,
     is_ignored,
     map_cookie_list_as_tuples,
@@ -563,9 +566,10 @@ class Main(KytosNApp):
 
         force = bool(event.content.get("force", False))
         switch = self.controller.get_switch_by_dpid(dpid)
-        log.info(
+        flows_to_log_info(
             f"Send FlowMod from KytosEvent dpid: {dpid}, command: {command}, "
-            f"force: {force}, flows_dict: {flow_dict}"
+            f"force: {force}, ",
+            flow_dict,
         )
         try:
             self._install_flows(command, flow_dict, [switch], reraise_conn=not force)
@@ -575,6 +579,9 @@ class Main(KytosNApp):
             )
         except SwitchNotConnectedError as error:
             self._send_napp_event(switch, error.flow, "error")
+        except ValidationError as error:
+            msg = error_msg(error.errors())
+            log.error(f"Error with validation: {error}")
 
     @rest("v2/flows", methods=["POST"])
     @rest("v2/flows/{dpid}", methods=["POST"])
@@ -625,9 +632,10 @@ class Main(KytosNApp):
             raise HTTPException(400, detail=str(exc))
 
         force = bool(flows_dict.get("force", False))
-        log.info(
+        flows_to_log_info(
             f"Send FlowMod from request dpid: {dpid}, command: {command}, "
-            f"force: {force}, flows_dict: {flows_dict}"
+            f"force: {force}, ",
+            flows_dict,
         )
         try:
             if not dpid:
@@ -657,6 +665,9 @@ class Main(KytosNApp):
             raise HTTPException(400, detail=str(error))
         except FlowSerializerError as error:
             raise HTTPException(400, detail=str(error))
+        except ValidationError as error:
+            msg = error_msg(error.errors())
+            raise HTTPException(400, detail=msg) from error
 
     def _install_flows(
         self,

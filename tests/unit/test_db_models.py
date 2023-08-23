@@ -1,6 +1,7 @@
 """TestDbModels."""
-
+import pytest
 from napps.kytos.flow_manager.db.models import FlowDoc
+from pydantic import ValidationError
 
 
 class TestDbModels:
@@ -53,3 +54,23 @@ class TestDbModels:
         }
         flow_doc = FlowDoc(**data)
         assert flow_doc
+
+    def test_flow_validation_error(self) -> None:
+        """Test a flow with intructions and actions fields"""
+        flow_dict = {
+            "instructions": [
+                {
+                    "instruction_type": "apply_actions",
+                    "actions": [{"action_type": "output", "port": 10}],
+                }
+            ],
+            "actions": [{"action_type": "output", "port": 31}],
+        }
+        data = {
+            "switch": "00:00:00:00:00:00:00:02",
+            "flow_id": "1",
+            "id": "0",
+            "flow": flow_dict,
+        }
+        with pytest.raises(ValidationError):
+            FlowDoc(**data)
