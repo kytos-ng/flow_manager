@@ -725,24 +725,41 @@ class Main(KytosNApp):
         flows,
         reraise_conn=True,
         send_barrier=ENABLE_BARRIER_REQUEST,
+        batch_size=0,
+        batch_interval=0,
     ):
-        """Send FlowMod (and BarrierRequest) given a list of flow_dicts to switches."""
+        """Send FlowMod (and BarrierRequest) given a list of flow_dicts to switches.
+
+
+        batch_size and batch_interval parameters are for batching FlowMods, which
+        you'll want to set if you're sending a large number of flows. Just so
+        you can avoid overwhelming a switch with too many FlowMods at once.
+        If batch_size and batch_interval are positive values, they'll be used
+        accordingly batching at most batch_size per batch_interval in secs.
+
+        """
+        flows_zipped = list((fmod, flow) for fmod, flow in zip(flow_mods, flows))
+        batch_size = batch_size if batch_size > 0 else max(1, len(flows_zipped))
+
         for switch in switches:
-            for i, (flow_mod, flow) in enumerate(zip(flow_mods, flows)):
-                try:
-                    self._send_flow_mod(switch, flow_mod)
-                    if send_barrier and i == len(flow_mods) - 1:
-                        self._send_barrier_request(switch, flow_mods)
-                except SwitchNotConnectedError:
-                    if reraise_conn:
-                        raise
-                with self._flow_mods_sent_lock:
-                    self._add_flow_mod_sent(
-                        flow_mod.header.xid,
-                        flow,
-                        build_command_from_flow_mod(flow_mod),
-                    )
-                self._send_napp_event(switch, flow, "pending")
+            try:
+                for i in range(0, len(flows_zipped), batch_size):
+                    if i > 0 and batch_interval > 0:
+                        time.sleep(batch_interval)
+                    for flow_mod, flow in flows_zipped[i : i + batch_size]:
+                        self._send_flow_mod(switch, flow_mod)
+                        with self._flow_mods_sent_lock:
+                            self._add_flow_mod_sent(
+                                flow_mod.header.xid,
+                                flow,
+                                build_command_from_flow_mod(flow_mod),
+                            )
+                        self._send_napp_event(switch, flow, "pending")
+                if flow_mods and send_barrier:
+                    self._send_barrier_request(switch, flow_mods)
+            except SwitchNotConnectedError:
+                if reraise_conn:
+                    raise
         return flow_mods
 
     def _add_flow_mod_sent(self, xid, flow, command):
