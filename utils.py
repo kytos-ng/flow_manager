@@ -187,13 +187,12 @@ def validate_cookies_del(flows: list[dict]) -> None:
             )
 
 
-def flows_to_log_info(message: str, flow_dict: dict[str, list]) -> None:
+def flows_to_log_info(message: str, flows: list[dict], maximum=200) -> None:
     """Log flows, maximun flows in a log is 200"""
-    maximun = 200
-    flows_n = len(flow_dict["flows"])
-    i, j = 0, maximun
-    while flow_dict["flows"][i:j]:
+    flows_n = len(flows)
+    i, j = 0, maximum
+    while flows[i:j]:
         log.info(
-            f"{message} flows[{i}, {(j if j < flows_n else flows_n)}]: {flow_dict['flows'][i:j]}"
+            f"{message} flows[{i}, {(j if j < flows_n else flows_n)}]: {flows[i:j]}"
         )
-        i, j = i + maximun, j + maximun
+        i, j = i + maximum, j + maximum

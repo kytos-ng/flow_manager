@@ -261,6 +261,6 @@ class TestUtils(TestCase):
     @patch("napps.kytos.flow_manager.utils.log")
     def test_flows_to_log_info(self, mock_log):
         """Test flows_to_log_info"""
-        flows = {"flows": list(range(500))}
-        flows_to_log_info("", flows)
+        flows = list(range(500))
+        flows_to_log_info("", flows, maximum=200)
         assert mock_log.info.call_count == 3
