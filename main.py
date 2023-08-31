@@ -564,15 +564,35 @@ class Main(KytosNApp):
             log.error(f"{str(exc)} for flow_dict {flow_dict} ")
             return
 
-        force = bool(event.content.get("force", False))
+        try:
+            force = bool(flow_dict.get("force", False))
+            batch_size = int(flow_dict.get("batch_size", 0))
+            batch_interval = int(flow_dict.get("batch_interval", 0))
+        except (ValueError, TypeError):
+            log.error(
+                "Invalid 'force', 'batch_size' or 'batch_interval' value/type. "
+                f"force: {flow_dict.get('force', False)}, "
+                f"batch_size: {flow_dict.get('batch_size', 0)}, "
+                f"batch_interval: {flow_dict.get('batch_interval', 0)}, "
+            )
+
         switch = self.controller.get_switch_by_dpid(dpid)
+
         flows_to_log_info(
             f"Send FlowMod from KytosEvent dpid: {dpid}, command: {command}, "
-            f"force: {force}, ",
-            flow_dict,
+            f"force: {force}, batch_size: {batch_size}, "
+            f"batch_interval: {batch_interval},",
+            flow_dict.get("flows", []),
         )
         try:
-            self._install_flows(command, flow_dict, [switch], reraise_conn=not force)
+            self._install_flows(
+                command,
+                flow_dict,
+                [switch],
+                reraise_conn=not force,
+                batch_size=batch_size,
+                batch_interval=batch_interval,
+            )
         except InvalidCommandError as error:
             log.error(
                 "Error installing or deleting Flow through" f" Kytos Event: {error}"
@@ -631,11 +651,24 @@ class Main(KytosNApp):
         except ValueError as exc:
             raise HTTPException(400, detail=str(exc))
 
-        force = bool(flows_dict.get("force", False))
+        try:
+            force = bool(flows_dict.get("force", False))
+            batch_size = int(flows_dict.get("batch_size", 0))
+            batch_interval = int(flows_dict.get("batch_interval", 0))
+        except (ValueError, TypeError):
+            raise HTTPException(
+                400,
+                detail="Invalid 'force', 'batch_size' or 'batch_interval' value/type. "
+                f"force: {flows_dict.get('force', False)}, "
+                f"batch_size: {flows_dict.get('batch_size', 0)}, "
+                f"batch_interval: {flows_dict.get('batch_interval', 0)}, ",
+            )
+
         flows_to_log_info(
             f"Send FlowMod from request dpid: {dpid}, command: {command}, "
-            f"force: {force}, ",
-            flows_dict,
+            f"force: {force}, batch_size: {batch_size}, "
+            f"batch_interval: {batch_interval},",
+            flows_dict.get("flows", []),
         )
         try:
             if not dpid:
@@ -644,6 +677,8 @@ class Main(KytosNApp):
                     flows_dict,
                     self._get_all_switches_enabled(),
                     reraise_conn=not force,
+                    batch_size=batch_size,
+                    batch_interval=batch_interval,
                 )
                 return JSONResponse(
                     {"response": "FlowMod Messages Sent"}, status_code=202
@@ -656,7 +691,14 @@ class Main(KytosNApp):
             if not switch.is_enabled() and command == "add":
                 raise HTTPException(404, detail=f"Switch {dpid} is disabled.")
 
-            self._install_flows(command, flows_dict, [switch], reraise_conn=not force)
+            self._install_flows(
+                command,
+                flows_dict,
+                [switch],
+                reraise_conn=not force,
+                batch_size=batch_size,
+                batch_interval=batch_interval,
+            )
             return JSONResponse({"response": "FlowMod Messages Sent"}, status_code=202)
 
         except SwitchNotConnectedError as error:
@@ -677,6 +719,8 @@ class Main(KytosNApp):
         save=True,
         reraise_conn=True,
         send_barrier=ENABLE_BARRIER_REQUEST,
+        batch_size=0,
+        batch_interval=0,
     ):
         """Execute all procedures to bulk install flows in the switches.
 
@@ -687,6 +731,15 @@ class Main(KytosNApp):
             save: A boolean to save flows in the database
             reraise_conn: True to reraise switch connection errors
             send_barrier: True to send barrier_request
+            batch_size: size of the batch of FlowMods, 0 to send all at once
+            batch_interval: interval to sleep in seconds per batch_size
+
+        batch_size and batch_interval parameters are for batching FlowMods, which
+        you'll want to set if you're sending a large number of flows. Just so
+        you can avoid overwhelming a switch with too many FlowMods at once.
+        If batch_size and batch_interval are positive values, they'll be used
+        accordingly batching at most batch_size per batch_interval in seconds.
+
         """
         flow_mods, flows, flow_dicts = [], [], []
         for switch in switches:
@@ -716,7 +769,31 @@ class Main(KytosNApp):
             self.delete_matched_flows(
                 flow_dicts, {switch.id: switch for switch in switches}
             )
-        self._send_flow_mods(switches, flow_mods, flows, reraise_conn, send_barrier)
+
+        # If there's no need to reraise conn errors, then exec in background
+        if not reraise_conn:
+            event = KytosEvent(
+                "kytos/flow_manager.send_flows",
+                content={
+                    "switches": switches,
+                    "flow_mods": flow_mods,
+                    "flows": flows,
+                    "send_barrier": send_barrier,
+                    "batch_size": batch_size,
+                    "batch_interval": batch_interval,
+                },
+            )
+            self.controller.buffers.app.put(event)
+        else:
+            self._send_flow_mods(
+                switches,
+                flow_mods,
+                flows,
+                reraise_conn=reraise_conn,
+                send_barrier=send_barrier,
+                batch_size=batch_size,
+                batch_interval=batch_interval,
+            )
 
     def _send_flow_mods(
         self,
@@ -728,24 +805,28 @@ class Main(KytosNApp):
         batch_size=0,
         batch_interval=0,
     ):
-        """Send FlowMod (and BarrierRequest) given a list of flow_dicts to switches.
-
-
-        batch_size and batch_interval parameters are for batching FlowMods, which
-        you'll want to set if you're sending a large number of flows. Just so
-        you can avoid overwhelming a switch with too many FlowMods at once.
-        If batch_size and batch_interval are positive values, they'll be used
-        accordingly batching at most batch_size per batch_interval in secs.
-
-        """
+        """Send FlowMod (and BarrierRequest) given a list of flow_dicts to switches."""
         flows_zipped = list((fmod, flow) for fmod, flow in zip(flow_mods, flows))
-        batch_size = batch_size if batch_size > 0 else max(1, len(flows_zipped))
-
+        batch_size = (
+            min(batch_size, len(flows_zipped))
+            if batch_size > 0
+            else max(1, len(flows_zipped))
+        )
+        batch_interval = max(0, batch_interval)
         for switch in switches:
             try:
+                k = 0
                 for i in range(0, len(flows_zipped), batch_size):
                     if i > 0 and batch_interval > 0:
+                        log.info(
+                            f"Send FlowMods batching will sleep for {batch_interval} "
+                            f"seconds before sending slice[{i}:{batch_size}]"
+                        )
                         time.sleep(batch_interval)
+                    flows_to_log_info(
+                        f"Sending FlowMods slice[{i}: {i+batch_size}], iteration: {k},",
+                        [flow.as_dict() for flow in flows[i : i + batch_size]],
+                    )
                     for flow_mod, flow in flows_zipped[i : i + batch_size]:
                         self._send_flow_mod(switch, flow_mod)
                         with self._flow_mods_sent_lock:
@@ -755,6 +836,7 @@ class Main(KytosNApp):
                                 build_command_from_flow_mod(flow_mod),
                             )
                         self._send_napp_event(switch, flow, "pending")
+                    k += 1
                 if flow_mods and send_barrier:
                     self._send_barrier_request(switch, flow_mods)
             except SwitchNotConnectedError:
@@ -829,6 +911,19 @@ class Main(KytosNApp):
         content.update(kwargs)
         event_app = KytosEvent(name, content)
         self.controller.buffers.app.put(event_app)
+
+    @listen_to("kytos.flow_manager.send_flows")
+    def on_send_flows(self, event: KytosEvent) -> None:
+        """Send flow mods handler for interval background usage."""
+        self._send_flow_mods(
+            event.content["switches"],
+            event.content["flow_mods"],
+            event.content["flows"],
+            reraise_conn=False,
+            send_barrier=event.content.get("send_barrier", ENABLE_BARRIER_REQUEST),
+            batch_size=event.content.get("batch_size", 0),
+            batch_interval=event.content.get("batch_interval", 0),
+        )
 
     @listen_to("kytos/core.openflow.connection.error")
     def on_openflow_connection_error(self, event):
