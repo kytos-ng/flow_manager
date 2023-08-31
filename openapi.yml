@@ -343,6 +343,16 @@ components:
           type: boolean
           description: The force option is for ignoring switch connection errors, and delegating the flows to be automatically sent later on via consistency check.
           default: false
+        batch_size:
+          type: integer
+          description: This is for batching, represents how many flows to send per iteration, every batch_interval seconds. If this value is zero it will send all at once. If you are sending many flows you probably want to use batching to potentially avoid overwhelming switches. Also, if the force option is true, then it will not block the request.
+          minimum: 0
+          default: 0
+        batch_interval:
+          type: integer
+          description: The interval to wait for in seconds when sending a batch of flows.
+          minimum: 0
+          default: 0
     FlowDoc:
       type: object
       properties:
