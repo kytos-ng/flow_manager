@@ -102,6 +102,7 @@ Subscribed
 - ``kytos/of_core.v0x04.messages.in.ofpt_barrier_reply``
 - ``kytos/core.openflow.connection.error``
 - ``.*.of_core.*.ofpt_error``
+- ``kytos.flow_manager.send_flows``
 
 Generated
 ---------
