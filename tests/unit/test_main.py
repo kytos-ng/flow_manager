@@ -499,7 +499,12 @@ class TestMain:
         )
         self.napp.handle_flows_install_delete(event)
         mock_install_flows.assert_called_with(
-            "add", mock_flow_dict, [switch], reraise_conn=True
+            "add",
+            mock_flow_dict,
+            [switch],
+            reraise_conn=True,
+            batch_size=0,
+            batch_interval=0,
         )
         mock_flows_log.assert_called()
 
@@ -545,7 +550,12 @@ class TestMain:
         )
         self.napp.handle_flows_install_delete(event)
         mock_install_flows.assert_called_with(
-            "delete", mock_flow_dict, [switch], reraise_conn=True
+            "delete",
+            mock_flow_dict,
+            [switch],
+            reraise_conn=True,
+            batch_size=0,
+            batch_interval=0,
         )
         mock_flows_log.assert_called()
 
