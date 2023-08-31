@@ -565,15 +565,15 @@ class Main(KytosNApp):
             return
 
         try:
-            force = bool(flow_dict.get("force", False))
-            batch_size = int(flow_dict.get("batch_size", 0))
-            batch_interval = int(flow_dict.get("batch_interval", 0))
+            force = bool(event.content.get("force", False))
+            batch_size = int(event.content.get("batch_size", 0))
+            batch_interval = int(event.content.get("batch_interval", 0))
         except (ValueError, TypeError):
             log.error(
                 "Invalid 'force', 'batch_size' or 'batch_interval' value/type. "
-                f"force: {flow_dict.get('force', False)}, "
-                f"batch_size: {flow_dict.get('batch_size', 0)}, "
-                f"batch_interval: {flow_dict.get('batch_interval', 0)}, "
+                f"force: {event.content.get('force', False)}, "
+                f"batch_size: {event.content.get('batch_size', 0)}, "
+                f"batch_interval: {event.content.get('batch_interval', 0)}, "
             )
 
         switch = self.controller.get_switch_by_dpid(dpid)
