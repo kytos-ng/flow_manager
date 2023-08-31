@@ -7,7 +7,12 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+Added
+=====
 - Augmented ``GET v2/stored_flows`` ``cookie_range`` to accept an even list of ranges
+- Augmented ``POST v2/flows`` to support batching flows, ``batch_size`` and ``batch_interval`` were introduced. Check out the OpenAPI documentation.
+- Augmented ``kytos.flow_manager.flows.(install|delete)`` event to accept ``batch_size`` and ``batch_interval`` in the ``flow_dict`` payload to support batching.
+
 
 [2023.1.0] - 2023-06-05
 ***********************
