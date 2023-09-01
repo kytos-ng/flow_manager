@@ -654,9 +654,9 @@ class TestMain:
         self.napp.controller.buffers.msg_out.put = mock_buffers_put
         self.napp._send_flow_mod = mock_send_flow_mod()
         switch = get_switch_mock("00:00:00:00:00:00:00:01", 0x04)
-        n = 5
-        flow_mods = [MagicMock() for _ in range(n)]
-        flows = [MagicMock() for _ in range(n)]
+        n_flows = 5
+        flow_mods = [MagicMock() for _ in range(n_flows)]
+        flows = [MagicMock() for _ in range(n_flows)]
         batch_size = 2
         batch_interval = 1
 
@@ -670,9 +670,9 @@ class TestMain:
 
         mock_buffers_put.assert_called()
         log.info.assert_called()
-        assert time.sleep.call_count == math.ceil(n / batch_size) - 1
+        assert time.sleep.call_count == math.ceil(n_flows / batch_size) - 1
         time.sleep.assert_called_with(batch_interval)
-        assert flows_log.call_count == math.ceil(n / batch_size)
+        assert flows_log.call_count == math.ceil(n_flows / batch_size)
         assert self.napp._send_flow_mod.call_count == len(flow_mods)
 
     @patch("kytos.core.buffers.KytosEventBuffer.put")
