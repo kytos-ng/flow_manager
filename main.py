@@ -243,12 +243,12 @@ class Main(KytosNApp):
 
         flow_ids_to_update = []
         for flow in pending_flows:
-            _id = flow["_id"]
-            if _id not in installed_flows:
+            flow_id = flow["flow_id"]
+            if flow_id not in installed_flows:
                 continue
 
-            installed_flow = installed_flows[_id]
-            flow_ids_to_update.append(_id)
+            installed_flow = installed_flows[flow_id]
+            flow_ids_to_update.append(flow_id)
             self._send_napp_event(switch, installed_flow, "add")
 
         if flow_ids_to_update:
