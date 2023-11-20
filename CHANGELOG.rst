@@ -7,6 +7,13 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2023.1.1] - 2023-11-18
+***********************
+
+Fixed
+=====
+- Fixed updating flow installed state when handling ``kytos/of_core.flow_stats.received``
+
 [2023.1.0] - 2023-06-05
 ***********************
 
