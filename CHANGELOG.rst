@@ -7,7 +7,15 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+Changed
+=======
+
 - Augmented ``GET v2/stored_flows`` ``cookie_range`` to accept an even list of ranges
+
+Fixed
+=====
+- Fixed updating flow installed state when handling ``kytos/of_core.flow_stats.received``
+
 
 [2023.1.0] - 2023-06-05
 ***********************

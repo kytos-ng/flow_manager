@@ -1054,7 +1054,10 @@ class TestMain:
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
         flow1, flow2 = MagicMock(id="1"), MagicMock(id="2")
-        flow1_dict, flow2_dict = {"_id": flow1.id}, {"_id": flow2.id}
+        flow1_dict, flow2_dict = {"flow_id": flow1.id, "state": "pending"}, {
+            "flow_id": flow2.id,
+            "state": "pending",
+        }
         flow1.__getitem__.side_effect, flow2.__getitem__.side_effect = (
             flow1_dict.__getitem__,
             flow2_dict.__getitem__,
