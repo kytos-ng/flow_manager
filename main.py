@@ -1,6 +1,7 @@
 """kytos/flow_manager NApp installs, lists and deletes switch flows."""
 
 # pylint: disable=relative-beyond-top-level,too-many-function-args
+import json
 import time
 from collections import OrderedDict, defaultdict
 from datetime import datetime, timedelta
@@ -25,6 +26,7 @@ from kytos.core.rest_api import (
     Request,
     content_type_json_or_415,
     error_msg,
+    get_json,
     get_json_or_400,
 )
 
@@ -518,6 +520,22 @@ class Main(KytosNApp):
             raise HTTPException(
                 400, detail=f"cookie_range {cookies} couldn't be cast as an int"
             )
+
+        try:
+            if "application/json" in request.headers.get("Content-Type", ""):
+                body = get_json(request, self.controller.loop)
+                if isinstance(body, dict) and "cookie_range" in body:
+                    try:
+                        cookies = body["cookie_range"]
+                        cookie_range = [int(v) for v in cookies]
+                    except (ValueError, TypeError):
+                        raise HTTPException(
+                            400,
+                            detail=f"cookie_range {cookies} couldn't be cast as an int",
+                        )
+        except (json.decoder.JSONDecodeError, TypeError):
+            raise HTTPException(400, "failed to decode json body")
+
         try:
             cookie_ranges = map_cookie_list_as_tuples(cookie_range)
         except ValueError as exc:
