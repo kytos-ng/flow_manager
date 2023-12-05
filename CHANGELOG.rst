@@ -11,6 +11,7 @@ Changed
 =======
 
 - Augmented ``GET v2/stored_flows`` ``cookie_range`` to accept an even list of ranges
+- Augmented ``GET v2/stored_flows`` ``cookie_range`` to accept this filter via json body too. If both ``cookie_range`` query arg and body are set, the body values will have a higher preference.
 
 Fixed
 =====

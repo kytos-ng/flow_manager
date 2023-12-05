@@ -170,22 +170,52 @@ class TestMain:
     async def test_rest_list_stored_by_cookie(self):
         """Test list_stored rest method"""
         dpid = "00:00:00:00:00:00:00:01"
+        cookie = 84114964
         flow_dict = {
             "switch": dpid,
             "id": 1,
             "flow_id": 1,
             "state": "installed",
-            "flow": {"priority": 10, "cookie": "84114964"},
+            "flow": {"priority": 10, "cookie": cookie},
         }
 
         self.napp.flow_controller.find_flows.return_value = {dpid: [flow_dict]}
 
         endpoint = (
             f"{self.base_endpoint}/stored_flows?"
-            "cookie_range=84114964&cookie_range=84114964"
+            f"cookie_range={cookie}&cookie_range={cookie}"
         )
         response = await self.api_client.get(endpoint)
+        assert self.napp.flow_controller.find_flows.call_count == 1
+        assert self.napp.flow_controller.find_flows.call_args[0][2] == [
+            (cookie, cookie)
+        ]
+        assert response.status_code == 200
+        assert dpid in response.json()
 
+    async def test_rest_list_stored_by_cookie_json_body(self, event_loop):
+        """Test list_stored filter by cookie json body rest method"""
+        self.napp.controller.loop = event_loop
+        dpid = "00:00:00:00:00:00:00:01"
+        cookie = 84114964
+        flow_dict = {
+            "switch": dpid,
+            "id": 1,
+            "flow_id": 1,
+            "state": "installed",
+            "flow": {"priority": 10, "cookie": cookie},
+        }
+
+        self.napp.flow_controller.find_flows.return_value = {dpid: [flow_dict]}
+
+        endpoint = f"{self.base_endpoint}/stored_flows"
+        response = await self.api_client.request(
+            "GET", endpoint, json={"cookie_range": [cookie, cookie]}
+        )
+        assert self.napp.flow_controller.find_flows.call_count == 1
+        assert self.napp.flow_controller.find_flows.call_args[0][2] == [
+            (cookie, cookie)
+        ]
         assert response.status_code == 200
         assert dpid in response.json()
 
@@ -203,6 +233,28 @@ class TestMain:
         response = await self.api_client.get(endpoint)
         assert response.status_code == 400
         assert "Expected cookies length to be even" in response.json()["description"]
+
+    async def test_rest_list_stored_by_cookie_json_body_fail(self, event_loop):
+        """Test list_stored filter by cookie json body rest method"""
+        self.napp.controller.loop = event_loop
+        dpid = "00:00:00:00:00:00:00:01"
+        cookie = 84114964
+        flow_dict = {
+            "switch": dpid,
+            "id": 1,
+            "flow_id": 1,
+            "state": "installed",
+            "flow": {"priority": 10, "cookie": cookie},
+        }
+
+        self.napp.flow_controller.find_flows.return_value = {dpid: [flow_dict]}
+
+        endpoint = f"{self.base_endpoint}/stored_flows"
+        response = await self.api_client.request(
+            "GET", endpoint, json={"cookie_range": [cookie] * 3}
+        )
+        assert response.status_code == 400
+        assert "even" in response.json()["description"]
 
     async def test_list_flows_fail_case(self):
         """Test the failure case to recover all flows from a switch by dpid.
