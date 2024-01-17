@@ -3,17 +3,16 @@
 
 from datetime import datetime
 from decimal import Decimal
-from unittest import TestCase
 from unittest.mock import MagicMock
 
 from bson.decimal128 import Decimal128
 from napps.kytos.flow_manager.controllers import FlowController
 
 
-class TestFlowController(TestCase):  # pylint: disable=too-many-public-methods
+class TestFlowController:  # pylint: disable=too-many-public-methods
     """Test the Main class."""
 
-    def setUp(self) -> None:
+    def setup_method(self) -> None:
         """Execute steps before each tests."""
         self.flow_controller = FlowController(MagicMock())
         self.dpid = "00:00:00:00:00:00:00:01"

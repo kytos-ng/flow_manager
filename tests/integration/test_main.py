@@ -1,5 +1,4 @@
 """Module to test the main napp file."""
-from unittest import TestCase
 from unittest.mock import Mock, MagicMock
 
 from kytos.core import Controller
@@ -7,10 +6,10 @@ from kytos.core.config import KytosConfig
 from napps.kytos.flow_manager.main import Main
 
 
-class TestMain(TestCase):
+class TestMain:
     """Test the Main class."""
 
-    def setUp(self):
+    def setup_method(self):
         """Execute steps before each tests."""
         Main.get_flow_controller = MagicMock()
         self.napp = Main(self.get_controller_mock())
