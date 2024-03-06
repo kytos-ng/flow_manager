@@ -1,4 +1,5 @@
 """TestDbModels."""
+
 import pytest
 from napps.kytos.flow_manager.db.models import FlowDoc
 from pydantic import ValidationError

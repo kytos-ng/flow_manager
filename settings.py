@@ -1,4 +1,5 @@
 """Settings from flow_manager NApp."""
+
 FLOWS_DICT_MAX_SIZE = 10000
 ENABLE_CONSISTENCY_CHECK = True
 ENABLE_BARRIER_REQUEST = True

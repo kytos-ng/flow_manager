@@ -1,4 +1,5 @@
 """Tests from flow_manager napp."""
+
 import os
 import sys
 from pathlib import Path

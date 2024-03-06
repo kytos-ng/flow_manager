@@ -1,4 +1,5 @@
 """Module to test FlowController."""
+
 # pylint: disable=invalid-name,relative-beyond-top-level
 
 from datetime import datetime

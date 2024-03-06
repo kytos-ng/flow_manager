@@ -1,4 +1,5 @@
 """Module to test the utils module."""
+
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
