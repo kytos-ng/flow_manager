@@ -425,7 +425,6 @@ class TestMain:
         mock_send_flow_mod.side_effect = SwitchNotConnectedError(
             "error", flow=MagicMock()
         )
-        # self.napp.controller.loop = event_loop
         _id = str(uuid4())
         match_id = str(uuid4())
         serializer = MagicMock()

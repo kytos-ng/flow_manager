@@ -120,6 +120,7 @@ class FlowSubDoc(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @field_validator("cookie", mode="before")
+    @classmethod
     def preset_cookie(cls, v, values, **kwargs) -> Decimal128:
         """Preset cookie."""
         if isinstance(v, (int, str)):
@@ -142,4 +143,4 @@ class FlowDoc(DocumentBaseModel):
     switch: str
     flow_id: str
     flow: FlowSubDoc
-    state: FlowEntryState = Field(default=FlowEntryState.PENDING.value)
+    state: str = Field(default=FlowEntryState.PENDING.value)

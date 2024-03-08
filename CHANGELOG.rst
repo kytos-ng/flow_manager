@@ -9,6 +9,14 @@ file.
 
 Changed
 =======
+- Updated python environment installation from 3.9 to 3.11
+- Updated test dependencies
+
+[UNRELEASED] - Under development
+********************************
+
+Changed
+=======
 
 - Augmented ``GET v2/stored_flows`` ``cookie_range`` to accept an even list of ranges
 - Augmented ``GET v2/stored_flows`` ``cookie_range`` to accept this filter via json body too. If both ``cookie_range`` query arg and body are set, the body values will have a higher preference.
