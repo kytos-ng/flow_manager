@@ -107,13 +107,13 @@ class MatchSubDoc(BaseModel):
 class FlowSubDoc(BaseModel):
     """Flow DB SubDocument Model."""
 
-    table_id: int = Field(default=0)
+    table_id: int = 0
     owner: Optional[str] = None
-    table_group: str = Field(default="base")
-    priority: int = Field(default=0x8000)
-    cookie: Decimal128 = Field(default=Decimal128("0"))
-    idle_timeout: int = Field(default=0)
-    hard_timeout: int = Field(default=0)
+    table_group: str = "base"
+    priority: int = 0x8000
+    cookie: Decimal128 = Decimal128("0")
+    idle_timeout: int = 0
+    hard_timeout: int = 0
     match: Optional[MatchSubDoc] = None
     actions: Optional[List[dict]] = None
     instructions: Optional[List[dict]] = None
@@ -143,4 +143,4 @@ class FlowDoc(DocumentBaseModel):
     switch: str
     flow_id: str
     flow: FlowSubDoc
-    state: str = Field(default=FlowEntryState.PENDING.value)
+    state: str = FlowEntryState.PENDING.value
