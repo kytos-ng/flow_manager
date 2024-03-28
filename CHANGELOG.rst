@@ -7,6 +7,9 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2023.2.0] - 2024-02-16
+***********************
+
 Changed
 =======
 - Updated python environment installation from 3.9 to 3.11
