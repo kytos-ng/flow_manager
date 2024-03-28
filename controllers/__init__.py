@@ -1,4 +1,5 @@
 """FlowController."""
+
 # pylint: disable=unnecessary-lambda,invalid-name,relative-beyond-top-level
 import os
 from collections import defaultdict
@@ -84,7 +85,7 @@ class FlowController:
                     **{"_id": match_id, "updated_at": utc_now},
                 }
             )
-            payload = model.dict(exclude={"inserted_at"}, exclude_none=True)
+            payload = model.model_dump(exclude={"inserted_at"}, exclude_none=True)
             ops.append(
                 UpdateOne(
                     {"_id": match_id},
@@ -185,7 +186,7 @@ class FlowController:
         updated = self.db.flow_checks.find_one_and_update(
             {"_id": dpid},
             {
-                "$set": model.dict(exclude={"inserted_at"}),
+                "$set": model.model_dump(exclude={"inserted_at"}),
                 "$setOnInsert": {"inserted_at": utc_now},
             },
             return_document=ReturnDocument.AFTER,

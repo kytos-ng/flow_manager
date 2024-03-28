@@ -1,4 +1,5 @@
 """kytos/flow_manager barrier_request."""
+
 from pyof.v0x04.controller2switch.barrier_request import BarrierRequest as BReq13
 
 

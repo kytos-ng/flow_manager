@@ -1,4 +1,5 @@
 """Module to test the main napp file."""
+
 from unittest.mock import Mock, MagicMock
 
 from kytos.core import Controller

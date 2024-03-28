@@ -1,4 +1,5 @@
 """Test Main methods."""
+
 import asyncio
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
@@ -13,7 +14,7 @@ from napps.kytos.of_core.v0x04.flow import Flow as Flow04
 from pyof.v0x04.asynchronous.error_msg import ErrorType
 from pyof.v0x04.common.header import Type
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 from kytos.core.helpers import now
 from kytos.lib.helpers import (
     get_connection_mock,
@@ -193,9 +194,9 @@ class TestMain:
         assert response.status_code == 200
         assert dpid in response.json()
 
-    async def test_rest_list_stored_by_cookie_json_body(self, event_loop):
+    async def test_rest_list_stored_by_cookie_json_body(self):
         """Test list_stored filter by cookie json body rest method"""
-        self.napp.controller.loop = event_loop
+        self.napp.controller.loop = asyncio.get_running_loop()
         dpid = "00:00:00:00:00:00:00:01"
         cookie = 84114964
         flow_dict = {
@@ -234,9 +235,9 @@ class TestMain:
         assert response.status_code == 400
         assert "Expected cookies length to be even" in response.json()["description"]
 
-    async def test_rest_list_stored_by_cookie_json_body_fail(self, event_loop):
+    async def test_rest_list_stored_by_cookie_json_body_fail(self):
         """Test list_stored filter by cookie json body rest method"""
-        self.napp.controller.loop = event_loop
+        self.napp.controller.loop = asyncio.get_running_loop()
         dpid = "00:00:00:00:00:00:00:01"
         cookie = 84114964
         flow_dict = {
@@ -267,11 +268,9 @@ class TestMain:
         assert response.status_code == 404
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    async def test_rest_add_and_delete_without_dpid(
-        self, mock_install_flows, event_loop
-    ):
+    async def test_rest_add_and_delete_without_dpid(self, mock_install_flows):
         """Test add and delete rest method without dpid."""
-        self.napp.controller.loop = event_loop
+        self.napp.controller.loop = asyncio.get_running_loop()
         flows = {"flows": [{"match": {"in_port": 1}}]}
         coros = [
             self.api_client.post(f"{self.base_endpoint}/flows", json=flows),
@@ -284,9 +283,9 @@ class TestMain:
         assert mock_install_flows.call_count == 2
 
     @pytest.mark.parametrize("cookie", [27115650311270694912, "a", -1])
-    async def test_rest_add_pack_exc(self, cookie, event_loop):
+    async def test_rest_add_pack_exc(self, cookie):
         """Test add pack exception."""
-        self.napp.controller.loop = event_loop
+        self.napp.controller.loop = asyncio.get_running_loop()
         body = {"flows": [{"cookie": cookie}]}
         endpoint = f"{self.base_endpoint}/flows"
         response = await self.api_client.post(endpoint, json=body)
@@ -294,9 +293,9 @@ class TestMain:
         data = response.json()
         assert "FlowMod.cookie" in data["description"]
 
-    async def test_rest_add_flow_serializer_type_error(self, event_loop):
+    async def test_rest_add_flow_serializer_type_error(self):
         """Test add flow serializer type error exception."""
-        self.napp.controller.loop = event_loop
+        self.napp.controller.loop = asyncio.get_running_loop()
         body = {
             "flows": [
                 {
@@ -312,9 +311,9 @@ class TestMain:
         data = response.json()
         assert "portx" in data["description"]
 
-    async def test_rest_add_flow_serializer_key_error(self, event_loop):
+    async def test_rest_add_flow_serializer_key_error(self):
         """Test add flow serializer key error exception."""
-        self.napp.controller.loop = event_loop
+        self.napp.controller.loop = asyncio.get_running_loop()
         body = {
             "flows": [
                 {
@@ -330,9 +329,9 @@ class TestMain:
         data = response.json()
         assert "what" in data["description"]
 
-    async def test_rest_del_missing_cookie_mask(self, event_loop):
+    async def test_rest_del_missing_cookie_mask(self):
         """Test del missing cookie_mask."""
-        self.napp.controller.loop = event_loop
+        self.napp.controller.loop = asyncio.get_running_loop()
         body = {"flows": [{"cookie": 0x64}]}
         endpoint = f"{self.base_endpoint}/flows"
         response = await self.api_client.request("DELETE", endpoint, json=body)
@@ -341,11 +340,9 @@ class TestMain:
         assert "cookie_mask should be set too" in data["description"]
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    async def test_rest_add_and_delete_with_dpi_fail(
-        self, mock_install_flows, event_loop
-    ):
+    async def test_rest_add_and_delete_with_dpi_fail(self, mock_install_flows):
         """Test fail case the add and delete rest method with dpid."""
-        self.napp.controller.loop = event_loop
+        self.napp.controller.loop = asyncio.get_running_loop()
         data = {"flows": [{"match": {"in_port": 1}}]}
 
         dpids = [
@@ -374,9 +371,9 @@ class TestMain:
         assert responses[1].status_code == 404
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    async def test_rest_add_error(self, mock_install_flows, event_loop):
+    async def test_rest_add_error(self, mock_install_flows):
         """Test rest endpoint with ValidationError"""
-        self.napp.controller.loop = event_loop
+        self.napp.controller.loop = asyncio.get_running_loop()
         switch = MagicMock()
         switch.is_enabled = lambda: True
         self.napp.controller.get_switch_by_dpid = lambda id: switch
@@ -394,18 +391,16 @@ class TestMain:
                 }
             ]
         }
-        mock_install_flows.side_effect = ValidationError("", BaseModel)
+        mock_install_flows.side_effect = ValidationError.from_exception_data("", [])
         response = await self.api_client.post(
             f"{self.base_endpoint}/flows/{dpid}", json=data
         )
         assert response.status_code == 400
 
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    async def test_rest_flow_mod_add_switch_not_connected(
-        self, mock_install_flows, event_loop
-    ):
+    async def test_rest_flow_mod_add_switch_not_connected(self, mock_install_flows):
         """Test sending a flow mod when a swith isn't connected."""
-        self.napp.controller.loop = event_loop
+        self.napp.controller.loop = asyncio.get_running_loop()
         mock_install_flows.side_effect = SwitchNotConnectedError(
             "error", flow=MagicMock()
         )
@@ -420,17 +415,16 @@ class TestMain:
     @patch("napps.kytos.flow_manager.main.Main._send_flow_mod")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     async def test_rest_flow_mod_add_switch_not_connected_force(
-        self, mock_flow_factory, mock_send_flow_mod, event_loop
+        self, mock_flow_factory, mock_send_flow_mod
     ):
         """Test sending a flow mod when a swith isn't connected with force option."""
-        self.napp.controller.loop = event_loop
+        self.napp.controller.loop = asyncio.get_running_loop()
         self.napp._send_napp_event = MagicMock()
         self.napp._add_flow_mod_sent = MagicMock()
         self.napp._send_barrier_request = MagicMock()
         mock_send_flow_mod.side_effect = SwitchNotConnectedError(
             "error", flow=MagicMock()
         )
-        self.napp.controller.loop = event_loop
         _id = str(uuid4())
         match_id = str(uuid4())
         serializer = MagicMock()
@@ -579,7 +573,7 @@ class TestMain:
             name="kytos.flow_manager.flows.install",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
-        mock_install_flows.side_effect = ValidationError("", BaseModel)
+        mock_install_flows.side_effect = ValidationError.from_exception_data("", [])
         self.napp.handle_flows_install_delete(event)
         assert mock_log.error.call_count == 1
 
@@ -745,7 +739,7 @@ class TestMain:
     def test_handle_errors_ofpet_hello_failed(self):
         """Test handle_errors ofpet_hello_failed."""
         content = MagicMock()
-        event = MagicMock(content=dict(message=content))
+        event = MagicMock(content={"message": content})
         content.error_type = ErrorType.OFPET_HELLO_FAILED
         content.code = 5
         self.napp.handle_errors(event)
