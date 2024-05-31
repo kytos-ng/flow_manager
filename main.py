@@ -20,6 +20,7 @@ from pyof.v0x04.common.header import Type
 
 from kytos.core import KytosEvent, KytosNApp, log, rest
 from kytos.core.helpers import listen_to, now
+from kytos.core.pacing import PacerWrapper
 from kytos.core.rest_api import (
     HTTPException,
     JSONResponse,
@@ -48,6 +49,7 @@ from .settings import (
     ENABLE_BARRIER_REQUEST,
     ENABLE_CONSISTENCY_CHECK,
     FLOWS_DICT_MAX_SIZE,
+    ACTION_PACES,
 )
 from .utils import (
     _valid_consistency_ignored,
@@ -99,6 +101,9 @@ class Main(KytosNApp):
         self._flow_mods_retry_count = {}
         self._flow_mods_retry_count_lock = Lock()
         self.resent_flows = set()
+
+        self.pacer = PacerWrapper("flow_manager", self.controller.pacer)
+        self.pacer.inject_config(ACTION_PACES)
 
     @staticmethod
     def get_flow_controller() -> FlowController:
@@ -816,7 +821,7 @@ class Main(KytosNApp):
         self.controller.buffers.msg_out.put(event)
 
     def _send_flow_mod(self, switch, flow_mod):
-        self.controller.pacer.hit("flow_manager.send_flow_mod", switch.dpid)
+        self.pacer.hit("send_flow_mod", switch.dpid)
         if not switch.is_connected():
             raise SwitchNotConnectedError(
                 f"switch {switch.id} isn't connected", flow_mod
