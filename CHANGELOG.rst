@@ -14,6 +14,7 @@ Changed
 =======
 - Updated python environment installation from 3.9 to 3.11
 - Updated test dependencies
+- Added ``kytos.flow_manager.flows.single.(install|delete)`` handler with ``pool="dynamic_single"``
 
 [2023.2.0] - 2024-02-16
 ***********************
