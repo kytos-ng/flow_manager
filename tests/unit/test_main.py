@@ -531,16 +531,25 @@ class TestMain:
         mock_send_barrier_request.assert_called()
         self.napp.flow_controller.delete_flows_by_ids.assert_not_called()
 
-    @patch("napps.kytos.flow_manager.main.flows_to_log_info")
-    @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_event_add_flow(self, mock_install_flows, mock_flows_log):
+    @pytest.mark.parametrize(
+        "ev_name",
+        ("kytos.flow_manager.flows.install", "kytos.flow_manager.flows.single.install"),
+    )
+    def test_event_add_flow(self, monkeypatch, ev_name):
         """Test method for installing flows on the switches through events."""
+        mock_install_flows, mock_flows_log = MagicMock(), MagicMock()
+        monkeypatch.setattr(
+            "napps.kytos.flow_manager.main.flows_to_log_info", mock_flows_log
+        )
+        monkeypatch.setattr(
+            "napps.kytos.flow_manager.main.Main._install_flows", mock_install_flows
+        )
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid)
         self.napp.controller.switches = {dpid: switch}
         mock_flow_dict = {"flows": [MagicMock()]}
         event = get_kytos_event_mock(
-            name="kytos.flow_manager.flows.install",
+            name=ev_name,
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
         self.napp.handle_flows_install_delete(event)
@@ -577,16 +586,25 @@ class TestMain:
         self.napp.handle_flows_install_delete(event)
         assert mock_log.error.call_count == 1
 
-    @patch("napps.kytos.flow_manager.main.flows_to_log_info")
-    @patch("napps.kytos.flow_manager.main.Main._install_flows")
-    def test_event_flows_install_delete(self, mock_install_flows, mock_flows_log):
+    @pytest.mark.parametrize(
+        "ev_name",
+        ("kytos.flow_manager.flows.delete", "kytos.flow_manager.flows.single.delete"),
+    )
+    def test_event_flows_install_delete(self, monkeypatch, ev_name):
         """Test method for removing flows on the switches through events."""
+        mock_install_flows, mock_flows_log = MagicMock(), MagicMock()
+        monkeypatch.setattr(
+            "napps.kytos.flow_manager.main.flows_to_log_info", mock_flows_log
+        )
+        monkeypatch.setattr(
+            "napps.kytos.flow_manager.main.Main._install_flows", mock_install_flows
+        )
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid)
         self.napp.controller.switches = {dpid: switch}
         mock_flow_dict = {"flows": [MagicMock()]}
         event = get_kytos_event_mock(
-            name="kytos.flow_manager.flows.delete",
+            name=ev_name,
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
         self.napp.handle_flows_install_delete(event)

@@ -100,6 +100,7 @@ Subscribed
 
 - ``kytos/of_core.handshake.completed``
 - ``kytos.flow_manager.flows.(install|delete)``
+- ``kytos.flow_manager.flows.single.(install|delete)``
 - ``kytos/of_core.flow_stats.received``
 - ``kytos/of_core.v0x04.messages.in.ofpt_flow_removed``
 - ``kytos/of_core.v0x04.messages.in.ofpt_barrier_reply``

@@ -549,6 +549,19 @@ class Main(KytosNApp):
         )
         return JSONResponse(flows_collection)
 
+    @listen_to(
+        "kytos.flow_manager.flows.single.(install|delete)", pool="dynamic_single"
+    )
+    def on_flows_install_delete_single(self, event):
+        """Install or delete flows in the switches through events
+        with a single thread pool executor. If your NApp sends
+        flow additions and deletions with same match shortly after
+        you want to use this handler to ensure ordered execution.
+        When using this method, you should try to group a reasonable
+        number of flows, otherwise, DB IO throughput will decrease.
+        """
+        self.handle_flows_install_delete(event)
+
     @listen_to("kytos.flow_manager.flows.(install|delete)")
     def on_flows_install_delete(self, event):
         """Install or delete flows in the switches through events.
@@ -566,9 +579,9 @@ class Main(KytosNApp):
             log.error("Error getting fields to install or remove " f"Flows: {error}")
             return
 
-        if event.name == "kytos.flow_manager.flows.install":
+        if event.name.endswith("install"):
             command = "add"
-        elif event.name == "kytos.flow_manager.flows.delete":
+        elif event.name.endswith("delete"):
             command = "delete"
         else:
             msg = f'Invalid event "{event.name}", should be install|delete'
