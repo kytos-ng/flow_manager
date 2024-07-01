@@ -22,3 +22,10 @@ Consistency check is eventually consistent, so the minimum interval is recommend
 to be at least greater than FLOW_STATS and ideally it slightly greater than
 whichever longest network convergence FlowMods operations that your network has.
 """
+
+ACTION_PACES = {
+    "send_flow_mod": {
+        "pace": "100/second",
+        "strategy": "fixed_window",
+    },
+}
