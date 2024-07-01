@@ -40,6 +40,7 @@ from .exceptions import (
     SwitchNotConnectedError,
 )
 from .settings import (
+    ACTION_PACES,
     CONN_ERR_MAX_RETRIES,
     CONN_ERR_MIN_WAIT,
     CONN_ERR_MULTIPLIER,
@@ -49,7 +50,6 @@ from .settings import (
     ENABLE_BARRIER_REQUEST,
     ENABLE_CONSISTENCY_CHECK,
     FLOWS_DICT_MAX_SIZE,
-    ACTION_PACES,
 )
 from .utils import (
     _valid_consistency_ignored,
