@@ -27,4 +27,12 @@ ACTION_PACES = {
         "pace": "100/second",
         "strategy": "fixed_window",
     },
+    "send_flow_mod.no_owner": {
+        "pace": "50/second",
+        "strategy": "fixed_window",
+    },
+    "send_flow_mod.mef_eline": {
+        "pace": "50/second",
+        "strategy": "fixed_window",
+    },
 }

@@ -209,7 +209,7 @@ class Main(KytosNApp):
         flows = []
         with self._flow_mods_sent_lock:
             for flow_xid in flow_xids:
-                flow, cmd = self._flow_mods_sent[flow_xid]
+                flow, cmd, _ = self._flow_mods_sent[flow_xid]
                 if (
                     cmd != "add"
                     or flow_xid not in self._flow_mods_sent
@@ -311,7 +311,7 @@ class Main(KytosNApp):
 
         try:
             xid = int(event.message.header.xid)
-            flow, command = self._flow_mods_sent[xid]
+            flow, command, owner = self._flow_mods_sent[xid]
         except KeyError:
             raise ValueError(
                 f"Aborting retries, xid: {xid} not found on flow mods sent"
@@ -347,7 +347,7 @@ class Main(KytosNApp):
             )
             flow_mod = build_flow_mod_from_command(flow, command)
             flow_mod.header.xid = xid
-            self._send_flow_mod(flow.switch, flow_mod)
+            self._send_flow_mod(flow.switch, flow_mod, owner)
             if send_barrier:
                 self._send_barrier_request(flow.switch, [flow_mod])
             return True
@@ -729,7 +729,7 @@ class Main(KytosNApp):
             reraise_conn: True to reraise switch connection errors
             send_barrier: True to send barrier_request
         """
-        flow_mods, flows, flow_dicts = [], [], []
+        flow_mods, flows, flow_dicts, owners, commands = [], [], [], [], []
         for switch in switches:
             serializer = FlowFactory.get_class(switch, Flow04)
             flows_list = flows_dict.get("flows", [])
@@ -746,6 +746,8 @@ class Main(KytosNApp):
                 flow_mod.pack()
                 flow_mods.append(flow_mod)
                 flows.append(flow)
+                owners.append(flow_dict.get('owner'))
+                commands.append(command)
                 flow_dicts.append(
                     {**{"flow": flow_dict}, **{"flow_id": flow.id, "switch": switch.id}}
                 )
@@ -757,21 +759,32 @@ class Main(KytosNApp):
             self.delete_matched_flows(
                 flow_dicts, {switch.id: switch for switch in switches}
             )
-        self._send_flow_mods(switches, flow_mods, flows, reraise_conn, send_barrier)
+        self._send_flow_mods(
+            switches,
+            flow_mods,
+            flows,
+            owners,
+            commands,
+            reraise_conn,
+            send_barrier
+        )
 
     def _send_flow_mods(
         self,
         switches,
         flow_mods,
         flows,
+        owners,
+        commands,
         reraise_conn=True,
         send_barrier=ENABLE_BARRIER_REQUEST,
+        owner=None
     ):
         """Send FlowMod (and BarrierRequest) given a list of flow_dicts to switches."""
         for switch in switches:
-            for i, (flow_mod, flow) in enumerate(zip(flow_mods, flows)):
+            for i, (flow_mod, flow, owner, command) in enumerate(zip(flow_mods, flows, owners, commands)):
                 try:
-                    self._send_flow_mod(switch, flow_mod)
+                    self._send_flow_mod(switch, flow_mod, owner)
                     if send_barrier and i == len(flow_mods) - 1:
                         self._send_barrier_request(switch, flow_mods)
                 except SwitchNotConnectedError:
@@ -781,16 +794,17 @@ class Main(KytosNApp):
                     self._add_flow_mod_sent(
                         flow_mod.header.xid,
                         flow,
-                        build_command_from_flow_mod(flow_mod),
+                        command,
+                        owner
                     )
                 self._send_napp_event(switch, flow, "pending")
         return flow_mods
 
-    def _add_flow_mod_sent(self, xid, flow, command):
+    def _add_flow_mod_sent(self, xid, flow, command, owner):
         """Add the flow mod to the list of flow mods sent."""
         if len(self._flow_mods_sent) >= self._flow_mods_sent_max_size:
             self._flow_mods_sent.popitem(last=False)
-        self._flow_mods_sent[xid] = (flow, command)
+        self._flow_mods_sent[xid] = (flow, command, owner)
 
     def _add_barrier_request(self, dpid, barrier_xid, flow_mods):
         """Add a barrier request."""
@@ -820,7 +834,11 @@ class Main(KytosNApp):
         )
         self.controller.buffers.msg_out.put(event)
 
-    def _send_flow_mod(self, switch, flow_mod):
+    def _send_flow_mod(self, switch, flow_mod, owner=None):
+        owner = owner or "no_owner"
+        if not self.pacer.is_configured(f"send_flow_mod.{owner}"):
+            owner = "no_owner"
+        self.pacer.hit(f"send_flow_mod.{owner}", switch.dpid)
         self.pacer.hit("send_flow_mod", switch.dpid)
         if not switch.is_connected():
             raise SwitchNotConnectedError(
@@ -868,7 +886,7 @@ class Main(KytosNApp):
         switch = event.content["destination"].switch
         flow = event.message
         try:
-            _, error_command = self._flow_mods_sent[event.message.header.xid]
+            _, error_command, _ = self._flow_mods_sent[event.message.header.xid]
         except KeyError:
             error_command = "unknown"
         error_kwargs = {
@@ -901,7 +919,7 @@ class Main(KytosNApp):
             return
         xid = message.header.xid.value
         try:
-            flow, error_command = self._flow_mods_sent[xid]
+            flow, error_command, _ = self._flow_mods_sent[xid]
         except KeyError:
             pass
         else:
