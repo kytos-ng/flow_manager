@@ -713,7 +713,7 @@ class Main(KytosNApp):
             reraise_conn: True to reraise switch connection errors
             send_barrier: True to send barrier_request
         """
-        flow_mods, flows, flow_dicts, owners, commands = [], [], [], [], []
+        flow_mods, flows, flow_dicts, owners = [], [], [], [], []
         for switch in switches:
             serializer = FlowFactory.get_class(switch, Flow04)
             flows_list = flows_dict.get("flows", [])
@@ -731,7 +731,6 @@ class Main(KytosNApp):
                 flow_mods.append(flow_mod)
                 flows.append(flow)
                 owners.append(flow_dict.get('owner'))
-                commands.append(command)
                 flow_dicts.append(
                     {**{"flow": flow_dict}, **{"flow_id": flow.id, "switch": switch.id}}
                 )
@@ -759,14 +758,13 @@ class Main(KytosNApp):
         flow_mods,
         flows,
         owners,
-        commands,
         reraise_conn=True,
         send_barrier=ENABLE_BARRIER_REQUEST,
         owner=None
     ):
         """Send FlowMod (and BarrierRequest) given a list of flow_dicts to switches."""
         for switch in switches:
-            for i, (flow_mod, flow, owner, command) in enumerate(zip(flow_mods, flows, owners, commands)):
+            for i, (flow_mod, flow, owner) in enumerate(zip(flow_mods, flows, owners)):
                 try:
                     self._send_flow_mod(switch, flow_mod, owner)
                     if send_barrier and i == len(flow_mods) - 1:
@@ -778,7 +776,7 @@ class Main(KytosNApp):
                     self._add_flow_mod_sent(
                         flow_mod.header.xid,
                         flow,
-                        command,
+                        build_command_from_flow_mod(flow_mod),
                         owner
                     )
                 self._send_napp_event(switch, flow, "pending")
