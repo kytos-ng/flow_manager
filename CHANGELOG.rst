@@ -7,6 +7,10 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+General Information
+===================
+- Added new script ``scripts/db/2024.1.0/000_update_match_id.py`` to update flows ids (match ids), it'll update by inserting new flows and deleting old ones. Check out ``scripts/db/2024.1.0/README.md`` for more information.
+
 [2023.2.0] - 2024-02-16
 ***********************
 
