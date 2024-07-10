@@ -746,9 +746,9 @@ class Main(KytosNApp):
                 flow_mod.pack()
                 flow_mods.append(flow_mod)
                 flows.append(flow)
-                owners.append(flow_dict.get('owner'))
+                owners.append(flow_dict.get('owner', 'no_owner'))
                 flow_dicts.append(
-                    {**{"flow": flow_dict}, **{"flow_id": flow.id, "switch": switch.id}}
+                    {"flow": flow_dict, "flow_id": flow.id, "switch": switch.id}
                 )
         if save and command == "add":
             self.flow_controller.upsert_flows(
@@ -763,7 +763,6 @@ class Main(KytosNApp):
             flow_mods,
             flows,
             owners,
-            commands,
             reraise_conn,
             send_barrier
         )
@@ -832,12 +831,8 @@ class Main(KytosNApp):
         )
         self.controller.buffers.msg_out.put(event)
 
-    def _send_flow_mod(self, switch, flow_mod, owner=None):
-        owner = owner or "no_owner"
-        if not self.pacer.is_configured(f"send_flow_mod.{owner}"):
-            owner = "no_owner"
+    def _send_flow_mod(self, switch, flow_mod, owner):
         self.pacer.hit(f"send_flow_mod.{owner}", switch.dpid)
-        self.pacer.hit("send_flow_mod", switch.dpid)
         if not switch.is_connected():
             raise SwitchNotConnectedError(
                 f"switch {switch.id} isn't connected", flow_mod
