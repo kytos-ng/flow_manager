@@ -23,17 +23,28 @@ to be at least greater than FLOW_STATS and ideally it slightly greater than
 whichever longest network convergence FlowMods operations that your network has.
 """
 
+# Rate limits for sending flow mods this can be set per NApp,
+# and the pacing is per DPID when in the context of that NApp
+# The NApp that the flow pertains to is determined via the `owner` attribute of the flow.
 ACTION_PACES = {
-    "send_flow_mod": {
+    "send_flow_mod.no_owner": {
         "pace": "100/second",
         "strategy": "fixed_window",
     },
-    "send_flow_mod.no_owner": {
-        "pace": "50/second",
+    "send_flow_mod.mef_eline": {
+        "pace": "100/second",
         "strategy": "fixed_window",
     },
-    "send_flow_mod.mef_eline": {
-        "pace": "50/second",
+    "send_flow_mod.of_multi_table": {
+        "pace": "100/second",
+        "strategy": "fixed_window",
+    },
+    "send_flow_mod.of_multi_table": {
+        "pace": "100/second",
+        "strategy": "fixed_window",
+    },
+    "send_flow_mod.telemetry_int": {
+        "pace": "100/second",
         "strategy": "fixed_window",
     },
 }
