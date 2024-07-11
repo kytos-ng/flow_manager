@@ -33,14 +33,14 @@ mongorestore -d napps -c flows /tmp/napps_flows/napps/flows.bson
 
 ### How to use
 
-On version `2024.1`, flows `match_id` and `_id` document values have changed just so the `cookie` isn't a factor of the computed `match_id` hashed value anymore. This script will insert new updated flows and delete the old ones if the expected `match_id` is different.
+On version `2024.1`, flows `match_id` and `_id` document values have changed just so the `cookie` isn't a factor of the computed `match_id` hashed value anymore. This script will insert new updated flows and delete the old ones if the expected `match_id` is different. Before using this script, you're recommended to hard delete old soft deleted flows check out `scripts/db/2024.1.0/001_hard_delete_old.py` in the next section below.
 
 - You can use the `count` command to check how many flows have their `match_id` outdated, this will include all flows, including flows marked as deleted:
 
 ```
 ❯ CMD=count python3 scripts/db/2024.1.0/000_update_match_id.py
 
-{'to_delete': 809}
+{'to_delete': 3209}
 ```
 
 - Finally, you update (insert + deletion) with the `update` command:
@@ -98,13 +98,13 @@ This script `scripts/db/2024.1.0/001_hard_delete_old.py` is a general purpose sc
 - You can count flows that will be deleted with the `count` command. You need to set `UTC_DATETIME` which will be the `updated_at` datetime that will include flows which `updated_at` is less than or equal this datetime, the example bellow hard deletes flows that have been deleted prior to `"2024-07-11 17:47:24"` UTC:
 
 ```
-❯ CMD=count UTC_DATETIME="2024-07-11 17:47:24" python scripts/db/2024.1.0/001_hard_delete_old.py
+❯ CMD=count UTC_DATETIME="2024-07-11 17:47:24" python3 scripts/db/2024.1.0/001_hard_delete_old.py
 {'to_delete': 8}
 ```
 
 - (Optional step) if you wish to further analize and write the flows to a file you can use  the `write_file` command setting the `OUT_FILE` env var:
  ```
-❯ CMD=write_file OUT_FILE=out.json UTC_DATETIME="2024-07-11 17:47:24" python scripts/db/2024.1.0/001_hard_delete_old.py
+❯ CMD=write_file OUT_FILE=out.json UTC_DATETIME="2024-07-11 17:47:24" python3 scripts/db/2024.1.0/001_hard_delete_old.py
 out.json
 
 ❯ cat out.json | grep -E "state|updated_at"
@@ -130,14 +130,14 @@ out.json
 - Finally, to hard delete you can use the `delete` command, this command uses the same filer that the `count|write_file` command use:
 
 ```
-❯ CMD=delete UTC_DATETIME="2024-07-11 17:47:24" python scripts/db/2024.1.0/001_hard_delete_old.py
+❯ CMD=delete UTC_DATETIME="2024-07-11 17:47:24" python3 scripts/db/2024.1.0/001_hard_delete_old.py
 {'deleted': 8}
 ```
 
 - If you try to run again but there isn't flows to be deleted, it won't delete as you'd expect:
 
 ```
-❯ CMD=delete UTC_DATETIME="2024-07-11 17:47:24" python scripts/db/2024.1.0/001_hard_delete_old.py
+❯ CMD=delete UTC_DATETIME="2024-07-11 17:47:24" python3 scripts/db/2024.1.0/001_hard_delete_old.py
 {'deleted': 0}
 ```
 

@@ -56,7 +56,7 @@ def update_match_id_flows(flow_controller=flow_controller) -> dict:
         )
 
     pre_updated = (
-        flow_controller.db.flows.bulk_write(pre_update).upserted_count
+        flow_controller.db.flows.bulk_write(pre_update).modified_count
         if pre_update
         else 0
     )
