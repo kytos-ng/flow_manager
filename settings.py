@@ -39,10 +39,6 @@ ACTION_PACES = {
         "pace": "100/second",
         "strategy": "fixed_window",
     },
-    "send_flow_mod.of_multi_table": {
-        "pace": "100/second",
-        "strategy": "fixed_window",
-    },
     "send_flow_mod.telemetry_int": {
         "pace": "100/second",
         "strategy": "fixed_window",
