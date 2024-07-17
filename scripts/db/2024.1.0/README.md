@@ -104,7 +104,7 @@ mongorestore -d napps -c flows /tmp/napps_flows/napps/flows.bson
 
 ### How to use
 
-On version `2024.1`, flows `match_id` and `_id` document values have changed just so the `cookie` isn't a factor of the computed `match_id` hashed value anymore. This script will insert new updated flows and delete the old ones if the expected `match_id` is different. Before using this script, you're recommended to hard delete old soft deleted flows check out `scripts/db/2024.1.0/000_hard_delete_old.py` in the next section below.
+On version `2024.1`, flows `match_id` and `_id` document values have changed just so the `cookie` isn't a factor of the computed `match_id` hashed value anymore. This script will insert new updated flows and delete the old ones if the expected `match_id` is different. Before using this script, you're recommended to hard delete old deleted flows, check out `scripts/db/2024.1.0/000_hard_delete_old.py` in the prior section of this readme file.
 
 - You can use the `count` command to check how many flows have their `match_id` outdated, this will include all flows, including flows marked as deleted:
 
