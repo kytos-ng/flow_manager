@@ -9,9 +9,9 @@ file.
 
 General Information
 ===================
-- Added new script ``scripts/db/2024.1.0/001_hard_delete_old.py``, it's a general purpose script to hard delete flows that have been soft deleted before a given string UTC datetime. 
-You're are encouraged to use this script from time to time until `flow_manager` provides an automatic functionality for this procedure. 
-- Added new script ``scripts/db/2024.1.0/000_update_match_id.py`` to update flows ids (match ids), it'll update by inserting new flows and deleting old ones. Check out ``scripts/db/2024.1.0/README.md`` for more information. Before using this script, it's recommended that you run ``scripts/db/2024.1.0/001_hard_delete_old.py`` to clean up old flows first.
+- Added new script ``scripts/db/2024.1.0/000_hard_delete_old.py``, it's a general purpose script to hard delete flows that have been soft deleted before a given string UTC datetime.
+You're are encouraged to use this script from time to time until `flow_manager` provides an automatic functionality for this procedure.
+- Added new script ``scripts/db/2024.1.0/001_update_match_id.py`` to update flows ids (match ids), it'll update by inserting new flows and deleting old ones. Check out ``scripts/db/2024.1.0/README.md`` for more information. Before using this script, it's recommended that you run ``scripts/db/2024.1.0/000_hard_delete_old.py`` to clean up old flows first.
 
 [2023.2.0] - 2024-02-16
 ***********************
