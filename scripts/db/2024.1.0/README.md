@@ -36,7 +36,7 @@ mongorestore -d napps -c flows /tmp/napps_flows/napps/flows.bson
 This script `scripts/db/2024.1.0/000_hard_delete_old.py` is a general purpose script to hard delete flows that have been soft deleted before string UTC datetime that you'll specify. You're are encouraged to use this script from time to time until `flow_manager` provides an automatic functionality for this procedure.
 
 
-- You can count flows that will be deleted with the `count` command. You need to set `UTC_DATETIME` which will be the `updated_at` datetime that will include flows which `updated_at` is less than or equal this datetime, the example bellow hard deletes flows that have been deleted prior to `"2024-07-17 13:53:24"` UTC:
+- You can count flows that will be deleted with the `count` command. You need to set `UTC_DATETIME` which will be the `updated_at` datetime that will include flows which `updated_at` is less than or equal this datetime, the example bellow hard deletes flows that have been deleted prior to `"2024-07-17 13:53:24"` UTC (when using this script, you should set a recent datetime that is at least older than the current prior five minutes, for example the past hour datetime - just so it doesn't delete too recent soft deleted flows that consistency check might still need):
 
 ```
 ❯ CMD=count UTC_DATETIME="2024-07-17 13:53:24" python3 scripts/db/2024.1.0/000_hard_delete_old.py
