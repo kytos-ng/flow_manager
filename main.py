@@ -826,7 +826,10 @@ class Main(KytosNApp):
         self.controller.buffers.msg_out.put(event)
 
     def _send_flow_mod(self, switch, flow_mod, owner):
-        self.pacer.hit(f"send_flow_mod.{owner}", switch.dpid)
+        owner_pacer = f"send_flow_mod.{owner}"
+        if not self.pacer.is_configured(owner_pacer):
+            owner_pacer = "send_flow_mod.no_owner"
+        self.pacer.hit(owner_pacer, switch.dpid)
         if not switch.is_connected():
             raise SwitchNotConnectedError(
                 f"switch {switch.id} isn't connected", flow_mod
