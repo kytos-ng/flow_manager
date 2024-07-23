@@ -7,6 +7,9 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2024.1.0] - 2024-07-23
+***********************
+
 General Information
 ===================
 - Added new script ``scripts/db/2024.1.0/000_hard_delete_old.py``, it's a general purpose script to hard delete flows that have been soft deleted before a given string UTC datetime.
