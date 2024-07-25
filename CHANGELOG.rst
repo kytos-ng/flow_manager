@@ -7,6 +7,11 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+Added
+=====
+
+- Added pacing for sending flow mods. Pacing can be configured in ``ACTION_PACES`` in the NApp's ``setings.py`` file.
+
 [2023.2.0] - 2024-02-16
 ***********************
 
