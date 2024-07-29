@@ -46,4 +46,8 @@ ACTION_PACES = {
         "pace": "100/second",
         "strategy": "fixed_window",
     },
+    "send_flow_mod.coloring": {
+        "pace": "100/second",
+        "strategy": "fixed_window",
+    },
 }
