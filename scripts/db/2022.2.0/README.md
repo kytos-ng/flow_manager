@@ -1,10 +1,10 @@
-## `flow_manager` scripts
+## `flow_manager` scripts from Kytos 2022.2.0
 
 This folder contains `flow_manager` related scripts.
 
 ### Data migration from `storehouse` to MongoDB
 
-[`storehouse_to_mongo.py`](./storehouse_to_mongo.py) is a script to migrate OpenFlow1.3 flow data entries from certain namespaces from `storehouse` to MongoDB.
+[`000_storehouse_to_mongo.py`](./000_storehouse_to_mongo.py) is a script to migrate OpenFlow1.3 flow data entries from certain namespaces from `storehouse` to MongoDB.
 
 #### Pre-requisites
 
@@ -27,7 +27,7 @@ export STOREHOUSE_NAMESPACES_DIR=/var/tmp/kytos/storehouse/
 export PYTHONPATH=/var/lib/kytos
 ```
 
-- Parametrize the environment variable `CMD` command and execute `storehouse_to_mongo.py` script (the command is passed via an env var to avoid conflicts with `kytosd`, since depending how you set the `PYTHONPATH` it can interfere)
+- Parametrize the environment variable `CMD` command and execute `000_storehouse_to_mongo.py` script (the command is passed via an env var to avoid conflicts with `kytosd`, since depending how you set the `PYTHONPATH` it can interfere)
 
 - The following `CMD` commands are available:
 
@@ -41,32 +41,11 @@ The `load_*` commands are meant to be used to double check what would actually b
 For example, to double check what would be loaded from storehouse namespace `kytos.flow.persistence`:
 
 ```
-CMD=load_flows python3 scripts/storehouse_to_mongo.py
+CMD=load_flows python3 scripts/db/2022.2.0/000_storehouse_to_mongo.py
 ```
 
 And then, to insert (or update) the flows:
 
 ```
-CMD=insert_flows python3 scripts/storehouse_to_mongo.py
-```
-
-### Add `owner` and `table_group` fields to `flows` collections
-
-### Pre-requisites
-Same requisites as above
-
-### How to use
-
-Run the script to upgrade all flows from `mef_eline`, `of_lldp` and `coloring` with new fields `owner` and `table_group`
-
-```
-python3 pipeline_related.py
-```
-
-### Drop compound index
-
-On version `2023.1`, this `flows` compound index `switch_1_flow.cookie_1_state_1_inserted_at_1_updated_at_1` has changed. If you're upgrading to `2023.1` froma previous version, you should run the `drop_compound_index.py` script to drop it:
-
-```
-CMD=drop_index python3 drop_compound_index.py
+CMD=insert_flows python3 scripts/db/2022.2.0/000_storehouse_to_mongo.py
 ```

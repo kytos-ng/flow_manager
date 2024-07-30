@@ -9,8 +9,13 @@ file.
 
 Added
 =====
-
 - Added pacing for sending flow mods. Pacing can be configured in ``ACTION_PACES`` in the NApp's ``setings.py`` file.
+
+General Information
+===================
+- Added new script ``scripts/db/2024.1.0/000_hard_delete_old.py``, it's a general purpose script to hard delete flows that have been soft deleted before a given string UTC datetime.
+You're are encouraged to use this script from time to time until `flow_manager` provides an automatic functionality for this procedure.
+- Added new script ``scripts/db/2024.1.0/001_update_match_id.py`` to update flows ids (match ids), it'll update by inserting new flows and deleting old ones. Check out ``scripts/db/2024.1.0/README.md`` for more information. Before using this script, it's recommended that you run ``scripts/db/2024.1.0/000_hard_delete_old.py`` to clean up old flows first.
 
 [2023.2.0] - 2024-02-16
 ***********************
@@ -19,6 +24,7 @@ Changed
 =======
 - Updated python environment installation from 3.9 to 3.11
 - Updated test dependencies
+- Added ``kytos.flow_manager.flows.single.(install|delete)`` handler with ``pool="dynamic_single"``
 
 [2023.2.0] - 2024-02-16
 ***********************
