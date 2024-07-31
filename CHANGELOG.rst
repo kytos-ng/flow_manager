@@ -7,6 +7,10 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+Added
+=====
+- Added pacing for sending flow mods. Pacing can be configured in ``ACTION_PACES`` in the NApp's ``setings.py`` file.
+
 General Information
 ===================
 - Added new script ``scripts/db/2024.1.0/000_hard_delete_old.py``, it's a general purpose script to hard delete flows that have been soft deleted before a given string UTC datetime.
