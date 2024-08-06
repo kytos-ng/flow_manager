@@ -485,14 +485,21 @@ class TestMain:
         serializer.from_dict.return_value = flow
         mock_flow_factory.return_value = serializer
 
-        flows_dict = {"flows": [MagicMock(), MagicMock()]}
+        flows_dict = {
+            "flows": [
+                MagicMock(get=lambda x, y=None: y),
+                MagicMock(get=lambda x, y=None: y),
+            ]
+        }
         switches = [self.switch_01]
         self.napp._install_flows("add", flows_dict, switches)
 
-        mock_send_flow_mod.assert_called_with(self.switch_01, flow_mod)
+        mock_send_flow_mod.assert_called_with(self.switch_01, flow_mod, "no_owner")
         assert mock_send_flow_mod.call_count == len(flows_dict["flows"])
         assert mock_send_barrier_request.call_count == 1
-        mock_add_flow_mod_sent.assert_called_with(flow_mod.header.xid, flow, "add")
+        mock_add_flow_mod_sent.assert_called_with(
+            flow_mod.header.xid, flow, "add", "no_owner"
+        )
         mock_send_napp_event.assert_called_with(self.switch_01, flow, "pending")
         self.napp.flow_controller.upsert_flows.assert_called()
 
@@ -519,13 +526,13 @@ class TestMain:
         serializer.from_dict.return_value = flow
         mock_flow_factory.return_value = serializer
 
-        flows_dict = {"flows": [MagicMock()]}
+        flows_dict = {"flows": [MagicMock(get=lambda x, y=None: y)]}
         switches = [self.switch_01]
         self.napp._install_flows("delete_strict", flows_dict, switches)
 
-        mock_send_flow_mod.assert_called_with(self.switch_01, flow_mod)
+        mock_send_flow_mod.assert_called_with(self.switch_01, flow_mod, "no_owner")
         mock_add_flow_mod_sent.assert_called_with(
-            flow_mod.header.xid, flow, "delete_strict"
+            flow_mod.header.xid, flow, "delete_strict", "no_owner"
         )
         mock_send_napp_event.assert_called_with(self.switch_01, flow, "pending")
         mock_send_barrier_request.assert_called()
@@ -676,9 +683,9 @@ class TestMain:
         xid = 0
         flow = MagicMock()
 
-        self.napp._add_flow_mod_sent(xid, flow, "add")
+        self.napp._add_flow_mod_sent(xid, flow, "add", "no_owner")
 
-        assert self.napp._flow_mods_sent[xid] == (flow, "add")
+        assert self.napp._flow_mods_sent[xid] == (flow, "add", "no_owner")
 
     def test_send_flow_mod(self):
         """Test _send_flow_mod method."""
@@ -687,7 +694,7 @@ class TestMain:
         switch = get_switch_mock("00:00:00:00:00:00:00:01", 0x04)
         flow_mod = MagicMock()
 
-        self.napp._send_flow_mod(switch, flow_mod)
+        self.napp._send_flow_mod(switch, flow_mod, "no_owner")
 
         mock_buffers_put.assert_called()
 
@@ -699,7 +706,7 @@ class TestMain:
         flow_mod = MagicMock()
 
         with pytest.raises(SwitchNotConnectedError):
-            self.napp._send_flow_mod(switch, flow_mod)
+            self.napp._send_flow_mod(switch, flow_mod, "no_owner")
 
         mock_buffers_put.assert_not_called()
 
@@ -722,7 +729,7 @@ class TestMain:
         flow.id = "1"
         flow.as_dict.return_value = {}
         flow.cookie = 0
-        self.napp._flow_mods_sent[0] = (flow, "add")
+        self.napp._flow_mods_sent[0] = (flow, "add", "no_owner")
 
         switch = get_switch_mock("00:00:00:00:00:00:00:01")
         switch.connection = get_connection_mock(
@@ -1086,7 +1093,9 @@ class TestMain:
 
         barrier_xid = list(self.napp._pending_barrier_reply[switch.id].keys())[-1]
         for flow_mod in flow_mods:
-            self.napp._add_flow_mod_sent(flow_mod.header.xid, flow_mod, "add")
+            self.napp._add_flow_mod_sent(
+                flow_mod.header.xid, flow_mod, "add", "no_owner"
+            )
 
         event = MagicMock()
         event.message.header.xid = barrier_xid
@@ -1157,7 +1166,7 @@ class TestMain:
         flow.as_dict.return_value = {}
         flow.header.message_type = Type.OFPT_FLOW_MOD
         flow.xid = 1
-        self.napp._flow_mods_sent[flow.xid] = (flow, "add")
+        self.napp._flow_mods_sent[flow.xid] = (flow, "add", "no_owner")
 
         mock_ev = MagicMock()
         mock_ev.message = flow
@@ -1187,7 +1196,7 @@ class TestMain:
         flow.as_dict.return_value = {}
         flow.header.message_type = Type.OFPT_FLOW_MOD
         flow.xid = 1
-        self.napp._flow_mods_sent[flow.xid] = (flow, "add")
+        self.napp._flow_mods_sent[flow.xid] = (flow, "add", "no_owner")
 
         # make sure a previous retry has stored executed
         self.napp._flow_mods_retry_count[flow.xid] = (3, now(), 10)
@@ -1241,7 +1250,7 @@ class TestMain:
         flow = MagicMock()
         flow.as_dict.return_value = {}
         flow.xid = 1
-        self.napp._flow_mods_sent[flow.xid] = (flow, "add")
+        self.napp._flow_mods_sent[flow.xid] = (flow, "add", "no_owner")
 
         mock_ev = MagicMock()
         mock_ev.event.content = {"destination": switch}
