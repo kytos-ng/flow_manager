@@ -650,7 +650,7 @@ class TestMain:
         # missing cookie_mask
         event = get_kytos_event_mock(
             name="kytos.flow_manager.flows.delete",
-            content={"dpid": dpid, "flow_dict": [{"cookie": 1}]},
+            content={"dpid": dpid, "flow_dict": {"cookie": 1, "flows": []}},
         )
         self.napp.handle_flows_install_delete(event)
         assert mock_log.error.call_count == 3
@@ -662,6 +662,14 @@ class TestMain:
         )
         self.napp.handle_flows_install_delete(event)
         assert mock_log.error.call_count == 4
+
+        # empty flow list
+        event = get_kytos_event_mock(
+            name="kytos.flow_manager.flows.delete",
+            content={"dpid": dpid, "flow_dict": {"flows": []}},
+        )
+        self.napp.handle_flows_install_delete(event)
+        assert mock_log.error.call_count == 5
 
         # install_flow exceptions
         event = get_kytos_event_mock(

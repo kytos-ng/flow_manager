@@ -603,6 +603,15 @@ class Main(KytosNApp):
             return
 
         force = bool(event.content.get("force", False))
+        if not flow_dict["flows"]:
+            log.error(f"Error, empty list of flows recieved. {flow_dict}")
+            return
+        else:
+            log.info(
+                f"Received event with {len(flow_dict['flows'])} flows"
+                f" with force={force}."
+            )
+
         switch = self.controller.get_switch_by_dpid(dpid)
         flows_to_log_info(
             f"Send FlowMod from KytosEvent dpid: {dpid}, command: {command}, "
@@ -670,6 +679,10 @@ class Main(KytosNApp):
             raise HTTPException(400, detail=str(exc))
 
         force = bool(flows_dict.get("force", False))
+        log.info(
+            f"Received request with {len(flows_dict['flows'])}"
+            f" flows_dict with force={force}."
+        )
         flows_to_log_info(
             f"Send FlowMod from request dpid: {dpid}, command: {command}, "
             f"force: {force}, ",
