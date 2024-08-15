@@ -608,7 +608,7 @@ class Main(KytosNApp):
 
         force = bool(event.content.get("force", False))
         if not flow_dict["flows"]:
-            log.error(f"Error, empty list of flows recieved. {flow_dict}")
+            log.error(f"Error, empty list of flows received. {flow_dict}")
             return
 
         switch = self.controller.get_switch_by_dpid(dpid)
