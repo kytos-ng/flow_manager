@@ -580,8 +580,12 @@ class Main(KytosNApp):
         try:
             dpid = event.content["dpid"]
             flow_dict = event.content["flow_dict"]
+            flows = flow_dict['flows']
         except KeyError as error:
             log.error("Error getting fields to install or remove " f"Flows: {error}")
+            return
+        except TypeError as err:
+            log.error(f"{str(err)} for flow_dict {flow_dict}")
             return
 
         if event.name.endswith("install"):
@@ -594,7 +598,7 @@ class Main(KytosNApp):
             return
 
         try:
-            validate_cookies_and_masks(flow_dict, command)
+            validate_cookies_and_masks(flows, command)
         except ValueError as exc:
             log.error(str(exc))
             return
@@ -606,11 +610,6 @@ class Main(KytosNApp):
         if not flow_dict["flows"]:
             log.error(f"Error, empty list of flows recieved. {flow_dict}")
             return
-        else:
-            log.info(
-                f"Received event with {len(flow_dict['flows'])} flows"
-                f" with force={force}."
-            )
 
         switch = self.controller.get_switch_by_dpid(dpid)
         flows_to_log_info(
@@ -679,10 +678,6 @@ class Main(KytosNApp):
             raise HTTPException(400, detail=str(exc))
 
         force = bool(flows_dict.get("force", False))
-        log.info(
-            f"Received request with {len(flows_dict['flows'])}"
-            f" flows_dict with force={force}."
-        )
         flows_to_log_info(
             f"Send FlowMod from request dpid: {dpid}, command: {command}, "
             f"force: {force}, ",
