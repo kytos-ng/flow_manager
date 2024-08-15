@@ -575,6 +575,7 @@ class Main(KytosNApp):
         """
         self.handle_flows_install_delete(event)
 
+    # pylint: disable=too-many-return-statements
     def handle_flows_install_delete(self, event):
         """Handle install/delete flows event."""
         try:
@@ -612,6 +613,10 @@ class Main(KytosNApp):
             return
 
         switch = self.controller.get_switch_by_dpid(dpid)
+        if not switch:
+            log.error(f"Switch, {switch}, was not found.")
+            return
+
         flows_to_log_info(
             f"Send FlowMod from KytosEvent dpid: {dpid}, command: {command}, "
             f"force: {force}, ",
