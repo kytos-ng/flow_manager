@@ -614,7 +614,7 @@ class Main(KytosNApp):
 
         switch = self.controller.get_switch_by_dpid(dpid)
         if not switch:
-            log.error(f"Switch, {switch}, was not found.")
+            log.error(f"Switch dpid {dpid} was not found.")
             return
 
         flows_to_log_info(
