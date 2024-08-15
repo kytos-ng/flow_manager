@@ -580,7 +580,7 @@ class Main(KytosNApp):
         try:
             dpid = event.content["dpid"]
             flow_dict = event.content["flow_dict"]
-            flows = flow_dict['flows']
+            flows = flow_dict["flows"]
         except KeyError as error:
             log.error("Error getting fields to install or remove " f"Flows: {error}")
             return
