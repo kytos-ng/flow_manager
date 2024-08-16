@@ -575,13 +575,18 @@ class Main(KytosNApp):
         """
         self.handle_flows_install_delete(event)
 
+    # pylint: disable=too-many-return-statements
     def handle_flows_install_delete(self, event):
         """Handle install/delete flows event."""
         try:
             dpid = event.content["dpid"]
             flow_dict = event.content["flow_dict"]
+            flows = flow_dict["flows"]
         except KeyError as error:
             log.error("Error getting fields to install or remove " f"Flows: {error}")
+            return
+        except TypeError as err:
+            log.error(f"{str(err)} for flow_dict {flow_dict}")
             return
 
         if event.name.endswith("install"):
@@ -594,7 +599,7 @@ class Main(KytosNApp):
             return
 
         try:
-            validate_cookies_and_masks(flow_dict, command)
+            validate_cookies_and_masks(flows, command)
         except ValueError as exc:
             log.error(str(exc))
             return
@@ -603,7 +608,15 @@ class Main(KytosNApp):
             return
 
         force = bool(event.content.get("force", False))
+        if not flow_dict["flows"]:
+            log.error(f"Error, empty list of flows received. {flow_dict}")
+            return
+
         switch = self.controller.get_switch_by_dpid(dpid)
+        if not switch:
+            log.error(f"Switch dpid {dpid} was not found.")
+            return
+
         flows_to_log_info(
             f"Send FlowMod from KytosEvent dpid: {dpid}, command: {command}, "
             f"force: {force}, ",
