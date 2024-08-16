@@ -87,6 +87,10 @@ Added
 - Added query parameter filter for `cookie_range` to the endpoint ``GET v2/stored_flows``.
 - Added query parameter filter for `state` to the endpoint ``GET v2/stored_flows``.
 
+Changed
+=======
+- Added flow quantity as ``total_length`` in logs for flow deletion and adittion through request and event.
+
 Fixed
 =====
 - Fixed handling ``OFPT_ERROR`` correctly when OF negotiation fails

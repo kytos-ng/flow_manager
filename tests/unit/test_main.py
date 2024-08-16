@@ -627,7 +627,7 @@ class TestMain:
         """Test handle_flows_install_delete with failure scenarios."""
         (mock_send_napp_event, mock_install_flows, mock_log) = args
         dpid = "00:00:00:00:00:00:00:01"
-        self.napp.controller.switches = {}
+        self.napp.controller.switches = {dpid: 1}
         mock_flow_dict = {"flows": [MagicMock()]}
 
         # 723, 746-751, 873
@@ -650,7 +650,7 @@ class TestMain:
         # missing cookie_mask
         event = get_kytos_event_mock(
             name="kytos.flow_manager.flows.delete",
-            content={"dpid": dpid, "flow_dict": [{"cookie": 1}]},
+            content={"dpid": dpid, "flow_dict": {"cookie": 1, "flows": []}},
         )
         self.napp.handle_flows_install_delete(event)
         assert mock_log.error.call_count == 3
@@ -663,20 +663,35 @@ class TestMain:
         self.napp.handle_flows_install_delete(event)
         assert mock_log.error.call_count == 4
 
+        # empty flow list
+        event = get_kytos_event_mock(
+            name="kytos.flow_manager.flows.delete",
+            content={"dpid": dpid, "flow_dict": {"flows": []}},
+        )
+        self.napp.handle_flows_install_delete(event)
+        assert mock_log.error.call_count == 5
+
         # install_flow exceptions
         event = get_kytos_event_mock(
             name="kytos.flow_manager.flows.install",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
         mock_install_flows.side_effect = InvalidCommandError("error")
-        mock_log.error.call_count = 0
         self.napp.handle_flows_install_delete(event)
         mock_log.error.assert_called()
         mock_install_flows.side_effect = SwitchNotConnectedError(
             "error", flow=MagicMock()
         )
         self.napp.handle_flows_install_delete(event)
+        assert mock_log.error.call_count == 6
         mock_send_napp_event.assert_called()
+
+        event = get_kytos_event_mock(
+            name="kytos.flow_manager.flows.delete",
+            content={"dpid": "unknown", "flow_dict": mock_flow_dict},
+        )
+        self.napp.handle_flows_install_delete(event)
+        assert mock_log.error.call_count == 7
 
     def test_add_flow_mod_sent(self):
         """Test _add_flow_mod_sent method."""
