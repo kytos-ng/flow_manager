@@ -1123,6 +1123,42 @@ class TestMain:
         self.napp._on_ofpt_barrier_reply(event)
         mock_publish.assert_called()
 
+    @patch("napps.kytos.flow_manager.main.log")
+    @patch("napps.kytos.flow_manager.main.Main._publish_installed_flow")
+    def test_on_ofpt_barrier_reply_error_case_1(self, mock_publish, mock_log):
+        """Test on_ofpt barrier reply error case 1."""
+        self.napp._on_ofpt_barrier_reply(MagicMock())
+        mock_log.error.assert_called()
+        mock_publish.assert_not_called()
+
+    @patch("napps.kytos.flow_manager.main.log")
+    @patch("napps.kytos.flow_manager.main.Main._publish_installed_flow")
+    def test_on_ofpt_barrier_reply_error_case_2(self, mock_publish, mock_log):
+        """Test on_ofpt barrier reply error case 2."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        flow_mods_xids = [123]
+        flow_mods = [MagicMock(header=MagicMock(xid=xid)) for xid in flow_mods_xids]
+        self.napp._send_barrier_request(switch, flow_mods)
+        assert (
+            list(self.napp._pending_barrier_reply[switch.id].values())[-1]
+            == flow_mods_xids
+        )
+        barrier_xid = list(self.napp._pending_barrier_reply[switch.id].keys())[-1]
+        event = MagicMock()
+        event.message.header.xid = barrier_xid
+        assert barrier_xid
+        assert (
+            self.napp._pending_barrier_reply[switch.id][barrier_xid] == flow_mods_xids
+        )
+        event.source.switch = switch
+        assert not self.napp._flow_mods_sent
+        self.napp._on_ofpt_barrier_reply(event)
+        assert not self.napp._flow_mods_sent
+        mock_log.error.assert_called()
+        mock_publish.assert_not_called()
+
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     def test_on_openflow_connection_error(self, mock_send_napp_event):
         """Test on_openflow_connection_error."""
