@@ -7,6 +7,19 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2024.1.1] - 2024-08-30
+***********************
+
+Changed
+=======
+
+- Increased ``settings.FLOWS_DICT_MAX_SIZE`` to 70k
+
+Fixed
+=====
+
+- Logged flow xid key error on barrier reply as an error
+
 [2024.1.0] - 2024-07-23
 ***********************
 
