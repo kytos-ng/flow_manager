@@ -51,4 +51,8 @@ ACTION_PACES = {
         "pace": "100/second",
         "strategy": "fixed_window",
     },
+    "send_flow_mod.alien": {
+        "pace": "100/second",
+        "strategy": "fixed_window",
+    },
 }
