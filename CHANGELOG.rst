@@ -7,6 +7,10 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+Changed
+=======
+- Changed alien flows to have ``alien`` as owner.
+
 [2024.1.1] - 2024-08-30
 ***********************
 
