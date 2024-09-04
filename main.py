@@ -425,22 +425,27 @@ class Main(KytosNApp):
                     and deleted_by_flow_id[flow.id]["updated_at"] >= verdict_dt
                 ):
                     continue
-
-                log.info(f"Consistency check: alien flow on switch {dpid}")
                 alien_flows.append({**flow.as_dict(), "owner": "alien"})
 
         command = "delete_strict"
-        try:
-            self._install_flows(command, {"flows": alien_flows}, [switch], save=False)
+        if alien_flows:
             log.info(
-                f"Flows forwarded to switch {dpid} to be deleted. "
-                f"Flows: {alien_flows}"
+                f"Consistency check: {len(alien_flows)} alien flows on switch {dpid}"
             )
-        except SwitchNotConnectedError:
-            log.error(
-                f"Failed to forward flows to switch {dpid} to be deleted. "
-                f"Flows: {alien_flows}"
-            )
+            try:
+
+                self._install_flows(
+                    command, {"flows": alien_flows}, [switch], save=False
+                )
+                log.info(
+                    f"Flows forwarded to switch {dpid} to be deleted. "
+                    f"Flows: {alien_flows}"
+                )
+            except SwitchNotConnectedError:
+                log.error(
+                    f"Failed to forward flows to switch {dpid} to be deleted. "
+                    f"Flows: {alien_flows}"
+                )
 
     def delete_matched_flows(self, flow_dicts, switches: dict) -> None:
         """Try to delete many matched stored flows given flow_dicts for switches.
