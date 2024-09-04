@@ -627,7 +627,7 @@ class TestMain:
         """Test handle_flows_install_delete with failure scenarios."""
         (mock_send_napp_event, mock_install_flows, mock_log) = args
         dpid = "00:00:00:00:00:00:00:01"
-        self.napp.controller.switches = {}
+        self.napp.controller.switches = {dpid: 1}
         mock_flow_dict = {"flows": [MagicMock()]}
 
         # 723, 746-751, 873
@@ -650,7 +650,7 @@ class TestMain:
         # missing cookie_mask
         event = get_kytos_event_mock(
             name="kytos.flow_manager.flows.delete",
-            content={"dpid": dpid, "flow_dict": [{"cookie": 1}]},
+            content={"dpid": dpid, "flow_dict": {"cookie": 1, "flows": []}},
         )
         self.napp.handle_flows_install_delete(event)
         assert mock_log.error.call_count == 3
@@ -663,20 +663,35 @@ class TestMain:
         self.napp.handle_flows_install_delete(event)
         assert mock_log.error.call_count == 4
 
+        # empty flow list
+        event = get_kytos_event_mock(
+            name="kytos.flow_manager.flows.delete",
+            content={"dpid": dpid, "flow_dict": {"flows": []}},
+        )
+        self.napp.handle_flows_install_delete(event)
+        assert mock_log.error.call_count == 5
+
         # install_flow exceptions
         event = get_kytos_event_mock(
             name="kytos.flow_manager.flows.install",
             content={"dpid": dpid, "flow_dict": mock_flow_dict},
         )
         mock_install_flows.side_effect = InvalidCommandError("error")
-        mock_log.error.call_count = 0
         self.napp.handle_flows_install_delete(event)
         mock_log.error.assert_called()
         mock_install_flows.side_effect = SwitchNotConnectedError(
             "error", flow=MagicMock()
         )
         self.napp.handle_flows_install_delete(event)
+        assert mock_log.error.call_count == 6
         mock_send_napp_event.assert_called()
+
+        event = get_kytos_event_mock(
+            name="kytos.flow_manager.flows.delete",
+            content={"dpid": "unknown", "flow_dict": mock_flow_dict},
+        )
+        self.napp.handle_flows_install_delete(event)
+        assert mock_log.error.call_count == 7
 
     def test_add_flow_mod_sent(self):
         """Test _add_flow_mod_sent method."""
@@ -1107,6 +1122,42 @@ class TestMain:
 
         self.napp._on_ofpt_barrier_reply(event)
         mock_publish.assert_called()
+
+    @patch("napps.kytos.flow_manager.main.log")
+    @patch("napps.kytos.flow_manager.main.Main._publish_installed_flow")
+    def test_on_ofpt_barrier_reply_error_case_1(self, mock_publish, mock_log):
+        """Test on_ofpt barrier reply error case 1."""
+        self.napp._on_ofpt_barrier_reply(MagicMock())
+        mock_log.error.assert_called()
+        mock_publish.assert_not_called()
+
+    @patch("napps.kytos.flow_manager.main.log")
+    @patch("napps.kytos.flow_manager.main.Main._publish_installed_flow")
+    def test_on_ofpt_barrier_reply_error_case_2(self, mock_publish, mock_log):
+        """Test on_ofpt barrier reply error case 2."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        flow_mods_xids = [123]
+        flow_mods = [MagicMock(header=MagicMock(xid=xid)) for xid in flow_mods_xids]
+        self.napp._send_barrier_request(switch, flow_mods)
+        assert (
+            list(self.napp._pending_barrier_reply[switch.id].values())[-1]
+            == flow_mods_xids
+        )
+        barrier_xid = list(self.napp._pending_barrier_reply[switch.id].keys())[-1]
+        event = MagicMock()
+        event.message.header.xid = barrier_xid
+        assert barrier_xid
+        assert (
+            self.napp._pending_barrier_reply[switch.id][barrier_xid] == flow_mods_xids
+        )
+        event.source.switch = switch
+        assert not self.napp._flow_mods_sent
+        self.napp._on_ofpt_barrier_reply(event)
+        assert not self.napp._flow_mods_sent
+        mock_log.error.assert_called()
+        mock_publish.assert_not_called()
 
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     def test_on_openflow_connection_error(self, mock_send_napp_event):
