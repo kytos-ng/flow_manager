@@ -7,6 +7,15 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2024.1.3] - 2024-09-05
+***********************
+
+Changed
+=======
+
+- Increased ``telemetry_int`` pacing rate to 300/second
+
+
 [2024.1.1] - 2024-08-30
 ***********************
 
