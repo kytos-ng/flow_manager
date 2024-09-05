@@ -57,7 +57,7 @@ from .utils import (
     build_cookie_range_tuple,
     build_flow_mod_from_command,
     cast_fields,
-    flows_to_log_info,
+    flows_to_log,
     get_min_wait_diff,
     is_ignored,
     map_cookie_list_as_tuples,
@@ -630,7 +630,8 @@ class Main(KytosNApp):
             log.error(f"Switch dpid {dpid} was not found.")
             return
 
-        flows_to_log_info(
+        flows_to_log(
+            log.info,
             f"Send FlowMod from KytosEvent dpid: {dpid}, command: {command}, "
             f"force: {force}, ",
             flow_dict,
@@ -696,7 +697,8 @@ class Main(KytosNApp):
             raise HTTPException(400, detail=str(exc))
 
         force = bool(flows_dict.get("force", False))
-        flows_to_log_info(
+        flows_to_log(
+            log.info,
             f"Send FlowMod from request dpid: {dpid}, command: {command}, "
             f"force: {force}, ",
             flows_dict,
