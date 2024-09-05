@@ -439,19 +439,22 @@ class Main(KytosNApp):
             log.info(
                 f"Consistency check: {len(alien_flows)} alien flows on switch {dpid}"
             )
+            flow_dict = {"flows": alien_flows}
             try:
 
                 self._install_flows(
-                    command, {"flows": alien_flows}, [switch], save=False
+                    command, flow_dict, [switch], save=False
                 )
-                log.info(
-                    f"Flows forwarded to switch {dpid} to be deleted. "
-                    f"Flows: {alien_flows}"
+                flows_to_log(
+                    log.info,
+                    f"Flows forwarded to switch {dpid} to be deleted. ",
+                    flow_dict
                 )
             except SwitchNotConnectedError:
-                log.error(
-                    f"Failed to forward flows to switch {dpid} to be deleted. "
-                    f"Flows: {alien_flows}"
+                flows_to_log(
+                    log.error,
+                    f"Failed to forward flows to switch {dpid} to be deleted. ",
+                    flow_dict
                 )
 
     def delete_matched_flows(self, flow_dicts, switches: dict) -> None:
