@@ -9,7 +9,7 @@ file.
 
 Changed
 =======
-- Changed alien flows to have ``alien`` as owner.
+- Changed alien flows to have ``alien`` as owner. Alien flow deletion is now paced by ``send_flow_mod.alien``.
 
 [2024.1.1] - 2024-08-30
 ***********************
