@@ -1,7 +1,7 @@
 """Module to test the utils module."""
 
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from napps.kytos.flow_manager.exceptions import InvalidCommandError
@@ -16,7 +16,7 @@ from napps.kytos.flow_manager.utils import (
     merge_cookie_ranges,
     validate_cookies_add,
     validate_cookies_del,
-    flows_to_log_info,
+    flows_to_log,
 )
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 
@@ -258,9 +258,9 @@ class TestUtils:
             == min_wait - (dt_t2 - dt_t1).total_seconds()
         )
 
-    @patch("napps.kytos.flow_manager.utils.log")
-    def test_flows_to_log_info(self, mock_log):
-        """Test flows_to_log_info"""
+    def test_flows_to_log(self):
+        """Test flows_to_log"""
+        mock_log = MagicMock()
         flows = {"flows": list(range(500))}
-        flows_to_log_info("", flows)
+        flows_to_log(mock_log.info, "", flows)
         assert mock_log.info.call_count == 3

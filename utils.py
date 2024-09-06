@@ -189,11 +189,6 @@ def validate_cookies_del(flows: list[dict]) -> None:
             )
 
 
-def flows_to_log_info(message: str, flow_dict: dict[str, list]) -> None:
-    """Log flows, maximun flows in a log is 200"""
-    flows_to_log(log.info, message, flow_dict)
-
-
 def flows_to_log(logger_fun: Callable, message: str, flow_dict: dict[str, list]):
     """Log flows, maximun flows in a log is 200"""
     length_msg = f"total_length: {len(flow_dict['flows'])}, "
