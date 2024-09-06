@@ -57,7 +57,7 @@ from .utils import (
     build_cookie_range_tuple,
     build_flow_mod_from_command,
     cast_fields,
-    flows_to_log_info,
+    flows_to_log,
     get_min_wait_diff,
     is_ignored,
     map_cookie_list_as_tuples,
@@ -381,22 +381,32 @@ class Main(KytosNApp):
         verdict_dt = datetime.utcnow() if not verdict_dt else verdict_dt
         dpid = switch.dpid
         flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
-        for flow in self.flow_controller.get_flows_lte_updated_at(
-            switch.id, verdict_dt
-        ):
-            if flow["flow_id"] not in flows:
-                log.info(f"Consistency check: missing flow on switch {dpid}.")
-                flow = {"flows": [flow["flow"]]}
-                try:
-                    self._install_flows("add", flow, [switch], save=False)
-                    log.info(
-                        f"Flow forwarded to switch {dpid} to be installed. Flow: {flow}"
-                    )
-                except SwitchNotConnectedError:
-                    log.error(
-                        f"Failed to forward flow to switch {dpid} to be installed. "
-                        f"Flow: {flow}"
-                    )
+        missing_flows = [
+            flow["flow"]
+            for flow in self.flow_controller.get_flows_lte_updated_at(
+                switch.id, verdict_dt
+            )
+            if flow["flow_id"] not in flows
+        ]
+
+        if missing_flows:
+            log.info(
+                f"Consistency check: missing {len(missing_flows)} flows on switch {dpid}."
+            )
+            flow_dict = {"flows": missing_flows}
+            try:
+                self._install_flows("add", flow_dict, [switch], save=False)
+                flows_to_log(
+                    log.info,
+                    f"Flows forwarded to switch {dpid} to be installed. ",
+                    flow_dict,
+                )
+            except SwitchNotConnectedError:
+                flows_to_log(
+                    log.error,
+                    f"Failed to forward flows to switch {dpid} to be installed. ",
+                    flow_dict,
+                )
 
     def check_alien_flows(self, switch, verdict_dt: Optional[datetime] = None):
         """Check alien flows on a switch and delete them."""
@@ -418,6 +428,7 @@ class Main(KytosNApp):
 
         verdict_dt = datetime.utcnow() if not verdict_dt else verdict_dt
         flows = self.switch_flows_by_id(switch, self.is_not_ignored_flow)
+        alien_flows = []
         for flow_id, flow in flows.items():
             if flow_id not in stored_by_flow_id:
                 if (
@@ -431,22 +442,28 @@ class Main(KytosNApp):
                     and deleted_by_flow_id[flow.id]["updated_at"] >= verdict_dt
                 ):
                     continue
+                alien_flows.append({**flow.as_dict(), "owner": "alien"})
 
-                log.info(f"Consistency check: alien flow on switch {dpid}")
-                flow = {"flows": [flow.as_dict()]}
-                command = "delete_strict"
-                try:
-                    self._install_flows(command, flow, [switch], save=False)
-                    log.info(
-                        f"Flow forwarded to switch {dpid} to be deleted. "
-                        f"Flow: {flow}"
-                    )
-                    continue
-                except SwitchNotConnectedError:
-                    log.error(
-                        f"Failed to forward flow to switch {dpid} to be deleted. "
-                        f"Flow: {flow}"
-                    )
+        command = "delete_strict"
+        if alien_flows:
+            log.info(
+                f"Consistency check: {len(alien_flows)} alien flows on switch {dpid}"
+            )
+            flow_dict = {"flows": alien_flows}
+            try:
+
+                self._install_flows(command, flow_dict, [switch], save=False)
+                flows_to_log(
+                    log.info,
+                    f"Flows forwarded to switch {dpid} to be deleted. ",
+                    flow_dict,
+                )
+            except SwitchNotConnectedError:
+                flows_to_log(
+                    log.error,
+                    f"Failed to forward flows to switch {dpid} to be deleted. ",
+                    flow_dict,
+                )
 
     def delete_matched_flows(self, flow_dicts, switches: dict) -> None:
         """Try to delete many matched stored flows given flow_dicts for switches.
@@ -624,7 +641,8 @@ class Main(KytosNApp):
             log.error(f"Switch dpid {dpid} was not found.")
             return
 
-        flows_to_log_info(
+        flows_to_log(
+            log.info,
             f"Send FlowMod from KytosEvent dpid: {dpid}, command: {command}, "
             f"force: {force}, ",
             flow_dict,
@@ -690,7 +708,8 @@ class Main(KytosNApp):
             raise HTTPException(400, detail=str(exc))
 
         force = bool(flows_dict.get("force", False))
-        flows_to_log_info(
+        flows_to_log(
+            log.info,
             f"Send FlowMod from request dpid: {dpid}, command: {command}, "
             f"force: {force}, ",
             flows_dict,

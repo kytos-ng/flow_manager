@@ -546,7 +546,7 @@ class TestMain:
         """Test method for installing flows on the switches through events."""
         mock_install_flows, mock_flows_log = MagicMock(), MagicMock()
         monkeypatch.setattr(
-            "napps.kytos.flow_manager.main.flows_to_log_info", mock_flows_log
+            "napps.kytos.flow_manager.main.flows_to_log", mock_flows_log
         )
         monkeypatch.setattr(
             "napps.kytos.flow_manager.main.Main._install_flows", mock_install_flows
@@ -601,7 +601,7 @@ class TestMain:
         """Test method for removing flows on the switches through events."""
         mock_install_flows, mock_flows_log = MagicMock(), MagicMock()
         monkeypatch.setattr(
-            "napps.kytos.flow_manager.main.flows_to_log_info", mock_flows_log
+            "napps.kytos.flow_manager.main.flows_to_log", mock_flows_log
         )
         monkeypatch.setattr(
             "napps.kytos.flow_manager.main.Main._install_flows", mock_install_flows

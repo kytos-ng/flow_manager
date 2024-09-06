@@ -7,6 +7,14 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2024.1.2] - 2024-09-06
+***********************
+
+Changed
+=======
+- Changed alien flows to have ``alien`` as owner. Alien flow deletion is now paced by ``send_flow_mod.alien``.
+- Increased ``telemetry_int`` pacing rate to 300/second
+
 [2024.1.1] - 2024-08-30
 ***********************
 

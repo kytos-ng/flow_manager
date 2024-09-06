@@ -40,7 +40,7 @@ ACTION_PACES = {
         "strategy": "fixed_window",
     },
     "send_flow_mod.telemetry_int": {
-        "pace": "100/second",
+        "pace": "300/second",
         "strategy": "fixed_window",
     },
     "send_flow_mod.of_lldp": {
@@ -49,6 +49,10 @@ ACTION_PACES = {
     },
     "send_flow_mod.coloring": {
         "pace": "100/second",
+        "strategy": "fixed_window",
+    },
+    "send_flow_mod.alien": {
+        "pace": "500/second",
         "strategy": "fixed_window",
     },
 }
