@@ -1,10 +1,11 @@
+import os
 from kytos.core.db import mongo_client
 from bson.decimal128 import Decimal128
 from decimal import Decimal
 
 
 client = mongo_client()
-collection = client["napps"]["flows"]
+collection = client[os.environ["MONGO_DBNAME"]]["flows"]
 
 # Flows from mef_eline, table groups available: epl, evpl
 query_match = {
