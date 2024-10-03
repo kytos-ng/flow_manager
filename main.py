@@ -63,6 +63,7 @@ from .utils import (
     map_cookie_list_as_tuples,
     merge_cookie_ranges,
     validate_cookies_and_masks,
+    flows_by_switch_to_log,
 )
 
 
@@ -659,6 +660,11 @@ class Main(KytosNApp):
             msg = error_msg(error.errors())
             log.error(f"Error with validation: {error}")
 
+    @rest("v2/flows_by_switch", methods=["POST"])
+    def add_by_switch(self, request: Request) -> JSONResponse:
+        """Install new flows by switch specified in the content"""
+        return self._send_flows_by_switch_from_request(request, "add")
+
     @rest("v2/flows", methods=["POST"])
     @rest("v2/flows/{dpid}", methods=["POST"])
     def add(self, request: Request) -> JSONResponse:
@@ -826,6 +832,142 @@ class Main(KytosNApp):
                     )
                 self._send_napp_event(switch, flow, "pending")
         return flow_mods
+
+    def _send_flows_by_switch_from_request(
+        self,
+        request: Request,
+        command: str,
+    ) -> JSONResponse:
+        """Send flows in the respective switches from request."""
+        content_type_json_or_415(request)
+        content_dict = get_json_or_400(request, self.controller.loop)
+        if not isinstance(content_dict, dict):
+            raise HTTPException(400, detail=f"Invalid payload: {content_dict}")
+
+        if not any(content_dict):
+            result = "The request body doesn't have any flows"
+            raise HTTPException(400, detail=result)
+        
+        switches = []
+        for dpid in content_dict:
+            flows = content_dict[dpid]["flows"]
+            if not any(flows):
+                result = f"The switch {dpid} in the request body doesn't have any flows"
+                raise HTTPException(400, detail=result)
+            try:
+                validate_cookies_and_masks(flows, command)
+            except ValueError as exc:
+                raise HTTPException(400, detail=str(exc))
+            
+            switch = self.controller.get_switch_by_dpid(dpid)
+            if not switch:
+                return JSONResponse({"response": "dpid not found."}, status_code=404)
+            switches.append(switch)
+            
+        flows_by_switch_to_log(log.info, command, content_dict)
+        try:
+            errored_switches = self._install_flows_by_switch(
+                switches, content_dict, command
+            )
+            if errored_switches == len(content_dict):
+                msg = "All switches were not connected"
+                raise HTTPException(424, detail=msg)
+            return JSONResponse(
+                {
+                    "response": "FlowMod Message Sent",
+                    "errored_switches": errored_switches
+                },
+                status_code=202)
+        except SwitchNotConnectedError as error:
+            raise HTTPException(424, detail=str(error))
+        except PackException as error:
+            raise HTTPException(400, detail=str(error))
+        except FlowSerializerError as error:
+            raise HTTPException(400, detail=str(error))
+        except ValidationError as error:
+            msg = error_msg(error.errors())
+            raise HTTPException(400, detail=msg) from error
+    
+    def _install_flows_by_switch(
+        self,
+        switches: list,
+        content_dict: dict[str, dict],
+        command: str,
+        save=True,
+        send_barrier=ENABLE_BARRIER_REQUEST
+    ) -> set:
+        """
+        """
+        flow_mods, flows = defaultdict(list), defaultdict(list)
+        flow_by_switch_dict = defaultdict(list)
+        for switch in switches:
+            serializer = FlowFactory.get_class(switch, Flow04)
+            flow_list = content_dict[switch.dpid]["flows"]
+            for flow_dict in flow_list:
+                try:
+                    flow = serializer.from_dict(flow_dict, switch)
+                except (TypeError, KeyError) as exc:
+                    raise FlowSerializerError(
+                        f"It couldn't serialize flow_dict: {flow_dict}. "
+                        f"Exception type: {type(exc)} "
+                        f"Error: {str(exc)} "
+                    )
+                flow_mod = build_flow_mod_from_command(flow, command)
+                flow_mod.pack()
+                flow_mods[switch.dpid].append(flow_mod)
+                flows[switch.dpid].append(flow)
+                flow_by_switch_dict[switch.dpid].append(
+                    {"flow": flow_dict, "flow_id": flow.id, "switch": switch.dpid}
+                )
+
+        if save and command == "add":
+            for switch in switches:
+                self.flow_controller.upsert_flows(
+                    [flow.match_id for flow in flows[switch.dpid]],
+                    flow_by_switch_dict[switch.dpid]
+                )
+        if save and command == "delete":
+            self.delete_matched_flows(
+                flow_by_switch_dict, {switch.id: switch for switch in switches}
+            )
+        
+        
+        return self._send_flows_by_switch(
+            switches, content_dict, flow_mods, flows, send_barrier
+        )
+
+    def _send_flows_by_switch(
+        self,
+        switches,
+        content_dict,
+        flow_mods,
+        flows,
+        send_barrier=ENABLE_BARRIER_REQUEST,
+    ) -> set:
+        """Send FlowMod (and BarrierRequest) by switch."""
+        failed_switches = set()
+        for switch in switches:
+            for i, (flow_mod, flow, flow_dict) in enumerate(zip(flow_mods[switch.dpid], flows[switch.dpid], content_dict[switch.dpid]["flows"])):
+                owner = flow_dict.get("owner", "no_owner")
+                try:
+                    self._send_flow_mod(switch, flow_mod, owner)
+                    if send_barrier and i == len(flow_mods[switch.dpid]) - 1:
+                        self._send_barrier_request(switch, flow_mods[switch.dpid])
+                except SwitchNotConnectedError:
+                    if not content_dict[switch.dpid]["force"]:
+                        failed_switches.add(switch.dpid)
+                        break
+                    else:
+                        pass
+                with self._flow_mods_sent_lock:
+                    self._add_flow_mod_sent(
+                        flow_mod.header.xid,
+                        flow,
+                        build_command_from_flow_mod(flow_mod),
+                        owner
+                    )
+                self._send_napp_event(switch, flow, "pending")
+        return failed_switches
 
     def _add_flow_mod_sent(self, xid, flow, command, owner):
         """Add the flow mod to the list of flow mods sent."""

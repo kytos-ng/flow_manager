@@ -202,3 +202,45 @@ def flows_to_log(logger_fun: Callable, message: str, flow_dict: dict[str, list])
         )
         i, j = j, j + maximun
         length_msg = ""
+
+
+def flows_by_switch_to_log(
+    logger_fun: Callable,
+    command: str,
+    content_dict: dict[str, dict]
+):
+    """New flog to log"""
+    total_length = 0
+    for dpid in content_dict:
+        total_length += len(content_dict[dpid]["flows"])
+    length_msg = f"total_length: {total_length}"
+
+    maximun = 200
+    dpids = []
+    counter = maximun
+    flows_acc = {}
+
+    for dpid in content_dict:
+        i = 0
+        flows = content_dict[dpid]["flows"]
+        n_flows = len(flows)
+        while n_flows > 0:
+            j = min(n_flows, counter)
+            counter -= j
+            n_flows -= j
+            flows_acc[dpid] = flows[i: i+j]
+            dpids.append(dpid)
+            if counter == 0:
+                counter = maximun
+                logger_fun(f"Send FlowMod from request dpids: {dpids},"
+                           f" command: {command}, {length_msg}"
+                           f" flows({counter}): {flows_acc}")
+                length_msg = ""
+                dpids = []
+                flows_acc = {}
+                i = j
+ 
+    if dpids and flows_acc:
+        logger_fun(f"Send FlowMod from request dpids: {dpids},"
+                   f" command: {command}, {length_msg}"
+                   f" flows({maximun-counter}): {flows_acc}")
