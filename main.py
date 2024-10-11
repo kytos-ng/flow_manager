@@ -398,13 +398,15 @@ class Main(KytosNApp):
                 self._install_flows("add", flow_dict, [switch], save=False)
                 flows_to_log(
                     log.info,
-                    f"Flows forwarded to switch {dpid} to be installed. ",
+                    f"Flows forwarded to be installed to switch ",
+                    [dpid],
                     flow_dict,
                 )
             except SwitchNotConnectedError:
                 flows_to_log(
                     log.error,
-                    f"Failed to forward flows to switch {dpid} to be installed. ",
+                    f"Failed to forward flows to be installed to switch ",
+                    [dpid],
                     flow_dict,
                 )
 
@@ -455,17 +457,38 @@ class Main(KytosNApp):
                 self._install_flows(command, flow_dict, [switch], save=False)
                 flows_to_log(
                     log.info,
-                    f"Flows forwarded to switch {dpid} to be deleted. ",
+                    f"Flows forwarded  to be deleted to switch ",
+                    [dpid],
                     flow_dict,
                 )
             except SwitchNotConnectedError:
                 flows_to_log(
                     log.error,
-                    f"Failed to forward flows to switch {dpid} to be deleted. ",
+                    f"Failed to forward flows  to be deleted to switch ",
+                    [dpid],
                     flow_dict,
                 )
 
-    def delete_matched_flows(self, flow_dicts, switches: dict) -> None:
+    def get_flows_by_cookie_ranges(self, dpids: list[str], cookie_ranges_dict: dict[str, list[tuple[int, int]]]) -> dict:
+        """Avoid multiple DB searches when all or consecutive switches have the same cookie range."""
+        if len(dpids) == 1:
+            return self.flow_controller.get_flows_by_cookie_ranges(dpids, cookie_ranges_dict[dpids[0]])
+        dpids_acc = []
+        flows = {}
+        prev_range = cookie_ranges_dict[dpids[0]]
+        for i, dpid in enumerate(dpids):
+            if not cookie_ranges_dict[dpid]:
+                continue
+                
+            dpids_acc.append(dpid)
+            if (cookie_ranges_dict[dpid] == prev_range and len(dpids) - 1 != i):
+                continue 
+            flows.update(self.flow_controller.get_flows_by_cookie_ranges(dpids_acc, cookie_ranges_dict[dpid]))
+            prev_range = cookie_ranges_dict[dpid]
+            dpids_acc = []
+        return flows
+
+    def delete_matched_flows(self, flow_dicts: dict, switches: dict) -> None:
         """Try to delete many matched stored flows given flow_dicts for switches.
 
         This deletion tries to minimize DB round trips, it aggregates all
@@ -474,20 +497,23 @@ class Main(KytosNApp):
         deleted yet. If flows are matched, they will be bulk updated as deleted.
         """
         deleted_flows = {}
-        cookie_ranges = list(
-            {
-                build_cookie_range_tuple(
-                    int(value.get("cookie", 0)),
-                    int(value.get("cookie_mask", 0)),
-                )
-                for value in [flow.get("flow", {}) for flow in flow_dicts]
-            }
-        )
-        cookie_ranges = merge_cookie_ranges(cookie_ranges)
-        for dpid, stored_flows in self.flow_controller.get_flows_by_cookie_ranges(
-            list(switches.keys()), cookie_ranges
+        cookie_ranges_dict = {}
+        for dpid in flow_dicts:
+            cookie_ranges_dict[dpid] = list(
+                {
+                    build_cookie_range_tuple(
+                        int(value.get("cookie", 0)),
+                        int(value.get("cookie_mask", 0)),
+                    )
+                    for value in [flow.get("flow", {}) for flow in flow_dicts[dpid]]
+                }
+            )
+        for dpid, cookie_ranges in cookie_ranges_dict.items():
+            cookie_ranges_dict[dpid] = merge_cookie_ranges(cookie_ranges)
+        for dpid, stored_flows in self.get_flows_by_cookie_ranges(
+            list(switches.keys()), cookie_ranges_dict
         ).items():
-            for flow_dict in flow_dicts:
+            for flow_dict in flow_dicts[dpid]:
                 for stored_flow in stored_flows:
                     if stored_flow["id"] in deleted_flows:
                         continue
@@ -643,8 +669,9 @@ class Main(KytosNApp):
 
         flows_to_log(
             log.info,
-            f"Send FlowMod from KytosEvent dpid: {dpid}, command: {command}, "
-            f"force: {force}, ",
+            f"Send FlowMod from KytosEvent command: {command}, "
+            f"force: {force}, dpid: ",
+            [dpid],
             flow_dict,
         )
         try:
@@ -658,6 +685,20 @@ class Main(KytosNApp):
         except ValidationError as error:
             msg = error_msg(error.errors())
             log.error(f"Error with validation: {error}")
+
+    @rest("v2/flows_by_switch", methods=["POST"])
+    def add_by_switch(self, request: Request) -> JSONResponse:
+        """Install new flows by switch specified in the content"""
+        force = request.query_params.get("force")
+        force = True if not force or force.lower() == "true" else False
+        return self._send_flows_by_switch_from_request(request, "add", force)
+
+    @rest("v2/flows_by_switch", methods=["DELETE"])
+    def delete_by_switch(self, request: Request) -> JSONResponse:
+        """Install new flows by switch specified in the content"""
+        force = request.query_params.get("force")
+        force = True if not force or force.lower() == "true" else False
+        return self._send_flows_by_switch_from_request(request, "delete", force)
 
     @rest("v2/flows", methods=["POST"])
     @rest("v2/flows/{dpid}", methods=["POST"])
@@ -690,7 +731,6 @@ class Main(KytosNApp):
         self, request: Request, dpid: Optional[str], command: str
     ):
         """Install FlowsMods from request."""
-
         content_type_json_or_415(request)
         flows_dict = get_json_or_400(request, self.controller.loop)
         if not isinstance(flows_dict, dict):
@@ -708,10 +748,21 @@ class Main(KytosNApp):
             raise HTTPException(400, detail=str(exc))
 
         force = bool(flows_dict.get("force", False))
+        if not dpid:
+            switches = self._get_all_switches_enabled()
+        else:
+            switches = self.controller.get_switch_by_dpid(dpid)
+            if not switches:
+                return JSONResponse({"response": "dpid not found."}, status_code=404)
+
+            if not switches.is_enabled() and command == "add":
+                raise HTTPException(404, detail=f"Switch {dpid} is disabled.")
+            switches = [switches]
+
         flows_to_log(
             log.info,
-            f"Send FlowMod from request dpid: {dpid}, command: {command}, "
-            f"force: {force}, ",
+            f"Send FlowMod from request command: {command}, force: {force}, dpid: ",
+            [switches],
             flows_dict,
         )
         try:
@@ -719,21 +770,14 @@ class Main(KytosNApp):
                 self._install_flows(
                     command,
                     flows_dict,
-                    self._get_all_switches_enabled(),
+                    switches,
                     reraise_conn=not force,
                 )
                 return JSONResponse(
                     {"response": "FlowMod Messages Sent"}, status_code=202
                 )
 
-            switch = self.controller.get_switch_by_dpid(dpid)
-            if not switch:
-                return JSONResponse({"response": "dpid not found."}, status_code=404)
-
-            if not switch.is_enabled() and command == "add":
-                raise HTTPException(404, detail=f"Switch {dpid} is disabled.")
-
-            self._install_flows(command, flows_dict, [switch], reraise_conn=not force)
+            self._install_flows(command, flows_dict, switches, reraise_conn=not force)
             return JSONResponse({"response": "FlowMod Messages Sent"}, status_code=202)
 
         except SwitchNotConnectedError as error:
@@ -765,10 +809,13 @@ class Main(KytosNApp):
             reraise_conn: True to reraise switch connection errors
             send_barrier: True to send barrier_request
         """
-        flow_mods, flows, flow_dicts, owners = [], [], [], []
+        flow_mods, flows = defaultdict(list), defaultdict(list)
+        flows_dict_by_switch, owners = defaultdict(list), defaultdict(list)
         for switch in switches:
             serializer = FlowFactory.get_class(switch, Flow04)
             flows_list = flows_dict.get("flows", [])
+            if not flows_list:
+                flows_list = flows_dict.get(switch.id, {}).get("flows", [])
             for flow_dict in flows_list:
                 try:
                     flow = serializer.from_dict(flow_dict, switch)
@@ -780,19 +827,21 @@ class Main(KytosNApp):
                     )
                 flow_mod = build_flow_mod_from_command(flow, command)
                 flow_mod.pack()
-                flow_mods.append(flow_mod)
-                flows.append(flow)
-                owners.append(flow_dict.get("owner", "no_owner"))
-                flow_dicts.append(
+                flow_mods[switch.id].append(flow_mod)
+                flows[switch.id].append(flow)
+                owners[switch.id].append(flow_dict.get("owner", "no_owner"))
+                flows_dict_by_switch[switch.id].append(
                     {"flow": flow_dict, "flow_id": flow.id, "switch": switch.id}
                 )
         if save and command == "add":
-            self.flow_controller.upsert_flows(
-                [flow.match_id for flow in flows], flow_dicts
-            )
+            for switch in switches:
+                self.flow_controller.upsert_flows(
+                    [flow.match_id for flow in flows[switch.dpid]],
+                    flows_dict_by_switch[switch.dpid]
+                )
         if save and command == "delete":
             self.delete_matched_flows(
-                flow_dicts, {switch.id: switch for switch in switches}
+                flows_dict_by_switch, {switch.id: switch for switch in switches}
             )
         self._send_flow_mods(
             switches, flow_mods, flows, owners, reraise_conn, send_barrier
@@ -809,11 +858,11 @@ class Main(KytosNApp):
     ):
         """Send FlowMod (and BarrierRequest) given a list of flow_dicts to switches."""
         for switch in switches:
-            for i, (flow_mod, flow, owner) in enumerate(zip(flow_mods, flows, owners)):
+            for i, (flow_mod, flow, owner) in enumerate(zip(flow_mods[switch.id], flows[switch.id], owners[switch.id])):
                 try:
                     self._send_flow_mod(switch, flow_mod, owner)
-                    if send_barrier and i == len(flow_mods) - 1:
-                        self._send_barrier_request(switch, flow_mods)
+                    if send_barrier and i == len(flow_mods[switch.id]) - 1:
+                        self._send_barrier_request(switch, flow_mods[switch.id])
                 except SwitchNotConnectedError:
                     if reraise_conn:
                         raise
@@ -826,6 +875,63 @@ class Main(KytosNApp):
                     )
                 self._send_napp_event(switch, flow, "pending")
         return flow_mods
+
+    def _send_flows_by_switch_from_request(
+        self,
+        request: Request,
+        command: str,
+        force: bool,
+    ) -> JSONResponse:
+        """Send flows in the respective switches from request."""
+        content_type_json_or_415(request)
+        content_dict = get_json_or_400(request, self.controller.loop)
+        if not isinstance(content_dict, dict):
+            raise HTTPException(400, detail=f"Invalid payload: {content_dict}")
+
+        if not any(content_dict):
+            result = "The request body doesn't have any flows"
+            raise HTTPException(400, detail=result)
+        
+        switches = []
+        for dpid in content_dict:
+            flows = content_dict[dpid]["flows"]
+            if not any(flows):
+                result = f"The switch {dpid} in the request body doesn't have any flows"
+                raise HTTPException(400, detail=result)
+            try:
+                validate_cookies_and_masks(flows, command)
+            except ValueError as exc:
+                raise HTTPException(400, detail=str(exc))
+            
+            switch = self.controller.get_switch_by_dpid(dpid)
+            if not switch:
+                return JSONResponse({"response": "dpid not found."}, status_code=404)
+            switches.append(switch)
+
+        flows_to_log(
+            log.info,
+            f"Send FlowMod from request command: {command}, "
+            f"force: {force}, dpid: ",
+            [switches],
+            content_dict,
+            by_switch=True,
+        )
+
+        try:
+            self._install_flows(command, content_dict, switches, reraise_conn=not force)
+            return JSONResponse(
+                {"response": "FlowMod Message Sent"},
+                status_code=202
+            )
+        except SwitchNotConnectedError as error:
+            raise HTTPException(424, detail=str(error))
+        except PackException as error:
+            raise HTTPException(400, detail=str(error))
+        except FlowSerializerError as error:
+            raise HTTPException(400, detail=str(error))
+        except ValidationError as error:
+            msg = error_msg(error.errors())
+            raise HTTPException(400, detail=msg) from error
 
     def _add_flow_mod_sent(self, xid, flow, command, owner):
         """Add the flow mod to the list of flow mods sent."""
