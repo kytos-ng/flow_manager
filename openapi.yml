@@ -69,8 +69,9 @@ paths:
       summary: Insert flows by switch.
       parameters:
         - name: force
+          in: query
           schema:
-            type: string
+            type: boolean
           description: Option to ignore switch connection errors.
           required: false
           example: "true"
@@ -99,8 +100,9 @@ paths:
       summary: Remove flows by matched switch.
       parameters:
         - name: force
+          in: query
           schema:
-            type: string
+            type: boolean
           description: Option to ignore switch connection errors.
           required: false
           example: "true"
@@ -407,6 +409,12 @@ components:
           type: boolean
           description: The force option is for ignoring switch connection errors, and delegating the flows to be automatically sent later on via consistency check.
           default: false
+        switches:
+          type: array
+          items:
+            type: string
+          example: ["00:00:00:00:00:00:00:01","00:00:00:00:00:00:00:02"]
+          
     FlowDoc:
       type: object
       properties:

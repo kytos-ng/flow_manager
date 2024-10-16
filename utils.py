@@ -6,7 +6,7 @@ from pyof.foundation.base import UBIntBase
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
 from typing import Union
 from kytos.core import log
-
+from typing import Union
 from .exceptions import InvalidCommandError
 
 
@@ -188,64 +188,48 @@ def validate_cookies_del(flows: list[dict]) -> None:
                 f"when deleting flows. flow: {flow}"
             )
 
-
-def _flows_to_log(
-    logger_fun: Callable,
-    flows: list,
-    dpid: Union[str, list],
-    counter: int,
-    flows_acc: dict,
-    maximun: int,
-    message: str,
-    total_length: str,
-) -> tuple[int, dict, str]:
-    start, end = 0, counter
-    while flows[start:end]:
-        counter -= len(flows[start:end])
-        flows_acc[str(dpid)] = flows[start: end]
-        dpids = list(flows_acc.keys()) if isinstance(dpid, str) else dpid
-        if counter == 0:
-            counter = maximun
-            logger_fun(f"{message}{dpids}{total_length}, "
-                       f" flows({counter}): {flows_acc}")
-            total_length = ""
-            flows_acc = {}
-        start += len(flows[start:end])
-        end += counter
-    return counter, flows_acc, total_length
-
-
 def flows_to_log(
     logger_fun: Callable,
     message: str,
-    dpid: list,
-    content_dict: dict[str, dict],
-    by_switch=False,
+    switches: list[str],
+    flows_dict: Union[
+        dict[str, dict[str, list]], # by_switch=True
+        dict[str, list]             # by_switch=False
+    ],
+    by_switch=False
 ):
-    """New flog to log"""
+    """Log the information of installing or deleting flows. The logs will
+     show the quantity of flows being modified in each switch or all
+     existent switches.
+     If flows are sent by switch, each switch will log the flows modified."""
+    log_str = "Batched of flows received: "
+    count_flows = 0
+    for switch in switches:
+        if not by_switch:
+            flows_n = len(flows_dict['flows'])
+            log_str = log_str + f" switches:{switches}, flows_by_switch:{flows_n}, "
+            count_flows = flows_n*len(switches)
+            _flows_to_log(logger_fun, message, switches, flows_dict['flows'])
+            break
+        
+        flows_n = len(flows_dict[switch]['flows'])
+        log_str = log_str + f"{{switch: {switch}, flows_lenght: {flows_n}}}, "
+        count_flows += flows_n
+        _flows_to_log(logger_fun, message, [switch], flows_dict[switch]['flows'])
+    logger_fun(f"{log_str} total_flows_length: {count_flows}")
+
+def _flows_to_log(
+    logger_fun: Callable,
+    message: str,
+    switches: list[str],
+    flow_list: list,
+):
+    """Logs the flows within a limit."""
     maximun = 200
-    flows_acc = {}
-    counter = maximun
-
-    if not by_switch:
-        flows = content_dict["flows"]
-        total_length = f", total_length: {len(flows)}"
-        counter, flows_acc, total_length = _flows_to_log(
-            logger_fun, flows, dpid, maximun, flows_acc, maximun, message, total_length
+    i, j = 0, maximun
+    while flow_list[i:j]:
+        logger_fun(
+            f"{message}{switches}, flows[{i}, {(j if j < len(flow_list) else len(flow_list))}]:"
+            f" {flow_list[i:j]}"
         )
-
-    else:
-        total_length = 0
-        for dpid in content_dict:
-            total_length += len(content_dict[dpid]["flows"])
-        total_length = f", total_length: {total_length}"
-        for dpid in content_dict:
-            flows = content_dict[dpid]["flows"]
-            counter, flows_acc, total_length = _flows_to_log(
-                logger_fun, flows, dpid, counter, flows_acc, maximun, message, total_length
-            )
-
-    if flows_acc:
-        dpids = list(flows_acc.keys()) if isinstance(dpid, str) else dpid
-        logger_fun(f"{message}{dpids}{total_length}, "
-                   f"flows({maximun-counter}): {flows_acc}")
+        i, j = j, j + maximun
