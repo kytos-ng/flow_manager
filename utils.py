@@ -1,12 +1,15 @@
 """kytos/flow_manager utils."""
 
 from collections.abc import Callable
+from typing import Union
 
 from pyof.foundation.base import UBIntBase
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
-from typing import Union
+from starlette.datastructures import QueryParams
+
 from kytos.core import log
-from typing import Union
+from kytos.core.rest_api import HTTPException
+
 from .exceptions import InvalidCommandError
 
 
@@ -188,35 +191,36 @@ def validate_cookies_del(flows: list[dict]) -> None:
                 f"when deleting flows. flow: {flow}"
             )
 
+
 def flows_to_log(
     logger_fun: Callable,
     message: str,
     switches: list[str],
     flows_dict: Union[
-        dict[str, dict[str, list]], # by_switch=True
-        dict[str, list]             # by_switch=False
+        dict[str, dict[str, list]], dict[str, list]  # by_switch=True  # by_switch=False
     ],
-    by_switch=False
+    by_switch=False,
 ):
     """Log the information of installing or deleting flows. The logs will
-     show the quantity of flows being modified in each switch or all
-     existent switches.
-     If flows are sent by switch, each switch will log the flows modified."""
+    show the quantity of flows being modified in each switch or all
+    existent switches.
+    If flows are sent by switch, each switch will log the flows modified."""
     log_str = "Batched of flows received: "
     count_flows = 0
     for switch in switches:
         if not by_switch:
-            flows_n = len(flows_dict['flows'])
+            flows_n = len(flows_dict["flows"])
             log_str = log_str + f" switches:{switches}, flows_by_switch:{flows_n}, "
-            count_flows = flows_n*len(switches)
-            _flows_to_log(logger_fun, message, switches, flows_dict['flows'])
+            count_flows = flows_n * len(switches)
+            _flows_to_log(logger_fun, message, switches, flows_dict["flows"])
             break
-        
-        flows_n = len(flows_dict[switch]['flows'])
-        log_str = log_str + f"{{switch: {switch}, flows_lenght: {flows_n}}}, "
+
+        flows_n = len(flows_dict[switch]["flows"])
+        log_str = log_str + f"{{switch: {switch}, flows_lengthq: {flows_n}}}, "
         count_flows += flows_n
-        _flows_to_log(logger_fun, message, [switch], flows_dict[switch]['flows'])
+        _flows_to_log(logger_fun, message, [switch], flows_dict[switch]["flows"])
     logger_fun(f"{log_str} total_flows_length: {count_flows}")
+
 
 def _flows_to_log(
     logger_fun: Callable,
@@ -233,3 +237,12 @@ def _flows_to_log(
             f" {flow_list[i:j]}"
         )
         i, j = j, j + maximun
+
+
+# pylint: disable=simplifiable-if-expression
+def _get_force_from_params(params: QueryParams):
+    force = params.get("force", "false").lower()
+    if force not in {"true", "false"}:
+        msg = "Parameter force does not have a valid value."
+        raise HTTPException(400, detail=msg)
+    return True if force == "true" else False
