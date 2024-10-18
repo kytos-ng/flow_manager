@@ -17,8 +17,10 @@ from napps.kytos.flow_manager.utils import (
     validate_cookies_add,
     validate_cookies_del,
     flows_to_log,
+    _get_force_from_params,
 )
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
+from kytos.core.rest_api import HTTPException
 
 
 @pytest.mark.parametrize(
@@ -259,8 +261,24 @@ class TestUtils:
         )
 
     def test_flows_to_log(self):
-        """Test flows_to_log"""
+        """Test _flows_to_log"""
         mock_log = MagicMock()
         flows = {"flows": list(range(500))}
-        flows_to_log(mock_log.info, "", flows)
-        assert mock_log.info.call_count == 3
+        switches = ["00:01", "00:02"]
+        flows_to_log(mock_log.info, "", switches, flows)
+        assert mock_log.info.call_count == 4
+        flows_by_switch = {switches[0]: flows, switches[1]: flows}
+        flows_to_log(mock_log.info, "", switches, flows_by_switch, by_switch=True)
+        assert mock_log.info.call_count == 11
+
+    def test_get_force_from_params(self):
+        """Test _get_force_from_params"""
+        mock_param = {"force": "123error"}
+        with pytest.raises(HTTPException):
+            _get_force_from_params(mock_param)
+
+        mock_param = {"force": "TRUE"}
+        assert _get_force_from_params(mock_param)
+
+        mock_param = {"force": "FaLsE"}
+        assert _get_force_from_params(mock_param) is False

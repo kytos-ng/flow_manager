@@ -142,10 +142,11 @@ class FlowController:
             yield flow
 
     def get_flows_by_cookie_ranges(
-        self, dpids: list[str],
+        self,
+        dpids: list[str],
         cookie_collection: Union[
-            dict[str, list[tuple[int, int]]], # by_switch=True
-            list[tuple[int, int]], # by_switch=False
+            dict[str, list[tuple[int, int]]],  # by_switch=True
+            list[tuple[int, int]],  # by_switch=False
         ],
         by_switch=False,
     ) -> dict:
@@ -157,23 +158,23 @@ class FlowController:
                 cookie_range = cookie_collection[dpid]
             else:
                 cookie_range = cookie_collection
-            match_filter["$or"].append({
-                "switch": dpid,
-                "state": {"$ne": "deleted"},
-                "$or": [
-                    {
-                        "flow.cookie": {
-                            "$gte": Decimal128(Decimal(low)),
-                            "$lte": Decimal128(Decimal(high)),
+            match_filter["$or"].append(
+                {
+                    "switch": dpid,
+                    "state": {"$ne": "deleted"},
+                    "$or": [
+                        {
+                            "flow.cookie": {
+                                "$gte": Decimal128(Decimal(low)),
+                                "$lte": Decimal128(Decimal(high)),
+                            }
                         }
-                    }
-                    for low, high in cookie_range
-                ]
-            })
+                        for low, high in cookie_range
+                    ],
+                }
+            )
         pipeline.append({"$match": match_filter})
-        pipeline.append({
-            "$group": {"_id": "$switch", "flows": {"$push": "$$ROOT"}}
-        })
+        pipeline.append({"$group": {"_id": "$switch", "flows": {"$push": "$$ROOT"}}})
         flows = defaultdict(list)
         for document in self.db.flows.aggregate(pipeline):
             for flow in document["flows"]:
