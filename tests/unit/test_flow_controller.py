@@ -79,6 +79,16 @@ class TestFlowController:  # pylint: disable=too-many-public-methods
         assert arg1 == {"flow_id": {"$in": [self.flow_id]}}
         assert arg2["$set"]["state"] == "installed"
 
+    def test_update_flows_state_from_filter(self) -> None:
+        """Test update_flows_state with from filter."""
+        from_state = "pending"
+        assert self.flow_controller.update_flows_state(
+            [self.flow_id], "installed", "pending"
+        )
+        arg1, arg2 = self.flow_controller.db.flows.update_many.call_args[0]
+        assert arg1 == {"flow_id": {"$in": [self.flow_id]}, "state": from_state}
+        assert arg2["$set"]["state"] == "installed"
+
     def test_delete_flow_by_id(self) -> None:
         """Test delete_flow_by_id."""
         assert self.flow_controller.delete_flow_by_id(self.flow_id)

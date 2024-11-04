@@ -1199,12 +1199,17 @@ class TestMain:
         dpid = "00:00:00:00:00:00:00:01"
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
-        flows = [MagicMock(id="1")]
+        flows = [MagicMock(id="1"), MagicMock(id="2")]
+        self.napp.flow_controller.get_flows_by_flow_id.return_value = [
+            {"flow_id": flow.id} for flow in flows
+        ]
         self.napp._publish_installed_flow(switch, flows)
-        mock_send_napp_event.assert_called()
-        self.napp.flow_controller.update_flows_state.assert_called_with(
-            [flow.id for flow in flows], "installed"
-        )
+        assert mock_send_napp_event.call_count == len(flows)
+        args = self.napp.flow_controller.update_flows_state.call_args
+        assert args[0][0] == [flow.id for flow in flows]
+        assert args[0][1] == "installed"
+        assert "from_state" in args[1]
+        assert args[1]["from_state"] == "pending"
 
     @patch("napps.kytos.flow_manager.main.Main._send_barrier_request")
     def test_retry_on_openflow_connection_error(self, mock_barrier):
