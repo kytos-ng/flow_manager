@@ -115,13 +115,16 @@ class FlowController:
             return_document=ReturnDocument.AFTER,
         )
 
-    def update_flows_state(self, flow_ids: List[str], state: str) -> int:
+    def update_flows_state(
+        self, flow_ids: List[str], state: str, from_state: Optional[str] = None
+    ) -> int:
         """Bulk update flows state."""
         update_expr = {"$set": {"state": state}}
         self._set_updated_at(update_expr)
-        return self.db.flows.update_many(
-            {"flow_id": {"$in": flow_ids}}, update_expr
-        ).modified_count
+        filter_expr = {"flow_id": {"$in": flow_ids}}
+        if from_state:
+            filter_expr["state"] = from_state
+        return self.db.flows.update_many(filter_expr, update_expr).modified_count
 
     def delete_flow_by_id(self, flow_id: str) -> int:
         """Delete flow by id."""
@@ -176,6 +179,17 @@ class FlowController:
     def get_flows_by_state(self, dpid: str, state: str) -> Iterator[dict]:
         """Get flows by state."""
         for flow in self.db.flows.find({"switch": dpid, "state": state}):
+            flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
+            yield flow
+
+    def get_flows_by_flow_id(
+        self, flow_ids: list[str], state: Optional[str] = None
+    ) -> Iterator[dict]:
+        """Get flows by flow_id."""
+        filter_expr = {"flow_id": {"$in": flow_ids}}
+        if state:
+            filter_expr["state"] = state
+        for flow in self.db.flows.find(filter_expr):
             flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
             yield flow
 

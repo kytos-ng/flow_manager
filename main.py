@@ -235,10 +235,26 @@ class Main(KytosNApp):
 
     def _publish_installed_flow(self, switch, flows):
         """Publish installed flow when it's confirmed."""
+        if not flows:
+            return
+
+        pending_flows = {
+            flow["flow_id"]: flow
+            for flow in self.flow_controller.get_flows_by_flow_id(
+                [flow.id for flow in flows], state=FlowEntryState.PENDING.value
+            )
+        }
+        if not pending_flows:
+            return
+
         for flow in flows:
-            self._send_napp_event(switch, flow, "add")
+            if flow.id in pending_flows:
+                self._send_napp_event(switch, flow, "add")
+
         self.flow_controller.update_flows_state(
-            [flow.id for flow in flows], FlowEntryState.INSTALLED.value
+            list(pending_flows.keys()),
+            FlowEntryState.INSTALLED.value,
+            from_state=FlowEntryState.PENDING.value,
         )
 
     @listen_to("kytos/of_core.flow_stats.received")
@@ -270,7 +286,9 @@ class Main(KytosNApp):
 
         if flow_ids_to_update:
             self.flow_controller.update_flows_state(
-                flow_ids_to_update, FlowEntryState.INSTALLED.value
+                flow_ids_to_update,
+                FlowEntryState.INSTALLED.value,
+                from_state=FlowEntryState.PENDING.value,
             )
 
     def _retry_on_openflow_connection_error(
