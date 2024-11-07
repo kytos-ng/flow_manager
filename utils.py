@@ -205,7 +205,7 @@ def flows_to_log(
     show the quantity of flows being modified in each switch or all
     existent switches.
     If flows are sent by switch, each switch will log the flows modified."""
-    log_str = "Batched of flows received: "
+    log_str = "Flows received summary: "
     count_flows = 0
     for switch in switches:
         if not by_switch:
@@ -216,7 +216,7 @@ def flows_to_log(
             break
 
         flows_n = len(flows_dict[switch]["flows"])
-        log_str = log_str + f"{{switch: {switch}, flows_lengthq: {flows_n}}}, "
+        log_str = log_str + f"{{switch: {switch}, flows_length: {flows_n}}}, "
         count_flows += flows_n
         _flows_to_log(logger_fun, message, [switch], flows_dict[switch]["flows"])
     logger_fun(f"{log_str} total_flows_length: {count_flows}")
@@ -245,4 +245,4 @@ def _get_force_from_params(params: QueryParams):
     if force not in {"true", "false"}:
         msg = "Parameter force does not have a valid value."
         raise HTTPException(400, detail=msg)
-    return True if force == "true" else False
+    return force == "true"
