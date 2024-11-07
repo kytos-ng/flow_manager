@@ -110,6 +110,38 @@ Subscribed
 Generated
 ---------
 
+kytos/flow_manager.messages.out.ofpt_barrier_request
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*buffer*: ``app``
+
+Event reporting that a Barrier Request was sent to a switch.
+
+Content:
+
+.. code-block:: python3
+
+   {
+     'datapath': <Switch object>
+     'flow': <Object representing the barrier request>
+   }
+
+kytos/flow_manager.messages.out.ofpt_flow_mod
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*buffer*: ``app``
+
+Event reporting that a FlowMod was sent to a switch.
+
+Content:
+
+.. code-block:: python3
+
+   {
+     'datapath': <Switch object>
+     'flow': <Object representing the flow>
+   }
+
 kytos/flow_manager.flow.pending
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
