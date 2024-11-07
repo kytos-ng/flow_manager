@@ -314,37 +314,47 @@ components:
         in_port:
           type: integer
           format: int16
-          example: 2
+          examples:
+            - 2
         dl_src:
           type: string
-          example: '00:1f:3a:3e:9a:cf'
+          examples:
+            - '00:1f:3a:3e:9a:cf'
         dl_dst:
           type: string
-          example: '00:15:af:d5:38:98'
+          examples: 
+            - '00:15:af:d5:38:98'
         dl_type:
           type: integer
           format: int16
-          example: 2048
+          examples:
+            - 2048
         dl_vlan:
           oneOf:
             - type: string
-              example: "40/4088"
+              examples:
+                - "40/4088"
             - type: integer
-              example: 40
+              examples:
+                - 40
         dl_vlan_pcp:
           type: integer
           format: int8
-          example: 0
+          examples:
+            - 0
         nw_src:
           type: string
-          example: '192.168.0.1'
+          examples:
+            - '192.168.0.1'
         nw_dst:
           type: string
-          example: '192.168.0.2'
+          examples:
+            - '192.168.0.2'
         nw_proto:
           type: integer
           format: int8
-          example: 17
+          examples:
+            - 17
     Actions:
       type: array
       items:
@@ -353,12 +363,14 @@ components:
           action_type:
             type: string
             enum: [set_vlan, output]
-            example: 'output'
+            examples:
+              - 'output'
           value:
             type: integer
             format: int16
-            example: 7
-      example:
+            examples:
+              - 7
+      examples:
       - {
           "action_type": "output",
           "port": 42
@@ -373,19 +385,23 @@ components:
         priority:
           type: integer
           format: int16
-          example: 10
+          examples:
+            - 10
         idle_timeout:
           type: integer
           format: int16
-          example: 360
+          examples:
+            - 360
         hard_timeout:
           type: integer
           format: int16
-          example: 1200
+          examples:
+            - 1200
         cookie:
           type: integer
           format: int64
-          example: 84114904
+          examples:
+            - 84114904
         match:
           $ref: '#/components/schemas/Match'
         actions:
@@ -415,7 +431,8 @@ components:
           type: array
           items:
             type: string
-          example: ["00:00:00:00:00:00:00:01","00:00:00:00:00:00:00:02"]
+          examples:
+            - ["00:00:00:00:00:00:00:01","00:00:00:00:00:00:00:02"]
           
     FlowDoc:
       type: object
@@ -431,6 +448,4 @@ components:
         updated_at:
           type: string
         flow: 
-          type: object
-          items:
-            $ref: '#/components/schemas/Flow'
+          $ref: '#/components/schemas/Flow'
