@@ -99,7 +99,6 @@ def test_match_cookie(to_install, stored, should_match):
             {"match": {}},
             True,
         ),
-
     ],
 )
 def test_empty_match(to_install, stored, should_match) -> None:
