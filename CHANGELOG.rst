@@ -23,6 +23,7 @@ Changed
 - Changed alien flows to have ``alien`` as owner. Alien flow deletion is now paced by ``send_flow_mod.alien``.
 - Increased ``telemetry_int`` pacing rate to 300/second
 - Added ``switches`` proterty to requests ``POST v2/flows`` and ``DELETE v2/flows`` to add flows to all switches in the list from ``switches``
+- When a deletion flow is sent, it does not longer deletes flows without the ``"match"`` field. A deletion flow without match will still be match with all other flows whether they have the ``"match"`` field or not.
 
 [2024.1.1] - 2024-08-30
 ***********************

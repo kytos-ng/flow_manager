@@ -99,6 +99,11 @@ def test_match_cookie(to_install, stored, should_match):
             {"match": {}},
             True,
         ),
+        (
+            {"match": {"in_port": 1}},
+            {"table_id": 1},
+            False,
+        ),
     ],
 )
 def test_empty_match(to_install, stored, should_match) -> None:
