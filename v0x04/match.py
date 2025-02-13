@@ -43,11 +43,11 @@ def match13_no_strict(flow_to_install, stored_flow_dict):
         return False
     if not _match_table_id(flow_to_install, stored_flow_dict):
         return False
-    if "match" not in flow_to_install or "match" not in stored_flow_dict:
+    if "match" not in flow_to_install:
         return stored_flow_dict
     if not flow_to_install["match"]:
         return stored_flow_dict
-    if len(flow_to_install["match"]) > len(stored_flow_dict["match"]):
+    if (len(flow_to_install["match"]) > len(stored_flow_dict.get("match", []))):
         return False
 
     if not _match_keys(
