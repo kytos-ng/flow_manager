@@ -23,6 +23,7 @@ from kytos.lib.helpers import (
     get_switch_mock,
     get_test_client,
 )
+from kytos.core.rest_api import HTTPException
 
 # pylint: disable=too-many-lines,fixme,no-member
 # TODO split this test suite in smaller ones
@@ -412,16 +413,41 @@ class TestMain:
 
         assert response.status_code == 424
 
+    # _install_flows
+    @patch("napps.kytos.flow_manager.main.Main._install_flows")
+    async def test_rest_add_switches_list(self, mock_install_flows):
+        """Test rest endpoint when a switch list is sent."""
+        self.napp.controller.loop = asyncio.get_running_loop()
+        flows = {
+            "flows": [{"match": {"in_port": 1}}],
+            "switches": ["00:00:00:00:00:00:00:01"],
+        }
+        response = await self.api_client.post(f"{self.base_endpoint}/flows", json=flows)
+        assert response.status_code == 202
+        args = mock_install_flows.call_args[0]
+        assert args[0] == "add"
+        assert args[1] == flows
+        assert args[2] == [self.switch_01]
+
+        # Error, switch not found
+        flows["switches"].append("non_switch")
+        response = await self.api_client.post(f"{self.base_endpoint}/flows", json=flows)
+        assert response.status_code == 404
+
+        # Error, disabled switch
+        flows["switches"].pop(1)
+        flows["switches"].append("00:00:00:00:00:00:00:02")
+        response = await self.api_client.post(f"{self.base_endpoint}/flows", json=flows)
+        assert response.status_code == 404
+
+    @patch("napps.kytos.flow_manager.main.Main._get_all_switches_enabled")
     @patch("napps.kytos.flow_manager.main.Main._send_flow_mod")
     @patch("napps.kytos.flow_manager.main.FlowFactory.get_class")
     async def test_rest_flow_mod_add_switch_not_connected_force(
-        self, mock_flow_factory, mock_send_flow_mod
+        self, mock_flow_factory, mock_send_flow_mod, mock_get_switches
     ):
         """Test sending a flow mod when a swith isn't connected with force option."""
         self.napp.controller.loop = asyncio.get_running_loop()
-        self.napp._send_napp_event = MagicMock()
-        self.napp._add_flow_mod_sent = MagicMock()
-        self.napp._send_barrier_request = MagicMock()
         mock_send_flow_mod.side_effect = SwitchNotConnectedError(
             "error", flow=MagicMock()
         )
@@ -434,6 +460,9 @@ class TestMain:
         flow.match_id = match_id
         serializer.from_dict.return_value = flow
         mock_flow_factory.return_value = serializer
+        sw_id = "00:01"
+        switch = MagicMock(id=sw_id, dpid=sw_id)
+        mock_get_switches.return_value = [switch], [sw_id]
 
         flow_dict = {"flows": [{"priority": 25}]}
 
@@ -447,20 +476,20 @@ class TestMain:
         flow_dicts = [
             {
                 **{"flow": flow_dict["flows"][0]},
-                **{"flow_id": flow.id, "switch": self.switch_01.id},
+                **{"flow_id": flow.id, "switch": switch.id},
             }
         ]
-        self.napp.flow_controller.upsert_flows.assert_called_with(
-            [match_id],
-            flow_dicts,
-        )
-        mock_flow_factory.assert_called_with(self.switch_01, Flow04)
+        args = self.napp.flow_controller.upsert_flows.call_args[0]
+        assert list(args[0]) == [match_id]
+        assert list(args[1]) == flow_dicts
+        mock_flow_factory.assert_called_with(switch, Flow04)
 
     def test_get_all_switches_enabled(self):
         """Test _get_all_switches_enabled method."""
-        switches = self.napp._get_all_switches_enabled()
+        switches, dpids = self.napp._get_all_switches_enabled()
 
         assert switches == [self.switch_01]
+        assert dpids == [self.switch_01.id]
 
     @patch("napps.kytos.flow_manager.main.Main._send_napp_event")
     @patch("napps.kytos.flow_manager.main.Main._add_flow_mod_sent")
@@ -997,14 +1026,26 @@ class TestMain:
         self.napp.flow_controller.get_flows_by_cookie_ranges.return_value = {
             switch.id: [flow1_dict]
         }
-        self.napp.delete_matched_flows([flow1_dict], {switch.id: switch})
-
+        self.napp.delete_matched_flows({switch.id: [flow1_dict]}, {switch.id: switch})
         assert self.napp.flow_controller.upsert_flows.call_count == 1
         call_args = self.napp.flow_controller.upsert_flows.call_args
         assert list(call_args[0][0]) == [flow1.match_id]
-
+        args = self.napp.flow_controller.get_flows_by_cookie_ranges.call_args[0]
+        assert isinstance(args[1], list)
         # second arg should be the same dict values, except with state deleted
         expected = dict(flow1_dict)
+        assert expected["state"] == "deleted"
+        assert list(call_args[0][1])[0] == expected
+
+        flow1_dict["state"] = "installed"
+        self.napp.delete_matched_flows(
+            {switch.id: [flow1_dict]}, {switch.id: switch}, by_switch=True
+        )
+        assert self.napp.flow_controller.upsert_flows.call_count == 2
+        call_args = self.napp.flow_controller.upsert_flows.call_args
+        assert list(call_args[0][0]) == [flow1.match_id]
+        args = self.napp.flow_controller.get_flows_by_cookie_ranges.call_args[0]
+        assert isinstance(args[1], dict)
         assert expected["state"] == "deleted"
         assert list(call_args[0][1])[0] == expected
 
@@ -1029,7 +1070,7 @@ class TestMain:
         self.napp.flow_controller.get_flows_by_cookie_ranges.return_value = {
             switch.id: [flow1_dict]
         }
-        self.napp.delete_matched_flows([flow1_dict], {switch.id: switch})
+        self.napp.delete_matched_flows({switch.id: [flow1_dict]}, {switch.id: switch})
 
         assert self.napp.flow_controller.upsert_flows.call_count == 1
         call_args = self.napp.flow_controller.upsert_flows.call_args
@@ -1307,3 +1348,26 @@ class TestMain:
         mock_ev.event.content = {"destination": switch}
         self.napp._send_openflow_connection_error(mock_ev)
         assert mock_send.call_count == 1
+
+    def test_get_switches_from_request_by_switch(self):
+        """Test _get_switches_from_request_by_switch"""
+        content_dict = {"no_switch": []}
+        with pytest.raises(HTTPException):
+            self.napp._get_switches_from_request_by_switch(content_dict, "add")
+
+        content_dict = {"no_switch": {}}
+        with pytest.raises(HTTPException):
+            self.napp._get_switches_from_request_by_switch(content_dict, "add")
+
+        content_dict = {"no_switch": {"flows": [{"cookie": 84114964}]}}
+        with pytest.raises(HTTPException):
+            self.napp._get_switches_from_request_by_switch(content_dict, "add")
+
+        content_dict = {"00:00:00:00:00:00:00:02": {"flows": [{"cookie": 84114964}]}}
+        with pytest.raises(HTTPException):
+            self.napp._get_switches_from_request_by_switch(content_dict, "add")
+
+        content_dict = {"00:00:00:00:00:00:00:01": {"flows": [{"cookie": 84114964}]}}
+        sws, ids = self.napp._get_switches_from_request_by_switch(content_dict, "add")
+        assert sws == [self.switch_01]
+        assert ids == ["00:00:00:00:00:00:00:01"]

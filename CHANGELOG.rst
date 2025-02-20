@@ -7,6 +7,17 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2024.1.4] - 2025-02-19
+***********************
+
+Added
+=====
+- Added new requests ``POST v2/flows_by_switch`` and ``DELETE v2/flows_by_switch`` to modify flows by switch. Both have the parameter ``force`` as a boolean to ignore switch connectivity errors.
+
+Changed
+=======
+- Added ``switches`` proterty to requests ``POST v2/flows`` and ``DELETE v2/flows`` to add flows to all switches in the list from ``switches``
+
 [2024.1.3] - 2024-11-04
 ***********************
 

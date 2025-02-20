@@ -5,7 +5,7 @@ import os
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
-from typing import Iterator, List, Optional
+from typing import Iterator, List, Optional, Union
 
 import pymongo
 from bson.decimal128 import Decimal128
@@ -145,32 +145,41 @@ class FlowController:
             yield flow
 
     def get_flows_by_cookie_ranges(
-        self, dpids: list[str], cookie_ranges: list[tuple[int, int]]
+        self,
+        dpids: list[str],
+        cookie_collection: Union[
+            dict[str, list[tuple[int, int]]],  # by_switch=True
+            list[tuple[int, int]],  # by_switch=False
+        ],
+        by_switch=False,
     ) -> dict:
-        """Get flows by cookie ranges [low, high] (inclusive) grouped by dpid."""
-        query_match = {
-            "$match": {
-                "switch": {"$in": dpids},
-                "state": {"$ne": "deleted"},
-            }
-        }
-        if cookie_ranges:
-            query_match["$match"]["$or"] = [
+        """Get flows by cookie ranges [low, high] by switches."""
+        pipeline = []
+        match_filter = {"$or": []}
+        for dpid in dpids:
+            if by_switch:
+                cookie_range = cookie_collection[dpid]
+            else:
+                cookie_range = cookie_collection
+            match_filter["$or"].append(
                 {
-                    "flow.cookie": {
-                        "$gte": Decimal128(Decimal(low)),
-                        "$lte": Decimal128(Decimal(high)),
-                    }
+                    "switch": dpid,
+                    "state": {"$ne": "deleted"},
+                    "$or": [
+                        {
+                            "flow.cookie": {
+                                "$gte": Decimal128(Decimal(low)),
+                                "$lte": Decimal128(Decimal(high)),
+                            }
+                        }
+                        for low, high in cookie_range
+                    ],
                 }
-                for low, high in cookie_ranges
-            ]
+            )
+        pipeline.append({"$match": match_filter})
+        pipeline.append({"$group": {"_id": "$switch", "flows": {"$push": "$$ROOT"}}})
         flows = defaultdict(list)
-        for document in self.db.flows.aggregate(
-            [
-                query_match,
-                {"$group": {"_id": "$switch", "flows": {"$push": "$$ROOT"}}},
-            ]
-        ):
+        for document in self.db.flows.aggregate(pipeline):
             for flow in document["flows"]:
                 flow["flow"]["cookie"] = int(flow["flow"]["cookie"].to_decimal())
                 flows[flow["switch"]].append(flow)

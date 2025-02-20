@@ -1,11 +1,14 @@
 """kytos/flow_manager utils."""
 
 from collections.abc import Callable
+from typing import Union
 
 from pyof.foundation.base import UBIntBase
 from pyof.v0x04.controller2switch.flow_mod import FlowModCommand
+from starlette.datastructures import QueryParams
 
 from kytos.core import log
+from kytos.core.rest_api import HTTPException
 
 from .exceptions import InvalidCommandError
 
@@ -189,16 +192,57 @@ def validate_cookies_del(flows: list[dict]) -> None:
             )
 
 
-def flows_to_log(logger_fun: Callable, message: str, flow_dict: dict[str, list]):
-    """Log flows, maximun flows in a log is 200"""
-    length_msg = f"total_length: {len(flow_dict['flows'])}, "
+def flows_to_log(
+    logger_fun: Callable,
+    message: str,
+    switches: list[str],
+    flows_dict: Union[
+        dict[str, dict[str, list]], dict[str, list]  # by_switch=True  # by_switch=False
+    ],
+    by_switch=False,
+):
+    """Log the information of installing or deleting flows. The logs will
+    show the quantity of flows being modified in each switch or all
+    existent switches.
+    If flows are sent by switch, each switch will log the flows modified."""
+    log_str = "Flows received summary: "
+    count_flows = 0
+    for switch in switches:
+        if not by_switch:
+            flows_n = len(flows_dict["flows"])
+            log_str = log_str + f" switches:{switches}, flows_by_switch:{flows_n}, "
+            count_flows = flows_n * len(switches)
+            _flows_to_log(logger_fun, message, switches, flows_dict["flows"])
+            break
+
+        flows_n = len(flows_dict[switch]["flows"])
+        log_str = log_str + f"{{switch: {switch}, flows_length: {flows_n}}}, "
+        count_flows += flows_n
+        _flows_to_log(logger_fun, message, [switch], flows_dict[switch]["flows"])
+    logger_fun(f"{log_str} total_flows_length: {count_flows}")
+
+
+def _flows_to_log(
+    logger_fun: Callable,
+    message: str,
+    switches: list[str],
+    flow_list: list,
+):
+    """Logs the flows within a limit."""
     maximun = 200
-    flows_n = len(flow_dict["flows"])
     i, j = 0, maximun
-    while flow_dict["flows"][i:j]:
+    while flow_list[i:j]:
         logger_fun(
-            f"{message}{length_msg} flows[{i}, {(j if j < flows_n else flows_n)}]:"
-            f" {flow_dict['flows'][i:j]}"
+            f"{message}{switches}, flows[{i}, {(j if j < len(flow_list) else len(flow_list))}]:"
+            f" {flow_list[i:j]}"
         )
         i, j = j, j + maximun
-        length_msg = ""
+
+
+# pylint: disable=simplifiable-if-expression
+def _get_force_from_params(params: QueryParams):
+    force = params.get("force", "false").lower()
+    if force not in {"true", "false"}:
+        msg = "Parameter force does not have a valid value."
+        raise HTTPException(400, detail=msg)
+    return force == "true"
