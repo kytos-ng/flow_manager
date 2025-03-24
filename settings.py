@@ -28,31 +28,31 @@ whichever longest network convergence FlowMods operations that your network has.
 # The NApp that the flow pertains to is determined via the `owner` attribute of the flow.
 ACTION_PACES = {
     "send_flow_mod.no_owner": {
-        "pace": "100/second",
+        "pace": "1000/second",
         "strategy": "fixed_window",
     },
     "send_flow_mod.mef_eline": {
-        "pace": "100/second",
+        "pace": "1000/second",
         "strategy": "fixed_window",
     },
     "send_flow_mod.of_multi_table": {
-        "pace": "100/second",
+        "pace": "1000/second",
         "strategy": "fixed_window",
     },
     "send_flow_mod.telemetry_int": {
-        "pace": "300/second",
+        "pace": "3000/second",
         "strategy": "fixed_window",
     },
     "send_flow_mod.of_lldp": {
-        "pace": "100/second",
+        "pace": "1000/second",
         "strategy": "fixed_window",
     },
     "send_flow_mod.coloring": {
-        "pace": "100/second",
+        "pace": "1000/second",
         "strategy": "fixed_window",
     },
     "send_flow_mod.alien": {
-        "pace": "500/second",
+        "pace": "5000/second",
         "strategy": "fixed_window",
     },
 }
