@@ -12,6 +12,10 @@ Fixed
 - Only update flows as ``'installed'`` if they were ``'pending'``. This fixed processing late barrier replies correctly even if there was a recent related flow deletion.
 - DB controller now retries for ``ExecutionTimeout`` and ``ConnectionFailure`` instead of just ``AutoReconnect``
 
+Changed
+=======
+- The default rate for the pacers had been increased to 10 times their previous values. With the introduction of bulk installations, Kytos can now handle up to 50,000 flows in a single request.
+
 [2024.1.2] - 2024-09-06
 ***********************
 
