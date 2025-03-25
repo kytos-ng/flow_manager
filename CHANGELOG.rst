@@ -7,6 +7,13 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2024.1.6] - 2025-03-24
+***********************
+
+Changed
+=======
+- The dedault for the pacers had been increased to 10 times their previous values. With the introduction of bulk installations, Kytos can now handle up to 50,000 flows in a single request.
+
 [2024.1.5] - 2025-03-03
 ***********************
 
