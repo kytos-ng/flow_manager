@@ -14,7 +14,7 @@ Fixed
 
 Changed
 =======
-- The dedault for the pacers had been increased to 10 times their previous values. With the introduction of bulk installations, Kytos can now handle up to 50,000 flows in a single request.
+- The default rate for the pacers had been increased to 10 times their previous values. With the introduction of bulk installations, Kytos can now handle up to 50,000 flows in a single request.
 
 [2024.1.2] - 2024-09-06
 ***********************
