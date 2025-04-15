@@ -7,6 +7,9 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2025.1.0] - 2025-04-14
+***********************
+
 Fixed
 =====
 - Only update flows as ``'installed'`` if they were ``'pending'``. This fixed processing late barrier replies correctly even if there was a recent related flow deletion.
