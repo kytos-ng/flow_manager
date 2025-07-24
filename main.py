@@ -517,14 +517,14 @@ class Main(KytosNApp):
                 # no more looping necessary
                 cookie_ranges = merge_cookie_ranges(cookie_ranges_dict[dpid])
                 flows_from_db = self.flow_controller.get_flows_by_cookie_ranges(
-                    switches_list, cookie_ranges
+                    switches_list, cookie_ranges, by_switch=by_switch
                 )
                 break
         if by_switch:
             for dpid, cookie_ranges in cookie_ranges_dict.items():
                 cookie_ranges_dict[dpid] = merge_cookie_ranges(cookie_ranges)
             flows_from_db = self.flow_controller.get_flows_by_cookie_ranges(
-                switches_list, cookie_ranges_dict, by_switch=True
+                switches_list, cookie_ranges_dict, by_switch=by_switch
             )
         for dpid, stored_flows in flows_from_db.items():
             for flow_dict in flow_dicts[dpid]:
