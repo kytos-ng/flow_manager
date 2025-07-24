@@ -429,6 +429,19 @@ class TestMain:
         assert args[1] == flows
         assert args[2] == [self.switch_01]
 
+        flows_by_switch = {
+            "00:00:00:00:00:00:00:01": {"flows": [{"match": {"in_port": 1}}]}
+        }
+        response = await self.api_client.post(
+            f"{self.base_endpoint}/flows_by_switch", json=flows_by_switch
+        )
+        assert response.status_code == 202
+        args1, args2 = mock_install_flows.call_args
+        assert args1[0] == "add"
+        assert args1[1] == flows_by_switch
+        assert args1[2] == [self.switch_01]
+        assert args2["by_switch"] is True
+
         # Error, switch not found
         flows["switches"].append("non_switch")
         response = await self.api_client.post(f"{self.base_endpoint}/flows", json=flows)
