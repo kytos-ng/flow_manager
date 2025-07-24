@@ -833,12 +833,19 @@ class Main(KytosNApp):
                     flows_dict,
                     switches,
                     reraise_conn=not force,
+                    by_switch=by_switch,
                 )
                 return JSONResponse(
                     {"response": "FlowMod Messages Sent"}, status_code=202
                 )
 
-            self._install_flows(command, flows_dict, switches, reraise_conn=not force)
+            self._install_flows(
+                command,
+                flows_dict,
+                switches,
+                reraise_conn=not force,
+                by_switch=by_switch,
+            )
             return JSONResponse({"response": "FlowMod Messages Sent"}, status_code=202)
 
         except SwitchNotConnectedError as error:
