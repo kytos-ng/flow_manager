@@ -7,6 +7,9 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2025.2.0] - 2026-02-02
+***********************
+
 Fixed
 =====
 - Bulk deletion ``by_switch`` would use not ``by_switch`` method to parametrize cookies causing mismatched cookies with multiple switches from the same request.
