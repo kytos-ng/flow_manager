@@ -98,7 +98,7 @@ class Main(KytosNApp):
         self._pending_barrier_lock = Lock()
         self._pending_barrier_max_size = FLOWS_DICT_MAX_SIZE
 
-        self._flow_mods_sent_error = {}
+        self._flow_mods_sent_error = OrderedDict()
         self._flow_mods_retry_count = {}
         self._flow_mods_retry_count_lock = Lock()
         self.resent_flows = set()
@@ -472,7 +472,6 @@ class Main(KytosNApp):
             )
             flow_dict = {"flows": alien_flows}
             try:
-
                 self._install_flows(command, flow_dict, [switch], save=False)
                 flows_to_log(
                     log.info,
@@ -647,7 +646,7 @@ class Main(KytosNApp):
             flow_dict = event.content["flow_dict"]
             flows = flow_dict["flows"]
         except KeyError as error:
-            log.error("Error getting fields to install or remove " f"Flows: {error}")
+            log.error(f"Error getting fields to install or remove Flows: {error}")
             return
         except TypeError as err:
             log.error(f"{str(err)} for flow_dict {flow_dict}")
@@ -683,17 +682,14 @@ class Main(KytosNApp):
 
         flows_to_log(
             log.info,
-            f"Send FlowMod from KytosEvent command: {command}, "
-            f"force: {force}, dpids: ",
+            f"Send FlowMod from KytosEvent command: {command}, force: {force}, dpids: ",
             [dpid],
             flow_dict,
         )
         try:
             self._install_flows(command, flow_dict, [switch], reraise_conn=not force)
         except InvalidCommandError as error:
-            log.error(
-                "Error installing or deleting Flow through" f" Kytos Event: {error}"
-            )
+            log.error(f"Error installing or deleting Flow through Kytos Event: {error}")
         except SwitchNotConnectedError as error:
             self._send_napp_event(switch, error.flow, "error")
         except ValidationError as error:
@@ -993,6 +989,19 @@ class Main(KytosNApp):
             self._flow_mods_sent.popitem(last=False)
         self._flow_mods_sent[xid] = (flow, command, owner)
 
+    def _add_flow_mod_sent_error(self, xid, error_kwargs):
+        """Record a flow mod error, evicting the oldest entry when the
+        bounded cache is full.
+
+        Without eviction this dict grows without bound: entries are only
+        removed when their xid is popped from ``_flow_mods_sent``, but that
+        dict is LRU-bounded, so evicted xids leave orphaned error entries
+        behind (see issue #243).
+        """
+        if len(self._flow_mods_sent_error) >= self._flow_mods_sent_max_size:
+            self._flow_mods_sent_error.popitem(last=False)
+        self._flow_mods_sent_error[xid] = error_kwargs
+
     def _add_barrier_request(self, dpid, barrier_xid, flow_mods):
         """Add a barrier request."""
         if len(self._pending_barrier_reply[dpid]) >= self._pending_barrier_max_size:
@@ -1079,7 +1088,7 @@ class Main(KytosNApp):
             "error_command": error_command,
             "error_exception": event.content.get("exception"),
         }
-        self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
+        self._add_flow_mod_sent_error(int(event.message.header.xid), error_kwargs)
         self._send_napp_event(
             switch,
             flow,
@@ -1114,7 +1123,7 @@ class Main(KytosNApp):
                 "error_type": error_type,
                 "error_code": error_code,
             }
-            self._flow_mods_sent_error[int(event.message.header.xid)] = error_kwargs
+            self._add_flow_mod_sent_error(int(event.message.header.xid), error_kwargs)
             log.warning(
                 f"Deleting flow: {flow.as_dict()}, xid: {xid}, cookie: {flow.cookie}, "
                 f"error: {error_kwargs}"

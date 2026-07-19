@@ -1,6 +1,7 @@
 """Test Main methods."""
 
 import asyncio
+from collections import OrderedDict
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -827,6 +828,27 @@ class TestMain:
         self.napp.handle_errors(event)
         content.data.pack.assert_not_called()
 
+    def test_flow_mods_sent_error_is_bounded(self):
+        """Regression test for #243.
+
+        ``_flow_mods_sent_error`` must not grow without bound. A flow xid can
+        be evicted from the LRU-bounded ``_flow_mods_sent`` dict while its
+        error entry lingers, so the error dict itself must be bounded and
+        evict oldest-first.
+        """
+        self.napp._flow_mods_sent_error_max_size = 3
+        self.napp._flow_mods_sent_error = OrderedDict()
+
+        for xid in range(5):
+            self.napp._add_flow_mod_sent_error(xid, {"error_code": xid})
+
+        self.assertEqual(len(self.napp._flow_mods_sent_error), 3)
+        # oldest entries (0, 1) were evicted, newest (2, 3, 4) remain
+        self.assertNotIn(0, self.napp._flow_mods_sent_error)
+        self.assertNotIn(1, self.napp._flow_mods_sent_error)
+        self.assertIn(2, self.napp._flow_mods_sent_error)
+        self.assertIn(4, self.napp._flow_mods_sent_error)
+
     @patch("napps.kytos.flow_manager.main.ENABLE_CONSISTENCY_CHECK", False)
     @patch("napps.kytos.flow_manager.main.Main._install_flows")
     def test_resend_stored_flows(self, mock_install_flows):
@@ -1232,10 +1254,13 @@ class TestMain:
         switch = get_switch_mock(dpid, 0x04)
         switch.id = dpid
         flow1, flow2 = MagicMock(id="1"), MagicMock(id="2")
-        flow1_dict, flow2_dict = {"flow_id": flow1.id, "state": "pending"}, {
-            "flow_id": flow2.id,
-            "state": "pending",
-        }
+        flow1_dict, flow2_dict = (
+            {"flow_id": flow1.id, "state": "pending"},
+            {
+                "flow_id": flow2.id,
+                "state": "pending",
+            },
+        )
         flow1.__getitem__.side_effect, flow2.__getitem__.side_effect = (
             flow1_dict.__getitem__,
             flow2_dict.__getitem__,
