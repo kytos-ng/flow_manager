@@ -98,7 +98,7 @@ class Main(KytosNApp):
         self._pending_barrier_lock = Lock()
         self._pending_barrier_max_size = FLOWS_DICT_MAX_SIZE
 
-        self._flow_mods_sent_error = {}
+        self._flow_mods_sent_error = OrderedDict()
         self._flow_mods_retry_count = {}
         self._flow_mods_retry_count_lock = Lock()
         self.resent_flows = set()
@@ -225,6 +225,9 @@ class Main(KytosNApp):
                 ):
                     continue
                 flows.append(flow)
+        for flow_xid in flow_xids:
+            self._flow_mods_sent_error.pop(flow_xid, None)
+            self._flow_mods_retry_count.pop(flow_xid, None)
         """
         It should only publish installed flow if it the original FlowMod xid hasn't
         errored out. OFPT_ERROR messages could be received first if the barrier request
@@ -336,6 +339,7 @@ class Main(KytosNApp):
                     f"switch {switch.id}, command: {command}, flow: {flow.as_dict()}"
                 )
                 self._send_openflow_connection_error(event)
+                self._flow_mods_retry_count.pop(xid, None)
                 return False
 
             datetime_t2 = now()
@@ -990,7 +994,9 @@ class Main(KytosNApp):
     def _add_flow_mod_sent(self, xid, flow, command, owner):
         """Add the flow mod to the list of flow mods sent."""
         if len(self._flow_mods_sent) >= self._flow_mods_sent_max_size:
-            self._flow_mods_sent.popitem(last=False)
+            evicted_xid, _ = self._flow_mods_sent.popitem(last=False)
+            self._flow_mods_sent_error.pop(evicted_xid, None)
+            self._flow_mods_retry_count.pop(evicted_xid, None)
         self._flow_mods_sent[xid] = (flow, command, owner)
 
     def _add_barrier_request(self, dpid, barrier_xid, flow_mods):
