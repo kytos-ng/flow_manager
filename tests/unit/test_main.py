@@ -774,9 +774,7 @@ class TestMain:
         flow_xid = 123
         flow_mods = [MagicMock(header=MagicMock(xid=flow_xid))]
         self.napp._send_barrier_request(switch, flow_mods)
-        barrier_xid = list(
-            self.napp._pending_barrier_reply[switch.id].keys()
-        )[-1]
+        barrier_xid = list(self.napp._pending_barrier_reply[switch.id].keys())[-1]
         self.napp._add_flow_mod_sent(flow_xid, flow_mods[0], "add", "no_owner")
         self.napp._flow_mods_sent_error[flow_xid] = {"error": 1}
         self.napp._flow_mods_retry_count[flow_xid] = (1, MagicMock(), 0.2)
