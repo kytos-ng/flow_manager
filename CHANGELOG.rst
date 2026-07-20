@@ -7,6 +7,10 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+Fixed
+=====
+- Purged xids from flow mods error dict to avoid unbounded growth
+
 [2025.2.0] - 2026-02-02
 ***********************
 
