@@ -10,6 +10,7 @@ file.
 Fixed
 =====
 - Purged xids from flow mods error dict to avoid unbounded growth
+- Prune _flow_mods_sent dict after using the xid to cut memory usage
 
 [2025.2.0] - 2026-02-02
 ***********************
