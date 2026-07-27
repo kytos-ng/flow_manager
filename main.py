@@ -218,10 +218,7 @@ class Main(KytosNApp):
                         f"Failled to pop flow_xid {flow_xid}, dict length: {length}"
                     )
                     continue
-                if (
-                    cmd != "add"
-                    or flow_xid in self._flow_mods_sent_error
-                ):
+                if cmd != "add" or flow_xid in self._flow_mods_sent_error:
                     continue
                 flows.append(flow)
         for flow_xid in flow_xids:
