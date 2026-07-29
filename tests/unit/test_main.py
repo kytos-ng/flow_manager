@@ -787,6 +787,29 @@ class TestMain:
         assert flow_xid not in self.napp._flow_mods_sent_error
         assert flow_xid not in self.napp._flow_mods_retry_count
 
+    @patch("napps.kytos.flow_manager.main.Main._publish_installed_flow")
+    def test_on_ofpt_barrier_reply_pops_flow_mods_sent(self, mock_publish):
+        """Barrier reply pops the reconciled xid from _flow_mods_sent so the
+        dict stays bounded, while still publishing the installed flow."""
+        dpid = "00:00:00:00:00:00:00:01"
+        switch = get_switch_mock(dpid, 0x04)
+        switch.id = dpid
+        flow_xid = 123
+        flow = MagicMock()
+        flow_mods = [MagicMock(header=MagicMock(xid=flow_xid))]
+        self.napp._send_barrier_request(switch, flow_mods)
+        barrier_xid = list(self.napp._pending_barrier_reply[switch.id].keys())[-1]
+        self.napp._add_flow_mod_sent(flow_xid, flow, "add", "no_owner")
+        assert flow_xid in self.napp._flow_mods_sent
+
+        event = MagicMock()
+        event.message.header.xid = barrier_xid
+        event.source.switch = switch
+        self.napp._on_ofpt_barrier_reply(event)
+
+        assert flow_xid not in self.napp._flow_mods_sent
+        mock_publish.assert_called_once_with(switch, [flow])
+
     @patch("napps.kytos.flow_manager.main.Main._send_openflow_connection_error")
     def test_retry_pops_retry_count_on_max_retries(self, _mock_send):
         """When retries are exhausted the retry counter entry is removed so
