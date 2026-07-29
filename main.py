@@ -211,18 +211,14 @@ class Main(KytosNApp):
         with self._flow_mods_sent_lock:
             for flow_xid in flow_xids:
                 try:
-                    flow, cmd, _ = self._flow_mods_sent[flow_xid]
+                    flow, cmd, _ = self._flow_mods_sent.pop(flow_xid)
                 except KeyError:
                     length = len(self._flow_mods_sent)
                     log.error(
                         f"Failled to pop flow_xid {flow_xid}, dict length: {length}"
                     )
                     continue
-                if (
-                    cmd != "add"
-                    or flow_xid not in self._flow_mods_sent
-                    or flow_xid in self._flow_mods_sent_error
-                ):
+                if cmd != "add" or flow_xid in self._flow_mods_sent_error:
                     continue
                 flows.append(flow)
         for flow_xid in flow_xids:

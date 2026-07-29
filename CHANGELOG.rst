@@ -7,6 +7,14 @@ file.
 [UNRELEASED] - Under development
 ********************************
 
+[2025.2.2] - 2026-07-27
+***********************
+
+Fixed
+=====
+
+- Prune _flow_mods_sent dict after using the xid to cut memory usage
+
 [2025.2.1] - 2026-07-20
 ***********************
 
